@@ -1,9 +1,13 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-PYTHON_BOOTSTRAP ?= python3.14
+PYTHON_BOOTSTRAP ?= python3
 POETRY_VERSION ?= 2.2.0
-POETRY_BIN ?= $(HOME)/.local/bin/poetry
+POETRY_BIN ?= $(or $(firstword $(wildcard \
+	$(HOME)/.local/bin/poetry \
+	$(HOME)/Library/Application\ Support/pypoetry/venv/bin/poetry \
+	/opt/homebrew/bin/poetry \
+	/usr/local/bin/poetry)),poetry)
 
 PROJECT ?= cjm_ui_convertor
 
@@ -28,7 +32,7 @@ CLI ?= $(VENV_BIN)/cjm_ui_convertor
 help:
 	@echo ""
 	@echo "Targets:"
-	@echo "  make bootstrap        - install poetry, create venv for Python 3.14, install deps"
+	@echo "  make bootstrap        - install poetry, create venv for Python 3, install deps"
 	@echo "  make install          - install python deps (poetry install)"
 	@echo "  make update           - update lock + install"
 	@echo "  make test             - run tests"
@@ -51,7 +55,12 @@ poetry-install:
 		echo "Installing Poetry $(POETRY_VERSION) via official installer..."; \
 		curl -sSL https://install.python-poetry.org | $(PYTHON_BOOTSTRAP) - --version $(POETRY_VERSION); \
 	fi
-	@$(POETRY_BIN) --version
+	@if [ -x "$(POETRY_BIN)" ]; then \
+		$(POETRY_BIN) --version; \
+	else \
+		echo "Poetry not found. Ensure it is on PATH or set POETRY_BIN."; \
+		exit 1; \
+	fi
 
 .PHONY: venv
 venv: poetry-install
