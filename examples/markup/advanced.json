@@ -1,0 +1,25 @@
+{
+  "finedog_unit_id": 67890,
+  "markup_type": "system_task_processor",
+  "procedures": [
+    {
+      "procedure_id": "start_proc",
+      "start_block_ids": ["s1"],
+      "end_block_ids": [],
+      "branches": {
+        "s1": ["s2", "s3"],
+        "s2": ["join1"],
+        "s3": ["join1"]
+      }
+    },
+    {
+      "procedure_id": "follow_up",
+      "start_block_ids": ["f1"],
+      "end_block_ids": ["f3"],
+      "branches": {
+        "f1": ["f2"],
+        "f2": ["f3"]
+      }
+    }
+  ]
+}

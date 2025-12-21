@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-PYTHON_BOOTSTRAP ?= python3
+PYTHON_BOOTSTRAP ?= python3.14
 POETRY_VERSION ?= 2.2.0
 
 PROJECT ?= cjm_ui_convertor
@@ -22,8 +22,8 @@ VENV_BIN ?= $(VENV_DIR)/bin
 VENV_PYTHON ?= $(VENV_BIN)/python
 POETRY_BIN ?= $(VENV_BIN)/poetry
 
-# CLI entrypoints (to be implemented in MVP)
-CLI ?= $(VENV_BIN)/cjm_ui_convertor
+# CLI entrypoints
+CLI ?= $(VENV_BIN)/cjm
 
 .PHONY: help
 help:
@@ -53,6 +53,8 @@ poetry-install: venv
 		$(VENV_PYTHON) -m pip install --upgrade pip; \
 		$(VENV_PYTHON) -m pip install "poetry==$(POETRY_VERSION)"; \
 	fi
+	@$(POETRY_BIN) config virtualenvs.create false --local
+	@$(POETRY_BIN) config virtualenvs.in-project true --local
 	@$(POETRY_BIN) --version
 
 .PHONY: venv
@@ -65,12 +67,12 @@ venv:
 	fi
 
 .PHONY: install
-install: venv
+install: poetry-install
 	@echo "Installing dependencies..."
 	@$(POETRY_BIN) install
 
 .PHONY: update
-update: venv
+update: poetry-install
 	@$(POETRY_BIN) lock
 	@$(POETRY_BIN) install
 
