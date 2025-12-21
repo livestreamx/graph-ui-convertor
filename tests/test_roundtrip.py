@@ -69,3 +69,15 @@ def test_metadata_contains_globals() -> None:
         assert meta.get("schema_version") == "1.0"
         assert meta.get("finedog_unit_id") == markup.finedog_unit_id
         assert meta.get("markup_type") == markup.markup_type
+
+
+def test_roundtrip_from_example_json_fixture() -> None:
+    markup = load_markup_fixture("from_example_json.json")
+    layout = GridLayoutEngine()
+    forward = MarkupToExcalidrawConverter(layout)
+    backward = ExcalidrawToMarkupConverter()
+
+    excal = forward.convert(markup)
+    reconstructed = backward.convert(excal.to_dict())
+
+    assert normalize(reconstructed) == normalize(markup)
