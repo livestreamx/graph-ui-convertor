@@ -185,10 +185,12 @@ class MarkupToExcalidrawConverter:
                 block = blocks.get((procedure.procedure_id, start_block_id))
                 if not marker or not block:
                     continue
+                start_center = self._marker_anchor(marker, side="right")
+                end_center = self._block_anchor(block, side="left")
                 elements.append(
                     self._arrow_element(
-                        start=self._center(marker.position, marker.size.width, marker.size.height),
-                        end=self._center(block.position, block.size.width, block.size.height),
+                        start=start_center,
+                        end=end_center,
                         label="start",
                         metadata=self._with_base_metadata(
                             {
@@ -222,10 +224,12 @@ class MarkupToExcalidrawConverter:
                 marker = markers.get((procedure.procedure_id, end_block_id, "end_marker"))
                 if not block or not marker:
                     continue
+                start_center = self._block_anchor(block, side="right")
+                end_center = self._marker_anchor(marker, side="left")
                 elements.append(
                     self._arrow_element(
-                        start=self._center(block.position, block.size.width, block.size.height),
-                        end=self._center(marker.position, marker.size.width, marker.size.height),
+                        start=start_center,
+                        end=end_center,
                         label="end",
                         metadata=self._with_base_metadata(
                             {
@@ -252,6 +256,22 @@ class MarkupToExcalidrawConverter:
         elements: List[dict],
         base_metadata: dict,
     ) -> None:
+        branch_offsets: Dict[Tuple[str, str], List[float]] = {}
+        for procedure in document.procedures:
+            for source_block, targets in procedure.branches.items():
+                count = max(1, len(targets))
+                offsets = [
+                    (idx - (count - 1) / 2) * 15.0
+                    for idx in range(count)
+                ]
+                branch_offsets[(procedure.procedure_id, source_block)] = offsets
+        branch_index: Dict[Tuple[str, str], int] = {}
+
+        # Index blocks by block_id for potential cross-procedure branches (best-effort).
+        block_by_id: Dict[str, List[Tuple[str, BlockPlacement]]] = {}
+        for (proc_id, blk_id), placement in blocks.items():
+            block_by_id.setdefault(blk_id, []).append((proc_id, placement))
+
         for procedure in document.procedures:
             for source_block, targets in procedure.branches.items():
                 source = blocks.get((procedure.procedure_id, source_block))
@@ -259,18 +279,32 @@ class MarkupToExcalidrawConverter:
                     continue
                 for target_block in targets:
                     target = blocks.get((procedure.procedure_id, target_block))
+                    target_proc_id = procedure.procedure_id
+                    if not target:
+                        candidates = block_by_id.get(target_block, [])
+                        if len(candidates) == 1:
+                            target_proc_id, target = candidates[0]
                     if not target:
                         continue
+                    offset_key = (procedure.procedure_id, source_block)
+                    offset_idx = branch_index.get(offset_key, 0)
+                    branch_index[offset_key] = offset_idx + 1
+                    dy = branch_offsets.get(offset_key, [0])[min(offset_idx, len(branch_offsets.get(offset_key, [0])) - 1)]
+                    start_center = self._block_anchor(
+                        source, side="right", y_offset=dy
+                    )
+                    end_center = self._block_anchor(
+                        target, side="left", y_offset=dy
+                    )
                     elements.append(
                         self._arrow_element(
-                            start=self._center(
-                                source.position, source.size.width, source.size.height
-                            ),
-                            end=self._center(target.position, target.size.width, target.size.height),
+                            start=start_center,
+                            end=end_center,
                             label="branch",
                             metadata=self._with_base_metadata(
                                 {
                                     "procedure_id": procedure.procedure_id,
+                                    "target_procedure_id": target_proc_id,
                                     "role": "edge",
                                     "edge_type": "branch",
                                     "source_block_id": source_block,
@@ -282,7 +316,7 @@ class MarkupToExcalidrawConverter:
                                 "block", procedure.procedure_id, source_block
                             ),
                             end_binding=self._stable_id(
-                                "block", procedure.procedure_id, target_block
+                                "block", target_proc_id, target_block
                             ),
                         )
                     )
@@ -330,6 +364,7 @@ class MarkupToExcalidrawConverter:
                 "seed": self._rand_seed(),
                 "version": 1,
                 "versionNonce": self._rand_seed(),
+                "boundElements": [],
             },
             metadata=metadata,
         )
@@ -443,8 +478,8 @@ class MarkupToExcalidrawConverter:
             "boundElements": [],
             "locked": False,
             "points": [[0, 0], [dx, dy]],
-            "startBinding": {"elementId": start_binding, "focus": 0.0, "gap": 4} if start_binding else None,
-            "endBinding": {"elementId": end_binding, "focus": 0.0, "gap": 4} if end_binding else None,
+            "startBinding": {"elementId": start_binding, "focus": 0.0, "gap": 8} if start_binding else None,
+            "endBinding": {"elementId": end_binding, "focus": 0.0, "gap": 8} if end_binding else None,
             "label": label,
             "text": label if metadata.get("edge_type") == "branch" else "",
             "customData": {CUSTOM_DATA_KEY: metadata},
@@ -489,6 +524,28 @@ class MarkupToExcalidrawConverter:
 
     def _center(self, position: Point, width: float, height: float) -> Point:
         return Point(x=position.x + width / 2, y=position.y + height / 2)
+
+    def _block_anchor(self, block: BlockPlacement, side: str, y_offset: float = 0.0) -> Point:
+        if side == "left":
+            return Point(
+                x=block.position.x,
+                y=block.position.y + block.size.height / 2 + y_offset,
+            )
+        return Point(
+            x=block.position.x + block.size.width,
+            y=block.position.y + block.size.height / 2 + y_offset,
+        )
+
+    def _marker_anchor(self, marker: MarkerPlacement, side: str) -> Point:
+        if side == "left":
+            return Point(
+                x=marker.position.x,
+                y=marker.position.y + marker.size.height / 2,
+            )
+        return Point(
+            x=marker.position.x + marker.size.width,
+            y=marker.position.y + marker.size.height / 2,
+        )
 
     def _stable_id(self, *parts: str) -> str:
         return str(uuid.uuid5(self.namespace, "|".join(parts)))

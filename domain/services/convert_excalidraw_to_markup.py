@@ -157,10 +157,6 @@ class ExcalidrawToMarkupConverter:
             start_blocks = sorted(start_map.get(procedure_id, set()))
             end_blocks = sorted(end_map.get(procedure_id, set()))
 
-            # Add standalone blocks to ensure they are preserved.
-            for block_id in blocks_in_proc:
-                branches.setdefault(block_id, branches.get(block_id, []))
-
             procedures.append(
                 Procedure(
                     procedure_id=procedure_id,
