@@ -3,11 +3,6 @@ SHELL := /bin/bash
 
 PYTHON_BOOTSTRAP ?= python3
 POETRY_VERSION ?= 2.2.0
-POETRY_BIN ?= $(or $(firstword $(wildcard \
-	$(HOME)/.local/bin/poetry \
-	$(HOME)/Library/Application\ Support/pypoetry/venv/bin/poetry \
-	/opt/homebrew/bin/poetry \
-	/usr/local/bin/poetry)),poetry)
 
 PROJECT ?= cjm_ui_convertor
 
@@ -24,6 +19,8 @@ EXCALIDRAW_OUT_DIR ?= $(DATA_DIR)/excalidraw_out
 ROUNDTRIP_DIR ?= $(DATA_DIR)/roundtrip
 VENV_DIR ?= .venv
 VENV_BIN ?= $(VENV_DIR)/bin
+VENV_PYTHON ?= $(VENV_BIN)/python
+POETRY_BIN ?= $(VENV_BIN)/poetry
 
 # CLI entrypoints (to be implemented in MVP)
 CLI ?= $(VENV_BIN)/cjm_ui_convertor
@@ -32,7 +29,7 @@ CLI ?= $(VENV_BIN)/cjm_ui_convertor
 help:
 	@echo ""
 	@echo "Targets:"
-	@echo "  make bootstrap        - install poetry, create venv for Python 3, install deps"
+	@echo "  make bootstrap        - create .venv, install poetry, install deps"
 	@echo "  make install          - install python deps (poetry install)"
 	@echo "  make update           - update lock + install"
 	@echo "  make test             - run tests"
@@ -48,26 +45,24 @@ help:
 # -------- Bootstrap / Poetry --------
 
 .PHONY: poetry-install
-poetry-install:
+poetry-install: venv
 	@if [ -x "$(POETRY_BIN)" ]; then \
 		echo "Poetry already installed at $(POETRY_BIN)"; \
 	else \
-		echo "Installing Poetry $(POETRY_VERSION) via official installer..."; \
-		curl -sSL https://install.python-poetry.org | $(PYTHON_BOOTSTRAP) - --version $(POETRY_VERSION); \
+		echo "Installing Poetry $(POETRY_VERSION) into $(VENV_DIR)..."; \
+		$(VENV_PYTHON) -m pip install --upgrade pip; \
+		$(VENV_PYTHON) -m pip install "poetry==$(POETRY_VERSION)"; \
 	fi
-	@if [ -x "$(POETRY_BIN)" ]; then \
-		$(POETRY_BIN) --version; \
-	else \
-		echo "Poetry not found. Ensure it is on PATH or set POETRY_BIN."; \
-		exit 1; \
-	fi
+	@$(POETRY_BIN) --version
 
 .PHONY: venv
-venv: poetry-install
-	@echo "Configuring Poetry venv in-project..."
-	@$(POETRY_BIN) config virtualenvs.in-project true --local
-	@echo "Using Python: $(PYTHON_BOOTSTRAP)"
-	@$(POETRY_BIN) env use $(PYTHON_BOOTSTRAP)
+venv:
+	@if [ -x "$(VENV_PYTHON)" ]; then \
+		echo "Venv already exists at $(VENV_DIR)"; \
+	else \
+		echo "Creating venv in $(VENV_DIR) with $(PYTHON_BOOTSTRAP)..."; \
+		$(PYTHON_BOOTSTRAP) -m venv $(VENV_DIR); \
+	fi
 
 .PHONY: install
 install: venv

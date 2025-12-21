@@ -1,0 +1,13 @@
+[tool.poetry]
+name = "cjm-ui-convertor"
+version = "0.1.0"
+description = "Tools for converting CJM markup to and from Excalidraw."
+authors = ["Your Name <you@example.com>"]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.13"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
