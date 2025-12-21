@@ -41,7 +41,7 @@ class GridLayoutEngine(LayoutEngine):
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in document.procedures:
-            _, max_level, level_counts = self._compute_block_levels(procedure)
+            _, max_level, level_counts, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
             rows = max(level_counts.values() or [1])
             frame_width = self.config.padding * 2 + cols * self.config.block_size.width + (
@@ -69,10 +69,10 @@ class GridLayoutEngine(LayoutEngine):
             frames.append(frame)
 
             placement_by_block: Dict[str, BlockPlacement] = {}
-            block_levels, max_level, level_counts = self._compute_block_levels(procedure)
+            block_levels, max_level, level_counts, order = self._compute_block_levels(procedure)
             level_rows: Dict[int, int] = {lvl: 0 for lvl in range(max_level + 1)}
 
-            for block_id in sorted(procedure.block_ids()):
+            for block_id in order:
                 level_idx = block_levels.get(block_id, 0)
                 row_idx = level_rows[level_idx]
                 level_rows[level_idx] += 1
@@ -128,26 +128,38 @@ class GridLayoutEngine(LayoutEngine):
 
     def _compute_block_levels(
         self, procedure: object
-    ) -> Tuple[Dict[str, int], int, Dict[int, int]]:
+    ) -> Tuple[Dict[str, int], int, Dict[int, int], List[str]]:
         branches = getattr(procedure, "branches")
         start_blocks = list(getattr(procedure, "start_block_ids"))
         end_blocks = list(getattr(procedure, "end_block_ids"))
 
-        levels: Dict[str, int] = {}
-        for block in start_blocks:
-            levels[block] = 0
+        all_blocks = set(start_blocks) | set(end_blocks)
+        for src, targets in branches.items():
+            all_blocks.add(src)
+            all_blocks.update(targets)
 
-        changed = True
-        while changed:
-            changed = False
-            for source, targets in branches.items():
-                src_level = levels.get(source, 0)
-                for target in targets:
-                    target_level = levels.get(target, src_level + 1)
-                    desired = max(target_level, src_level + 1)
-                    if desired != target_level:
-                        levels[target] = desired
-                        changed = True
+        indegree: Dict[str, int] = {b: 0 for b in all_blocks}
+        adj: Dict[str, List[str]] = {b: [] for b in all_blocks}
+        for src, targets in branches.items():
+            for tgt in targets:
+                adj[src].append(tgt)
+                indegree[tgt] = indegree.get(tgt, 0) + 1
+
+        queue = sorted(all_blocks, key=lambda b: (0 if b in start_blocks else 1, b))
+        queue = [b for b in queue if indegree.get(b, 0) == 0]
+        levels: Dict[str, int] = {}
+        order: List[str] = []
+        while queue:
+            node = queue.pop(0)
+            level = levels.get(node, 0)
+            levels[node] = level
+            order.append(node)
+            for neighbor in adj.get(node, []):
+                levels[neighbor] = max(levels.get(neighbor, 0), level + 1)
+                indegree[neighbor] -= 1
+                if indegree[neighbor] == 0:
+                    queue.append(neighbor)
+                    queue.sort(key=lambda b: (levels.get(b, 0), 0 if b in start_blocks else 1, b))
 
         max_level = max(levels.values() or [0])
         for end_block in end_blocks:
@@ -157,7 +169,9 @@ class GridLayoutEngine(LayoutEngine):
         level_counts: Dict[int, int] = {}
         for lvl in levels.values():
             level_counts[lvl] = level_counts.get(lvl, 0) + 1
-        return levels, max_level, level_counts
+        if not order:
+            order = sorted(levels.keys())
+        return levels, max_level, level_counts, order
 
     def _compute_procedure_levels(self, document: MarkupDocument) -> Dict[str, int]:
         block_to_proc: Dict[str, str] = {}
@@ -198,8 +212,12 @@ class GridLayoutEngine(LayoutEngine):
 
         level: Dict[str, int] = {node: 0 for node in nodes}
         visited = 0
+        order_offset = 0
         while queue:
             node = queue.pop(0)
+            if level[node] == 0:
+                level[node] = order_offset
+                order_offset += 1
             visited += 1
             for neighbor in adj.get(node, []):
                 level[neighbor] = max(level[neighbor], level[node] + 1)
@@ -213,5 +231,11 @@ class GridLayoutEngine(LayoutEngine):
         for node in nodes:
             if is_end(node):
                 level[node] = max_level + 1
+        # Ensure unique ordering left->right even if levels equal.
+        deduped: Dict[str, int] = {}
+        current = 0
+        for proc_id in sorted(nodes, key=lambda n: (level[n], 0 if is_start(n) else 1, n)):
+            deduped[proc_id] = current
+            current += 1
 
-        return level
+        return deduped

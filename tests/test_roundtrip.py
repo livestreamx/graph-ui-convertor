@@ -72,7 +72,7 @@ def test_metadata_contains_globals() -> None:
 
 
 def test_roundtrip_from_example_json_fixture() -> None:
-    markup = load_markup_fixture("from_example_json.json")
+    markup = load_markup_fixture("yet_another.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()
