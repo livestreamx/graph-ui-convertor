@@ -1,3 +1,4 @@
 .idea/*
 __pycache__/
-/^data/*
+data/excalidraw_in/*
+data/excalidraw_out/*

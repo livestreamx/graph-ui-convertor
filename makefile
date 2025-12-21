@@ -8,9 +8,9 @@ PROJECT ?= cjm_ui_convertor
 
 # ---- UI (Excalidraw) ----
 EXCALIDRAW_CONTAINER ?= excalidraw
-EXCALIDRAW_PORT ?= 5000
+EXCALIDRAW_PORT ?= 5010
 EXCALIDRAW_URL ?= http://localhost:$(EXCALIDRAW_PORT)
-ALLOW_DOCKER_FAILURE ?= 1
+ALLOW_DOCKER_FAILURE ?= 0
 
 # ---- Paths ----
 DATA_DIR ?= data
@@ -121,11 +121,11 @@ convert-from-ui: dirs
 
 .PHONY: excalidraw-up
 excalidraw-up:
-	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && [ "$(ALLOW_DOCKER_FAILURE)" = "1" ] && exit 0 || exit 1)
+	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
 	@echo "Starting Excalidraw at $(EXCALIDRAW_URL) ..."
-	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (check Colima/Docker Desktop). Set ALLOW_DOCKER_FAILURE=0 to fail." && [ "$(ALLOW_DOCKER_FAILURE)" = "1" ] && exit 0 || exit 1)
+	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
 	@docker rm -f $(EXCALIDRAW_CONTAINER) >/dev/null 2>&1 || true
-	@docker run --rm -d --name $(EXCALIDRAW_CONTAINER) -p $(EXCALIDRAW_PORT):80 excalidraw/excalidraw:latest || ([ "$(ALLOW_DOCKER_FAILURE)" = "1" ] && echo "Skipped Docker run; start Excalidraw manually if needed." && exit 0)
+	@docker run --rm -d --name $(EXCALIDRAW_CONTAINER) -p $(EXCALIDRAW_PORT):80 excalidraw/excalidraw:latest
 	@echo "Open: $(EXCALIDRAW_URL)"
 
 .PHONY: excalidraw-down

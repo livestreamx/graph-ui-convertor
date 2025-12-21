@@ -6,8 +6,9 @@ Round-trip converter between CJM markup graphs and Excalidraw scenes with determ
 
 ```bash
 make bootstrap             # create .venv, install Poetry + deps
+open Docker Desktop or start Colima
 cp examples/markup/*.json data/markup/
-make demo                  # convert markup -> Excalidraw + start UI
+make demo                  # convert markup -> Excalidraw + start UI (default: http://localhost:5010)
 # In browser: import from data/excalidraw_in, edit, export to data/excalidraw_out
 make convert-from-ui       # rebuild markup from exported Excalidraw
 ```
