@@ -162,9 +162,9 @@ class GridLayoutEngine(LayoutEngine):
                     queue.append(neighbor)
                     queue.sort(key=lambda b: (levels.get(b, 0), 0 if b in start_blocks else 1, b))
 
-        max_level = max(levels.values() or [0])
+        # Ensure end blocks have at least computed level (do not force extra column to keep arrows short).
         for end_block in end_blocks:
-            levels[end_block] = max(levels.get(end_block, max_level), max_level + 1)
+            levels.setdefault(end_block, max(levels.values() or [0]))
         max_level = max(levels.values() or [0])
 
         level_counts: Dict[int, int] = {}
@@ -203,13 +203,17 @@ class GridLayoutEngine(LayoutEngine):
             proc = next(p for p in document.procedures if p.procedure_id == proc_id)
             return bool(proc.end_block_ids)
 
+        def start_count(proc_id: str) -> int:
+            proc = next(p for p in document.procedures if p.procedure_id == proc_id)
+            return len(proc.start_block_ids)
+
         queue = [
             node
             for node in sorted(nodes)
             if indegree.get(node, 0) == 0
         ]
         # Prioritize start procedures at the head.
-        queue.sort(key=lambda n: (0 if is_start(n) else 1, n))
+        queue.sort(key=lambda n: (0 if is_start(n) else 1, -start_count(n), n))
 
         level: Dict[str, int] = {node: 0 for node in nodes}
         visited = 0
@@ -225,7 +229,7 @@ class GridLayoutEngine(LayoutEngine):
                 indegree[neighbor] -= 1
                 if indegree[neighbor] == 0:
                     queue.append(neighbor)
-                    queue.sort(key=lambda n: (0 if is_start(n) else 1, n))
+                    queue.sort(key=lambda n: (0 if is_start(n) else 1, -start_count(n), n))
 
         # Push end procedures to the rightmost layer.
         max_level = max(level.values() or [0])
@@ -235,7 +239,7 @@ class GridLayoutEngine(LayoutEngine):
         # Ensure unique ordering left->right even if levels equal.
         deduped: Dict[str, int] = {}
         current = 0
-        for proc_id in sorted(nodes, key=lambda n: (level[n], 0 if is_start(n) else 1, n)):
+        for proc_id in sorted(nodes, key=lambda n: (level[n], 0 if is_start(n) else 1, -start_count(n), n)):
             deduped[proc_id] = current
             current += 1
 

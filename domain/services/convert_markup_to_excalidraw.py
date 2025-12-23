@@ -362,9 +362,12 @@ class MarkupToExcalidrawConverter:
             return
 
         frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
+        # Order by computed procedure levels for deterministic left->right flow.
+        proc_levels = self.layout_engine.build_plan  # type: ignore[attr-defined]
+        # We cannot call build_plan again; use frame x positions as proxy.
         ordered = sorted(
             document.procedures,
-            key=lambda p: (0 if p.start_block_ids else 1, 0 if p.end_block_ids else 1, p.procedure_id),
+            key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
         )
         for left, right in zip(ordered, ordered[1:]):
             left_frame = frame_lookup.get(left.procedure_id)
