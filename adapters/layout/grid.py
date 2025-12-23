@@ -20,7 +20,7 @@ from domain.ports.layout import LayoutEngine
 class LayoutConfig:
     block_size: Size = Size(260, 120)
     marker_size: Size = Size(70, 50)
-    padding: float = 120.0
+    padding: float = 150.0
     gap_x: float = 120.0
     gap_y: float = 80.0
     lane_gap: float = 300.0
@@ -51,7 +51,8 @@ class GridLayoutEngine(LayoutEngine):
                 (rows - 1) * self.config.gap_y
             )
             sizing[procedure.procedure_id] = Size(
-                frame_width + self.config.marker_size.width, frame_height
+                frame_width + self.config.marker_size.width + self.config.padding * 0.5,
+                frame_height + self.config.padding * 0.25,
             )
 
         lane_span = max((size.width for size in sizing.values()), default=0) + self.config.lane_gap

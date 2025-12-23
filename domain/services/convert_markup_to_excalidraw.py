@@ -316,19 +316,20 @@ class MarkupToExcalidrawConverter:
                                     "procedure_id": procedure.procedure_id,
                                     "target_procedure_id": target_proc_id,
                                     "role": "edge",
-                                    "edge_type": "branch",
-                                    "source_block_id": source_block,
-                                    "target_block_id": target_block,
-                                },
-                                base_metadata,
-                            ),
-                            start_binding=self._stable_id(
-                                "block", procedure.procedure_id, source_block
-                            ),
-                            end_binding=self._stable_id(
-                                "block", target_proc_id, target_block
-                            ),
-                        )
+                            "edge_type": "branch",
+                            "source_block_id": source_block,
+                            "target_block_id": target_block,
+                        },
+                        base_metadata,
+                    ),
+                    start_binding=self._stable_id(
+                        "block", procedure.procedure_id, source_block
+                    ),
+                    end_binding=self._stable_id(
+                        "block", target_proc_id, target_block
+                    ),
+                        smoothing=0.15,
+                    )
                     add_element(arrow)
                     self._bind_arrow(element_index, arrow)
 
@@ -343,30 +344,27 @@ class MarkupToExcalidrawConverter:
     ) -> None:
         if len(document.procedures) <= 1:
             return
-        # Connect procedures if no explicit cross-procedure edges exist.
-        has_cross = False
+        # Connect procedures when no explicit block-to-block cross edges.
         proc_for_block: Dict[str, str] = {}
         for proc in document.procedures:
             for blk in proc.block_ids():
                 proc_for_block[blk] = proc.procedure_id
+
+        cross_edges = []
         for proc in document.procedures:
-            for targets in proc.branches.values():
+            for src, targets in proc.branches.items():
                 for tgt in targets:
                     tgt_proc = proc_for_block.get(tgt)
                     if tgt_proc and tgt_proc != proc.procedure_id:
-                        has_cross = True
-                        break
-        if has_cross:
+                        cross_edges.append((proc.procedure_id, tgt_proc))
+
+        if cross_edges:
             return
 
         frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
         ordered = sorted(
             document.procedures,
-            key=lambda p: (
-                0 if p.start_block_ids else 1,
-                0 if p.end_block_ids else 1,
-                p.procedure_id,
-            ),
+            key=lambda p: (0 if p.start_block_ids else 1, 0 if p.end_block_ids else 1, p.procedure_id),
         )
         for left, right in zip(ordered, ordered[1:]):
             left_frame = frame_lookup.get(left.procedure_id)
@@ -396,6 +394,7 @@ class MarkupToExcalidrawConverter:
                 ),
                 start_binding=self._stable_id("frame", left.procedure_id),
                 end_binding=self._stable_id("frame", right.procedure_id),
+                smoothing=0.1,
             )
             add_element(arrow)
             self._bind_arrow(element_index, arrow)
@@ -415,6 +414,7 @@ class MarkupToExcalidrawConverter:
                 "seed": self._rand_seed(),
                 "version": 1,
                 "versionNonce": self._rand_seed(),
+                "nameFontSize": 28,
             },
             metadata=metadata,
         )
@@ -530,6 +530,7 @@ class MarkupToExcalidrawConverter:
         metadata: dict,
         start_binding: str | None = None,
         end_binding: str | None = None,
+        smoothing: float = 0.0,
     ) -> dict:
         dx = end.x - start.x
         dy = end.y - start.y
