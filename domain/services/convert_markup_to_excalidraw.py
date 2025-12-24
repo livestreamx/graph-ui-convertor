@@ -40,7 +40,14 @@ class MarkupToExcalidrawConverter:
 
         frame_ids = self._build_frames(plan.frames, add_element, base_metadata)
         blocks = self._build_blocks(plan.blocks, frame_ids, add_element, base_metadata)
-        markers = self._build_markers(plan.markers, frame_ids, add_element, base_metadata)
+
+        start_label_index: Dict[Tuple[str, str], int] = {}
+        for proc in document.procedures:
+            for idx, block_id in enumerate(proc.start_block_ids, start=1):
+                start_label_index[(proc.procedure_id, block_id)] = idx
+        markers = self._build_markers(
+            plan.markers, frame_ids, add_element, base_metadata, start_label_index
+        )
 
         self._build_start_edges(document, blocks, markers, add_element, element_index, base_metadata)
         self._build_end_edges(document, blocks, markers, add_element, element_index, base_metadata)
@@ -126,6 +133,8 @@ class MarkupToExcalidrawConverter:
                         },
                         base_metadata,
                     ),
+                    max_width=block.size.width - 20,
+                    max_height=40.0,
                 )
             )
         return placement_index
@@ -136,6 +145,7 @@ class MarkupToExcalidrawConverter:
         frame_ids: Dict[str, str],
         add_element: callable,
         base_metadata: dict,
+        start_label_index: Dict[Tuple[str, str], int],
     ) -> Dict[Tuple[str, str, str], MarkerPlacement]:
         marker_index: Dict[Tuple[str, str, str], MarkerPlacement] = {}
         for marker in markers:
@@ -160,10 +170,15 @@ class MarkupToExcalidrawConverter:
             label_id = self._stable_id(
                 "marker-text", marker.procedure_id, marker.role, marker.block_id
             )
+            label_text = "START"
+            if marker.role == "start_marker":
+                label_text = f"START #{start_label_index.get((marker.procedure_id, marker.block_id), 1)}"
+            elif marker.role == "end_marker":
+                label_text = "END"
             add_element(
                 self._text_element(
                     element_id=label_id,
-                    text="START" if marker.role == "start_marker" else "END",
+                    text=label_text,
                     center=self._center(marker.position, marker.size.width, marker.size.height),
                     container_id=element_id,
                     frame_id=frame_ids.get(marker.procedure_id),
@@ -486,9 +501,13 @@ class MarkupToExcalidrawConverter:
         frame_id: str | None,
         metadata: dict,
         group_ids: List[str] | None = None,
+        max_width: float | None = None,
+        max_height: float | None = None,
     ) -> dict:
         width = max(80.0, len(text) * 8.0)
-        height = 30.0
+        if max_width is not None:
+            width = min(max_width, max(width, max_width))
+        height = 30.0 if max_height is None else max_height
         x = center.x - width / 2
         y = center.y - height / 2
         return {

@@ -51,7 +51,7 @@ class GridLayoutEngine(LayoutEngine):
                 (rows - 1) * self.config.gap_y
             )
             sizing[procedure.procedure_id] = Size(
-                frame_width + self.config.marker_size.width + self.config.padding * 0.5,
+                frame_width + self.config.marker_size.width + self.config.gap_x * 0.5,
                 frame_height + self.config.padding * 0.25,
             )
 
@@ -97,7 +97,7 @@ class GridLayoutEngine(LayoutEngine):
                 block = placement_by_block.get(start_block)
                 if not block:
                     continue
-                x = block.position.x - (self.config.marker_size.width + self.config.gap_x / 2)
+                x = block.position.x - (self.config.marker_size.width + self.config.gap_x * 0.3)
                 y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
                 markers.append(
                     MarkerPlacement(
@@ -113,7 +113,7 @@ class GridLayoutEngine(LayoutEngine):
                 block = placement_by_block.get(end_block)
                 if not block:
                     continue
-                x = block.position.x + block.size.width + (self.config.gap_x / 2)
+                x = block.position.x + block.size.width + (self.config.gap_x * 0.3)
                 y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
                 markers.append(
                     MarkerPlacement(
