@@ -1,41 +1,41 @@
 # Repository Guidelines
 
-This repository is currently a minimal workspace centered around a single JSON-like example file. Use this guide to keep additions consistent and easy to review.
+MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3.14 + Poetry, CLI на Typer, гексагональная архитектура, layout-движок GridLayoutEngine.
 
-## Project Structure & Module Organization
+## Project Structure
 
-- `example_json.txt` holds JSON-like data with `//` comments. Treat it as documentation or sample input rather than strict JSON.
-- `.venv/` and `.idea/` are local development artifacts and should not be edited directly in the repo.
-- Add new source under a top-level `src/` directory if the project grows, and tests under `tests/` to keep intent clear.
+- `app/cli.py` — Typer CLI (`cjm convert to-excalidraw|from-excalidraw|validate`).
+- `domain/` — модели, порты, use-cases; `convert_markup_to_excalidraw.py`, `convert_excalidraw_to_markup.py`.
+- `adapters/` — `filesystem` (IO), `excalidraw` (scene), `layout/grid.py` (детерминированный лейаут).
+- `examples/markup/` — `basic.json`, `advanced.json`, `with_links.json`, `yet_another.json`.
+- `data/` — runtime IO (markup/excalidraw_in/excalidraw_out/roundtrip).
+- `tests/` — pytest round-trip и метаданные.
+- `makefile` — bootstrap/install/test/lint/fmt/convert/demo; Poetry ставится в `.venv`.
 
-## Build, Test, and Development Commands
+## Build & Run
 
-There are no build or runtime commands defined yet. If you add tooling, document it here with clear examples, such as:
+- `make bootstrap` → venv + Poetry install.
+- `make convert-to-ui` → markup → `data/excalidraw_in`.
+- `EXCALIDRAW_PORT=5010 make demo` → конверт + docker run UI.
+- `make convert-from-ui` → экспорт из UI (`data/excalidraw_out`) → markup `data/roundtrip`.
+- Lint/format/typecheck: `make fmt`, `make lint`. Tests: `make test`.
 
-- `python -m pytest` (runs unit tests)
-- `npm test` (runs JavaScript test suite)
+## Conversion Logic (важно для доработок)
 
-## Coding Style & Naming Conventions
+- Layout внутри процедуры: топосорт, стартовые слева, children центруются по позициям целей для уменьшения пересечений/длины стрелок; end-овалы справа, если помещаются, иначе снизу по центру.
+- Процедуры располагаются и соединяются слева-направо в порядке JSON; если есть межпроцедурные связи по блокам, они рисуются; иначе фреймы соединяются последовательно.
+- START овалы 180x90, вынесены влево; если старт один — текст `START`, иначе глобальная нумерация `START #N`. END — аналогично справа/снизу, стрелка привязана.
+- Стрелки имеют start/end bindings + boundElements, опираются на края элементов; ветки с небольшими offset по Y для разведения.
+- Текст блоков/маркеров подгоняется по ширине/высоте с автоуменьшением шрифта.
 
-- Keep file content ASCII unless there is a clear reason to use Unicode.
-- Use 2-space indentation for JSON-like structures and align nested blocks cleanly.
-- Prefer descriptive, lowercase file names with underscores (e.g., `example_payload.txt`).
+## Coding Style & Tooling
 
-## Testing Guidelines
+- Python 3.14, Poetry 2.2.x, Pydantic v2, Typer, Rich, orjson, optional networkx.
+- Linters: ruff, mypy (strict). Tests: pytest. Pre-commit: ruff/format/mypy hooks.
+- ASCII по умолчанию, краткие комментарии только при необходимости.
 
-No test framework is configured. If tests are introduced:
+## Agent Notes
 
-- Place unit tests in `tests/`.
-- Use clear naming like `test_<feature>.py` or `*.spec.js`.
-- Document how to run the tests in this section.
-
-## Commit & Pull Request Guidelines
-
-The current Git history is minimal and does not establish a message convention. Until a standard is adopted:
-
-- Use short, imperative commit messages (e.g., “Add example payload format”).
-- Keep pull requests small and include a brief summary and any relevant context or screenshots if output changes.
-
-## Agent-Specific Notes
-
-If you add scripts, configs, or structured data, update this file with the new paths and commands so future contributors can onboard quickly.
+- Сцены для проверки: `data/excalidraw_in/*.excalidraw` генерятся `make convert-to-ui`.
+- Docker UI порт по умолчанию 5010. Если порт занят — задавай `EXCALIDRAW_PORT`.
+- При изменениях лейаута/стрелок убедись, что биндинги сохраняются и тесты зелёные (`pytest`).  
