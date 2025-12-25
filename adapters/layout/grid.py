@@ -50,9 +50,9 @@ class GridLayoutEngine(LayoutEngine):
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
-            _, max_level, level_counts, _, _, _ = self._compute_block_levels(procedure)
+            _, max_level, row_counts, _, _, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
-            rows = max(level_counts.values() or [1])
+            rows = max(row_counts.values() or [1])
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
             frame_width = (
                 self.config.padding * 2
@@ -170,15 +170,10 @@ class GridLayoutEngine(LayoutEngine):
         end_nodes: Dict[str, NodeInfo] = {}
         for block_id in end_blocks:
             base_type = normalize_end_type(end_block_types.get(block_id)) or END_TYPE_DEFAULT
-            if base_type in {"all", "intermediate"}:
-                transitions = ["end", "exit"]
-            else:
-                transitions = [base_type]
-            for transition in transitions:
-                node_id = f"__end_marker__{transition}::{block_id}"
-                end_nodes[node_id] = NodeInfo(
-                    kind="end_marker", block_id=block_id, end_type=transition
-                )
+            node_id = f"__end_marker__{base_type}::{block_id}"
+            end_nodes[node_id] = NodeInfo(
+                kind="end_marker", block_id=block_id, end_type=base_type
+            )
 
         node_info.update(end_nodes)
         all_nodes = set(node_info.keys())
@@ -221,16 +216,30 @@ class GridLayoutEngine(LayoutEngine):
                     queue.append(neighbor)
                     queue.sort(key=lambda n: sort_key(n, levels))
 
+        for node_id in all_nodes:
+            levels.setdefault(node_id, 0)
+
         # Ensure end blocks have at least computed level (do not force extra column to keep arrows short).
         for end_block in end_blocks:
             levels.setdefault(end_block, max(levels.values() or [0]))
+        if start_blocks:
+            for node_id in all_nodes:
+                if node_id not in start_nodes:
+                    levels[node_id] = max(levels.get(node_id, 0), 1)
+
+            changed = True
+            while changed:
+                changed = False
+                for src, targets in adj.items():
+                    src_level = levels.get(src, 0)
+                    for tgt in targets:
+                        if levels.get(tgt, 0) < src_level + 1:
+                            levels[tgt] = src_level + 1
+                            changed = True
+
         max_level = max(levels.values() or [0])
 
-        level_counts: Dict[int, int] = {}
-        for lvl in levels.values():
-            level_counts[lvl] = level_counts.get(lvl, 0) + 1
-        if not order:
-            order = sorted(levels.keys())
+        branch_counts = {block: len(targets) for block, targets in branches.items()}
 
         # Reorder blocks inside each level to reduce crossings using child anchors (right-to-left pass).
         level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
@@ -258,9 +267,23 @@ class GridLayoutEngine(LayoutEngine):
                 positions[node_id] = idx
 
         ordered: List[str] = []
+        row_positions: Dict[str, float] = {}
+        row_counts: Dict[int, int] = {}
         for lvl in range(max_level + 1):
             bucket = level_buckets.get(lvl, [])
             bucket.sort(key=lambda n: positions.get(n, 0))
-            ordered.extend(bucket)
-        row_positions = {node_id: float(positions.get(node_id, 0)) for node_id in ordered}
-        return levels, max_level, level_counts, ordered, row_positions, node_info
+            row = 0
+            for node_id in bucket:
+                ordered.append(node_id)
+                row_positions[node_id] = float(row)
+                info = node_info.get(node_id)
+                if info and info.kind == "block":
+                    step = max(1, branch_counts.get(info.block_id, 0))
+                else:
+                    step = 1
+                row += step
+            if bucket:
+                row_counts[lvl] = max(row, 1)
+        if not row_counts:
+            row_counts[0] = 1
+        return levels, max_level, row_counts, ordered, row_positions, node_info

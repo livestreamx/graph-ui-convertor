@@ -44,7 +44,7 @@ def test_end_type_roundtrip_and_service_name() -> None:
     assert marker_elements
     colors = {element.get("backgroundColor") for element in marker_elements}
     assert END_TYPE_COLORS["exit"] in colors
-    assert END_TYPE_COLORS["end"] in colors
+    assert END_TYPE_COLORS["intermediate"] in colors
 
     serialized = markup.to_markup_dict()
     assert serialized["procedures"][0]["end_block_ids"] == ["b::exit", "c::intermediate"]

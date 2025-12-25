@@ -11,6 +11,7 @@ from domain.models import (
     END_TYPE_DEFAULT,
     ExcalidrawDocument,
     FramePlacement,
+    INTERMEDIATE_BLOCK_COLOR,
     LayoutPlan,
     MarkupDocument,
     METADATA_SCHEMA_VERSION,
@@ -43,10 +44,18 @@ class MarkupToExcalidrawConverter:
             element_index[element["id"]] = element
 
         frame_ids = self._build_frames(plan.frames, add_element, base_metadata)
-        blocks = self._build_blocks(plan.blocks, frame_ids, add_element, base_metadata)
+        included_procs = {frame.procedure_id for frame in plan.frames}
+        end_block_type_lookup = {
+            (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
+            for proc in document.procedures
+            if proc.procedure_id in included_procs
+            for block_id in proc.end_block_ids
+        }
+        blocks = self._build_blocks(
+            plan.blocks, frame_ids, add_element, base_metadata, end_block_type_lookup
+        )
 
         start_label_index: Dict[Tuple[str, str], int] = {}
-        included_procs = {frame.procedure_id for frame in plan.frames}
         start_blocks_global = [
             (proc.procedure_id, blk_id)
             for proc in document.procedures
@@ -55,12 +64,6 @@ class MarkupToExcalidrawConverter:
         ]
         for idx, (proc_id, blk_id) in enumerate(start_blocks_global, start=1):
             start_label_index[(proc_id, blk_id)] = idx
-        end_block_type_lookup = {
-            (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
-            for proc in document.procedures
-            if proc.procedure_id in included_procs
-            for block_id in proc.end_block_ids
-        }
         markers = self._build_markers(
             plan.markers,
             frame_ids,
@@ -122,6 +125,7 @@ class MarkupToExcalidrawConverter:
         frame_ids: Dict[str, str],
         add_element: callable,
         base_metadata: dict,
+        end_block_type_lookup: Dict[Tuple[str, str], str],
     ) -> Dict[Tuple[str, str], BlockPlacement]:
         placement_index: Dict[Tuple[str, str], BlockPlacement] = {}
         for block in blocks:
@@ -129,6 +133,16 @@ class MarkupToExcalidrawConverter:
             group_id = self._stable_id("group", block.procedure_id, block.block_id)
             rect_id = self._stable_id("block", block.procedure_id, block.block_id)
             text_id = self._stable_id("block-text", block.procedure_id, block.block_id)
+            end_block_type = end_block_type_lookup.get(
+                (block.procedure_id, block.block_id)
+            )
+            block_meta = {
+                "procedure_id": block.procedure_id,
+                "block_id": block.block_id,
+                "role": "block",
+            }
+            if end_block_type:
+                block_meta["end_block_type"] = end_block_type
             add_element(
                 self._rectangle_element(
                     element_id=rect_id,
@@ -136,13 +150,11 @@ class MarkupToExcalidrawConverter:
                     size=block.size,
                     frame_id=frame_ids.get(block.procedure_id),
                     group_ids=[group_id],
-                    metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": block.procedure_id,
-                            "block_id": block.block_id,
-                            "role": "block",
-                        },
-                        base_metadata,
+                    metadata=self._with_base_metadata(block_meta, base_metadata),
+                    background_color=(
+                        INTERMEDIATE_BLOCK_COLOR
+                        if end_block_type == "intermediate"
+                        else None
                     ),
                 )
             )
@@ -159,6 +171,7 @@ class MarkupToExcalidrawConverter:
                             "procedure_id": block.procedure_id,
                             "block_id": block.block_id,
                             "role": "block_label",
+                            "end_block_type": end_block_type,
                         },
                         base_metadata,
                     ),
@@ -220,7 +233,10 @@ class MarkupToExcalidrawConverter:
                 idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
                 label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
             elif marker.role == "end_marker":
-                label_text = "END" if end_type != "exit" else "EXIT"
+                if end_type in {"all", "intermediate"}:
+                    label_text = "END & EXIT"
+                else:
+                    label_text = "END" if end_type != "exit" else "EXIT"
             add_element(
                 self._text_element(
                     element_id=label_id,
@@ -406,7 +422,8 @@ class MarkupToExcalidrawConverter:
         element_index: Dict[str, dict],
         base_metadata: dict,
     ) -> None:
-        if len(document.procedures) <= 1:
+        frames_list = list(frames)
+        if len(frames_list) <= 1:
             return
         # Connect procedures when no explicit block-to-block cross edges.
         proc_for_block: Dict[str, str] = {}
@@ -422,17 +439,18 @@ class MarkupToExcalidrawConverter:
                     if tgt_proc and tgt_proc != proc.procedure_id:
                         cross_edges.append((proc.procedure_id, tgt_proc))
 
-        if cross_edges:
-            edges_to_draw = list({(src, dst) for src, dst in cross_edges})
-        else:
-            frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
-            ordered = sorted(
-                document.procedures,
-                key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
-            )
-            edges_to_draw = [(left.procedure_id, right.procedure_id) for left, right in zip(ordered, ordered[1:])]
+        frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames_list}
+        ordered = sorted(
+            [proc for proc in document.procedures if proc.procedure_id in frame_lookup],
+            key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
+        )
+        sequential_edges = [
+            (left.procedure_id, right.procedure_id) for left, right in zip(ordered, ordered[1:])
+        ]
+        edges_to_draw = list({*cross_edges, *sequential_edges})
 
-        frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
+        min_height = min((frame.size.height for frame in frames_list), default=0.0)
+        baseline_y = frames_list[0].origin.y + (min_height / 2 if min_height else 0.0)
         for left_id, right_id in edges_to_draw:
             left_frame = frame_lookup.get(left_id)
             right_frame = frame_lookup.get(right_id)
@@ -440,11 +458,11 @@ class MarkupToExcalidrawConverter:
                 continue
             start = Point(
                 x=left_frame.origin.x + left_frame.size.width,
-                y=left_frame.origin.y + left_frame.size.height / 2,
+                y=baseline_y,
             )
             end = Point(
                 x=right_frame.origin.x,
-                y=right_frame.origin.y + right_frame.size.height / 2,
+                y=baseline_y,
             )
             arrow = self._arrow_element(
                 start=start,
@@ -494,6 +512,7 @@ class MarkupToExcalidrawConverter:
         frame_id: str | None,
         group_ids: List[str],
         metadata: dict,
+        background_color: str | None = None,
     ) -> dict:
         return self._base_shape(
             element_id=element_id,
@@ -505,7 +524,7 @@ class MarkupToExcalidrawConverter:
             group_ids=group_ids,
             extra={
                 "strokeColor": "#1e1e1e",
-                "backgroundColor": "#cce5ff",
+                "backgroundColor": background_color or "#cce5ff",
                 "fillStyle": "hachure",
                 "seed": self._rand_seed(),
                 "version": 1,

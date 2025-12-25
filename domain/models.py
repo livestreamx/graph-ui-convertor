@@ -16,6 +16,7 @@ END_TYPE_COLORS = {
     "all": "#fff3b0",
     "intermediate": "#cfe3ff",
 }
+INTERMEDIATE_BLOCK_COLOR = "#ffb347"
 
 
 def normalize_end_type(value: Optional[str]) -> Optional[str]:
