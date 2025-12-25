@@ -1,10 +1,20 @@
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from domain.models import CUSTOM_DATA_KEY, MarkupDocument, METADATA_SCHEMA_VERSION, Procedure
+from domain.models import (
+    CUSTOM_DATA_KEY,
+    END_TYPE_COLORS,
+    END_TYPE_DEFAULT,
+    MarkupDocument,
+    METADATA_SCHEMA_VERSION,
+    Procedure,
+    merge_end_types,
+    normalize_end_type,
+)
 
 
 @dataclass(frozen=True)
@@ -20,6 +30,7 @@ class MarkerCandidate:
     block_id: str
     role: str
     element_id: Optional[str]
+    end_type: Optional[str]
 
 
 class ExcalidrawToMarkupConverter:
@@ -29,10 +40,16 @@ class ExcalidrawToMarkupConverter:
         blocks = self._collect_blocks(elements, frames)
         markers = self._collect_markers(elements, frames)
 
-        finedog_unit_id, markup_type = self._infer_globals(elements)
+        finedog_unit_id, markup_type, service_name = self._infer_globals(elements)
         start_map: Dict[str, set[str]] = defaultdict(set)
-        end_map: Dict[str, set[str]] = defaultdict(set)
+        end_map: Dict[str, Dict[str, str]] = defaultdict(dict)
         branch_map: Dict[str, Dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+
+        marker_end_types = self._merge_marker_end_types(markers)
+        for (procedure_id, block_id), end_type in marker_end_types.items():
+            end_map[procedure_id][block_id] = merge_end_types(
+                end_map[procedure_id].get(block_id), end_type
+            )
 
         for arrow in filter(self._is_arrow, elements):
             meta = self._metadata(arrow)
@@ -52,9 +69,14 @@ class ExcalidrawToMarkupConverter:
                     start_map[procedure_id].add(target_block)
                 continue
 
-            if edge_type == "end":
+            if edge_type == "end" or self._is_end_arrow(arrow, markers, start_binding, end_binding):
                 if source_block:
-                    end_map[procedure_id].add(source_block)
+                    end_type = self._infer_end_type_from_arrow(
+                        arrow, meta, marker_end_types, procedure_id, source_block, markers
+                    )
+                    end_map[procedure_id][source_block] = merge_end_types(
+                        end_map[procedure_id].get(source_block), end_type
+                    )
                 continue
 
             if edge_type == "branch":
@@ -69,6 +91,7 @@ class ExcalidrawToMarkupConverter:
         return MarkupDocument(
             finedog_unit_id=finedog_unit_id,
             markup_type=markup_type,
+            service_name=service_name,
             procedures=procedures,
         )
 
@@ -126,11 +149,13 @@ class ExcalidrawToMarkupConverter:
             if not procedure_id or not block_id:
                 continue
             element_id = element.get("id")
+            end_type = self._infer_end_type_from_element(element, meta) if role == "end_marker" else None
             markers[element_id] = MarkerCandidate(
                 procedure_id=procedure_id,
                 block_id=block_id,
                 role=role,
                 element_id=element_id,
+                end_type=end_type,
             )
         return markers
 
@@ -138,7 +163,7 @@ class ExcalidrawToMarkupConverter:
         self,
         blocks: Dict[str, BlockCandidate],
         start_map: Dict[str, set[str]],
-        end_map: Dict[str, set[str]],
+        end_map: Dict[str, Dict[str, str]],
         branch_map: Dict[str, Dict[str, set[str]]],
         frames: Dict[str, str],
     ) -> List[Procedure]:
@@ -155,13 +180,15 @@ class ExcalidrawToMarkupConverter:
                 for source, targets in sorted(branch_map.get(procedure_id, {}).items())
             }
             start_blocks = sorted(start_map.get(procedure_id, set()))
-            end_blocks = sorted(end_map.get(procedure_id, set()))
+            end_types = dict(end_map.get(procedure_id, {}))
+            end_blocks = sorted(end_types.keys())
 
             procedures.append(
                 Procedure(
                     procedure_id=procedure_id,
                     start_block_ids=start_blocks,
                     end_block_ids=end_blocks,
+                    end_block_types=end_types,
                     branches=branches,
                 )
             )
@@ -224,11 +251,129 @@ class ExcalidrawToMarkupConverter:
         block_target = end_binding.get("elementId")
         return bool(start_marker and block_target)
 
-    def _infer_globals(self, elements: Iterable[dict]) -> Tuple[int, str]:
+    def _is_end_arrow(
+        self,
+        arrow: dict,
+        markers: Dict[str, MarkerCandidate],
+        start_binding: dict,
+        end_binding: dict,
+    ) -> bool:
+        end_marker = markers.get(end_binding.get("elementId"))
+        if not end_marker or end_marker.role != "end_marker":
+            return False
+        start_element = start_binding.get("elementId")
+        return bool(start_element and start_element not in markers)
+
+    def _infer_globals(self, elements: Iterable[dict]) -> Tuple[int, str, Optional[str]]:
         for element in elements:
             meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {})
             finedog = meta.get("finedog_unit_id")
             markup_type = meta.get("markup_type")
+            service_name = meta.get("service_name")
             if finedog is not None and markup_type:
-                return int(finedog), str(markup_type)
-        return 0, "service"
+                return int(finedog), str(markup_type), service_name
+        return 0, "service", None
+
+    def _merge_marker_end_types(
+        self, markers: Dict[str, MarkerCandidate]
+    ) -> Dict[Tuple[str, str], str]:
+        end_types: Dict[Tuple[str, str], str] = {}
+        for marker in markers.values():
+            if marker.role != "end_marker":
+                continue
+            end_type = marker.end_type or END_TYPE_DEFAULT
+            key = (marker.procedure_id, marker.block_id)
+            end_types[key] = merge_end_types(end_types.get(key), end_type)
+        return end_types
+
+    def _infer_end_type_from_arrow(
+        self,
+        arrow: dict,
+        meta: dict,
+        marker_end_types: Dict[Tuple[str, str], str],
+        procedure_id: str,
+        source_block: str,
+        markers: Dict[str, MarkerCandidate],
+    ) -> str:
+        end_type = normalize_end_type(meta.get("end_type"))
+        if end_type:
+            return end_type
+        tagged = self._end_type_from_tags(arrow, meta)
+        if tagged:
+            return tagged
+        end_type = marker_end_types.get((procedure_id, source_block))
+        if end_type:
+            return end_type
+        end_binding = arrow.get("endBinding") or {}
+        marker = markers.get(end_binding.get("elementId"))
+        if marker and marker.end_type:
+            return marker.end_type
+        return END_TYPE_DEFAULT
+
+    def _infer_end_type_from_element(self, element: dict, meta: dict) -> Optional[str]:
+        end_type = normalize_end_type(meta.get("end_type"))
+        if end_type:
+            return end_type
+        tagged = self._end_type_from_tags(element, meta)
+        if tagged:
+            return tagged
+        return self._end_type_from_color(element.get("backgroundColor"))
+
+    def _end_type_from_tags(self, element: dict, meta: dict) -> Optional[str]:
+        tags: List[str] = []
+        for source in (
+            meta.get("tags"),
+            element.get("tags"),
+            element.get("customData", {}).get("tags"),
+            element.get("customData", {}).get("excalidraw", {}).get("tags"),
+        ):
+            tags.extend(self._split_tags(source))
+        for field in ("text", "name"):
+            value = element.get(field)
+            if isinstance(value, str):
+                tags.extend(self._extract_inline_tags(value))
+        end_type: Optional[str] = None
+        for tag in tags:
+            normalized = normalize_end_type(tag)
+            if not normalized:
+                continue
+            end_type = merge_end_types(end_type, normalized)
+        return end_type
+
+    def _end_type_from_color(self, color: Optional[str]) -> Optional[str]:
+        if not color:
+            return None
+        candidate = str(color).lower()
+        for end_type, end_color in END_TYPE_COLORS.items():
+            if candidate == end_color.lower():
+                return end_type
+        return None
+
+    def _split_tags(self, value: object) -> List[str]:
+        if isinstance(value, (list, tuple, set)):
+            return [self._normalize_tag(str(item)) for item in value]
+        if isinstance(value, str):
+            return [
+                self._normalize_tag(chunk)
+                for chunk in re.split(r"[,\\s]+", value)
+                if chunk
+            ]
+        return []
+
+    def _extract_inline_tags(self, value: str) -> List[str]:
+        return [
+            match.lower()
+            for match in re.findall(
+                r"(?:#|::)(end|exit|all|intermediate)\\b",
+                value,
+                flags=re.IGNORECASE,
+            )
+        ]
+
+    def _normalize_tag(self, value: str) -> str:
+        candidate = value.strip()
+        if candidate.startswith("#"):
+            candidate = candidate[1:]
+        if candidate.startswith("::"):
+            candidate = candidate[2:]
+        return candidate

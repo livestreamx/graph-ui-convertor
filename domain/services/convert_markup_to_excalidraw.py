@@ -7,6 +7,8 @@ from typing import Dict, Iterable, List, Tuple
 from domain.models import (
     BlockPlacement,
     CUSTOM_DATA_KEY,
+    END_TYPE_COLORS,
+    END_TYPE_DEFAULT,
     ExcalidrawDocument,
     FramePlacement,
     LayoutPlan,
@@ -33,6 +35,8 @@ class MarkupToExcalidrawConverter:
             "finedog_unit_id": document.finedog_unit_id,
             "markup_type": document.markup_type,
         }
+        if document.service_name:
+            base_metadata["service_name"] = document.service_name
 
         def add_element(element: dict) -> None:
             elements.append(element)
@@ -49,8 +53,18 @@ class MarkupToExcalidrawConverter:
         ]
         for idx, (proc_id, blk_id) in enumerate(start_blocks_global, start=1):
             start_label_index[(proc_id, blk_id)] = idx
+        end_type_lookup = {
+            (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
+            for proc in document.procedures
+            for block_id in proc.end_block_ids
+        }
         markers = self._build_markers(
-            plan.markers, frame_ids, add_element, base_metadata, start_label_index
+            plan.markers,
+            frame_ids,
+            add_element,
+            base_metadata,
+            start_label_index,
+            end_type_lookup,
         )
 
         self._build_start_edges(document, blocks, markers, add_element, element_index, base_metadata)
@@ -151,25 +165,34 @@ class MarkupToExcalidrawConverter:
         add_element: callable,
         base_metadata: dict,
         start_label_index: Dict[Tuple[str, str], int],
+        end_type_lookup: Dict[Tuple[str, str], str],
     ) -> Dict[Tuple[str, str, str], MarkerPlacement]:
         marker_index: Dict[Tuple[str, str, str], MarkerPlacement] = {}
         for marker in markers:
             marker_index[(marker.procedure_id, marker.block_id, marker.role)] = marker
             element_id = self._stable_id("marker", marker.procedure_id, marker.role, marker.block_id)
+            marker_meta = {
+                "procedure_id": marker.procedure_id,
+                "block_id": marker.block_id,
+                "role": marker.role,
+            }
+            end_type = None
+            background_color = None
+            if marker.role == "end_marker":
+                end_type = end_type_lookup.get(
+                    (marker.procedure_id, marker.block_id), END_TYPE_DEFAULT
+                )
+                marker_meta["end_type"] = end_type
+                marker_meta["tags"] = [end_type]
+                background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
             add_element(
                 self._ellipse_element(
                     element_id=element_id,
                     position=marker.position,
                     size=marker.size,
                     frame_id=frame_ids.get(marker.procedure_id),
-                    metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": marker.procedure_id,
-                            "block_id": marker.block_id,
-                            "role": marker.role,
-                        },
-                        base_metadata,
-                    ),
+                    metadata=self._with_base_metadata(marker_meta, base_metadata),
+                    background_color=background_color,
                 )
             )
             label_id = self._stable_id(
@@ -188,14 +211,7 @@ class MarkupToExcalidrawConverter:
                     center=self._center(marker.position, marker.size.width, marker.size.height),
                     container_id=element_id,
                     frame_id=frame_ids.get(marker.procedure_id),
-                    metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": marker.procedure_id,
-                            "block_id": marker.block_id,
-                            "role": marker.role,
-                        },
-                        base_metadata,
-                    ),
+                    metadata=self._with_base_metadata(marker_meta, base_metadata),
                     max_width=marker.size.width - 24,
                     max_height=min(52.0, marker.size.height - 14),
                     font_size=None,
@@ -258,6 +274,7 @@ class MarkupToExcalidrawConverter:
                 marker = markers.get((procedure.procedure_id, end_block_id, "end_marker"))
                 if not block or not marker:
                     continue
+                end_type = procedure.end_block_types.get(end_block_id, END_TYPE_DEFAULT)
                 start_center = self._block_anchor(block, side="right")
                 end_center = self._marker_anchor(marker, side="left")
                 arrow = self._arrow_element(
@@ -269,6 +286,7 @@ class MarkupToExcalidrawConverter:
                                 "procedure_id": procedure.procedure_id,
                                 "role": "edge",
                                 "edge_type": "end",
+                                "end_type": end_type,
                                 "source_block_id": end_block_id,
                             },
                             base_metadata,
@@ -482,6 +500,7 @@ class MarkupToExcalidrawConverter:
         size: Size,
         frame_id: str | None,
         metadata: dict,
+        background_color: str | None = None,
     ) -> dict:
         return self._base_shape(
             element_id=element_id,
@@ -492,7 +511,7 @@ class MarkupToExcalidrawConverter:
             frame_id=frame_id,
             extra={
                 "strokeColor": "#1e1e1e",
-                "backgroundColor": "#d1ffd6",
+                "backgroundColor": background_color or "#d1ffd6",
                 "fillStyle": "solid",
                 "seed": self._rand_seed(),
                 "version": 1,

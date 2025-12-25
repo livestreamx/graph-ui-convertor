@@ -22,7 +22,8 @@ class FileSystemMarkupRepository(MarkupRepository):
 
     def save(self, document: MarkupDocument, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(document.model_dump_json(indent=2), encoding="utf-8")
+        payload = document.to_markup_dict()
+        path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _iter_paths(self, directory: Path) -> Iterable[Path]:
         for path in directory.glob("*.json"):
