@@ -42,7 +42,7 @@ class GridLayoutEngine(LayoutEngine):
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in document.procedures:
             has_end = bool(procedure.end_block_ids)
-            _, max_level, level_counts, _ = self._compute_block_levels(procedure)
+            _, max_level, level_counts, _, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
             rows = max(level_counts.values() or [1])
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
@@ -77,14 +77,13 @@ class GridLayoutEngine(LayoutEngine):
             frames.append(frame)
 
             placement_by_block: Dict[str, BlockPlacement] = {}
-            block_levels, max_level, level_counts, order = self._compute_block_levels(procedure)
-            level_rows: Dict[int, int] = {lvl: 0 for lvl in range(max_level + 1)}
+            block_levels, max_level, level_counts, order, row_positions = self._compute_block_levels(procedure)
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
-
+            level_rows: Dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
             for block_id in order:
                 level_idx = block_levels.get(block_id, 0)
-                row_idx = level_rows[level_idx]
-                level_rows[level_idx] += 1
+                row_idx = row_positions.get(block_id, level_rows[level_idx])
+                level_rows[level_idx] = max(level_rows[level_idx], row_idx + 1)
 
                 x = frame.origin.x + self.config.padding + start_extra + level_idx * (
                     self.config.block_size.width + self.config.gap_x
@@ -143,7 +142,7 @@ class GridLayoutEngine(LayoutEngine):
 
     def _compute_block_levels(
         self, procedure: object
-    ) -> Tuple[Dict[str, int], int, Dict[int, int], List[str]]:
+    ) -> Tuple[Dict[str, int], int, Dict[int, int], List[str], Dict[str, float]]:
         branches = getattr(procedure, "branches")
         start_blocks = list(getattr(procedure, "start_block_ids"))
         end_blocks = list(getattr(procedure, "end_block_ids"))
@@ -155,11 +154,9 @@ class GridLayoutEngine(LayoutEngine):
 
         indegree: Dict[str, int] = {b: 0 for b in all_blocks}
         adj: Dict[str, List[str]] = {b: [] for b in all_blocks}
-        preds: Dict[str, List[str]] = {b: [] for b in all_blocks}
         for src, targets in branches.items():
             for tgt in targets:
                 adj[src].append(tgt)
-                preds[tgt].append(src)
                 indegree[tgt] = indegree.get(tgt, 0) + 1
 
         queue = sorted(all_blocks, key=lambda b: (0 if b in start_blocks else 1, b))
@@ -188,29 +185,35 @@ class GridLayoutEngine(LayoutEngine):
             level_counts[lvl] = level_counts.get(lvl, 0) + 1
         if not order:
             order = sorted(levels.keys())
-        # Reorder blocks inside each level to reduce crossings using predecessor positions.
+
+        # Reorder blocks inside each level to reduce crossings using child anchors (right-to-left pass).
         level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
         for block_id, lvl in levels.items():
             level_buckets.setdefault(lvl, []).append(block_id)
 
+        positions: Dict[str, int] = {}
+        for lvl in reversed(range(max_level + 1)):
+            bucket = level_buckets.get(lvl, [])
+            if not bucket:
+                continue
+
+            def anchor_child(b: str) -> float:
+                children = [c for c in adj.get(b, []) if levels.get(c) == lvl + 1 and c in positions]
+                if children:
+                    return sum(positions[c] for c in children) / len(children)
+                return float("inf")
+
+            bucket.sort(key=lambda b: (anchor_child(b), indegree.get(b, 0), b))
+            for idx, b in enumerate(bucket):
+                positions[b] = idx
+
         ordered: List[str] = []
-        prev_positions: Dict[str, int] = {}
         for lvl in range(max_level + 1):
             bucket = level_buckets.get(lvl, [])
-            if lvl == 0:
-                bucket.sort()
-            else:
-                def anchor(b: str) -> float:
-                    relevant_preds = [p for p in preds.get(b, []) if levels.get(p) == lvl - 1]
-                    if relevant_preds:
-                        return sum(prev_positions.get(p, 0) for p in relevant_preds) / len(relevant_preds)
-                    return float("inf")
-
-                bucket.sort(key=lambda b: (anchor(b), indegree.get(b, 0), b))
-            for idx, b in enumerate(bucket):
-                prev_positions[b] = idx
+            bucket.sort(key=lambda b: positions.get(b, 0))
             ordered.extend(bucket)
-        return levels, max_level, level_counts, ordered
+        row_positions = {b: float(positions.get(b, 0)) for b in ordered}
+        return levels, max_level, level_counts, ordered, row_positions
 
     def _compute_procedure_levels(self, document: MarkupDocument) -> Dict[str, int]:
         # Use declared order in JSON to keep left->right flow consistent.
