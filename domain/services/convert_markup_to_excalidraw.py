@@ -42,9 +42,13 @@ class MarkupToExcalidrawConverter:
         blocks = self._build_blocks(plan.blocks, frame_ids, add_element, base_metadata)
 
         start_label_index: Dict[Tuple[str, str], int] = {}
-        for proc in document.procedures:
-            for idx, block_id in enumerate(proc.start_block_ids, start=1):
-                start_label_index[(proc.procedure_id, block_id)] = idx
+        start_blocks_global = [
+            (proc.procedure_id, blk_id)
+            for proc in document.procedures
+            for blk_id in proc.start_block_ids
+        ]
+        for idx, (proc_id, blk_id) in enumerate(start_blocks_global, start=1):
+            start_label_index[(proc_id, blk_id)] = idx
         markers = self._build_markers(
             plan.markers, frame_ids, add_element, base_metadata, start_label_index
         )
@@ -134,7 +138,8 @@ class MarkupToExcalidrawConverter:
                         base_metadata,
                     ),
                     max_width=block.size.width - 20,
-                    max_height=min(48.0, block.size.height - 20),
+                    max_height=min(56.0, block.size.height - 20),
+                    font_size=18.0,
                 )
             )
         return placement_index
@@ -172,7 +177,8 @@ class MarkupToExcalidrawConverter:
             )
             label_text = "START"
             if marker.role == "start_marker":
-                label_text = f"START #{start_label_index.get((marker.procedure_id, marker.block_id), 1)}"
+                idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
+                label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
             elif marker.role == "end_marker":
                 label_text = "END"
             add_element(
@@ -190,8 +196,9 @@ class MarkupToExcalidrawConverter:
                         },
                         base_metadata,
                     ),
-                    max_width=marker.size.width - 12,
-                    max_height=min(28.0, marker.size.height - 12),
+                    max_width=marker.size.width - 24,
+                    max_height=min(52.0, marker.size.height - 14),
+                    font_size=None,
                 )
             )
         return marker_index
@@ -376,19 +383,19 @@ class MarkupToExcalidrawConverter:
                         cross_edges.append((proc.procedure_id, tgt_proc))
 
         if cross_edges:
-            return
+            edges_to_draw = list({(src, dst) for src, dst in cross_edges})
+        else:
+            frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
+            ordered = sorted(
+                document.procedures,
+                key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
+            )
+            edges_to_draw = [(left.procedure_id, right.procedure_id) for left, right in zip(ordered, ordered[1:])]
 
         frame_lookup: Dict[str, FramePlacement] = {f.procedure_id: f for f in frames}
-        # Order by computed procedure levels for deterministic left->right flow.
-        proc_levels = self.layout_engine.build_plan  # type: ignore[attr-defined]
-        # We cannot call build_plan again; use frame x positions as proxy.
-        ordered = sorted(
-            document.procedures,
-            key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
-        )
-        for left, right in zip(ordered, ordered[1:]):
-            left_frame = frame_lookup.get(left.procedure_id)
-            right_frame = frame_lookup.get(right.procedure_id)
+        for left_id, right_id in edges_to_draw:
+            left_frame = frame_lookup.get(left_id)
+            right_frame = frame_lookup.get(right_id)
             if not left_frame or not right_frame:
                 continue
             start = Point(
@@ -405,15 +412,15 @@ class MarkupToExcalidrawConverter:
                 label="procedure",
                 metadata=self._with_base_metadata(
                     {
-                        "procedure_id": left.procedure_id,
-                        "target_procedure_id": right.procedure_id,
+                        "procedure_id": left_id,
+                        "target_procedure_id": right_id,
                         "role": "edge",
                         "edge_type": "procedure_flow",
                     },
                     base_metadata,
                 ),
-                start_binding=self._stable_id("frame", left.procedure_id),
-                end_binding=self._stable_id("frame", right.procedure_id),
+                start_binding=self._stable_id("frame", left_id),
+                end_binding=self._stable_id("frame", right_id),
                 smoothing=0.1,
             )
             add_element(arrow)
@@ -505,11 +512,16 @@ class MarkupToExcalidrawConverter:
         group_ids: List[str] | None = None,
         max_width: float | None = None,
         max_height: float | None = None,
+        font_size: float | None = None,
     ) -> dict:
         width = max(80.0, len(text) * 9.0)
         if max_width is not None:
-            width = min(max_width, max(width, 40.0))
-        height = 30.0 if max_height is None else max_height
+            width = max_width
+        size = font_size or 20.0
+        if max_width is not None and len(text) > 0:
+            ratio = max_width / (len(text) * 7.5)
+            size = max(11.0, min(20.0, 20.0 * ratio))
+        height = (size * 1.3) if max_height is None else max_height
         x = center.x - width / 2
         y = center.y - height / 2
         return {
@@ -537,7 +549,7 @@ class MarkupToExcalidrawConverter:
             "boundElements": [],
             "locked": False,
             "text": text,
-            "fontSize": 20,
+            "fontSize": size,
             "fontFamily": 1,
             "textAlign": "center",
             "verticalAlign": "middle",

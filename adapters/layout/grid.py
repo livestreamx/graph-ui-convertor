@@ -19,7 +19,7 @@ from domain.ports.layout import LayoutEngine
 @dataclass(frozen=True)
 class LayoutConfig:
     block_size: Size = Size(260, 120)
-    marker_size: Size = Size(100, 60)
+    marker_size: Size = Size(180, 90)
     padding: float = 150.0
     gap_x: float = 120.0
     gap_y: float = 80.0
@@ -41,11 +41,18 @@ class GridLayoutEngine(LayoutEngine):
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in document.procedures:
+            has_end = bool(procedure.end_block_ids)
             _, max_level, level_counts, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
             rows = max(level_counts.values() or [1])
-            frame_width = self.config.padding * 2 + cols * self.config.block_size.width + (
-                (cols - 1) * self.config.gap_x
+            start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
+            end_extra = (self.config.marker_size.width + self.config.gap_x * 0.4) if has_end else 0
+            frame_width = (
+                self.config.padding * 2
+                + start_extra
+                + cols * self.config.block_size.width
+                + ((cols - 1) * self.config.gap_x)
+                + end_extra
             )
             frame_height = self.config.padding * 2 + rows * self.config.block_size.height + (
                 (rows - 1) * self.config.gap_y
@@ -72,13 +79,14 @@ class GridLayoutEngine(LayoutEngine):
             placement_by_block: Dict[str, BlockPlacement] = {}
             block_levels, max_level, level_counts, order = self._compute_block_levels(procedure)
             level_rows: Dict[int, int] = {lvl: 0 for lvl in range(max_level + 1)}
+            start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
 
             for block_id in order:
                 level_idx = block_levels.get(block_id, 0)
                 row_idx = level_rows[level_idx]
                 level_rows[level_idx] += 1
 
-                x = frame.origin.x + self.config.padding + level_idx * (
+                x = frame.origin.x + self.config.padding + start_extra + level_idx * (
                     self.config.block_size.width + self.config.gap_x
                 )
                 y = frame.origin.y + self.config.padding + row_idx * (
@@ -97,7 +105,7 @@ class GridLayoutEngine(LayoutEngine):
                 block = placement_by_block.get(start_block)
                 if not block:
                     continue
-                x = block.position.x - (self.config.marker_size.width + self.config.gap_x * 0.3)
+                x = block.position.x - (self.config.marker_size.width + self.config.gap_x * 0.8)
                 y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
                 markers.append(
                     MarkerPlacement(
@@ -113,8 +121,14 @@ class GridLayoutEngine(LayoutEngine):
                 block = placement_by_block.get(end_block)
                 if not block:
                     continue
-                x = block.position.x + block.size.width + (self.config.gap_x * 0.3)
-                y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
+                right_x = block.position.x + block.size.width + (self.config.gap_x * 0.3)
+                fits_right = right_x + self.config.marker_size.width <= frame.origin.x + frame.size.width - self.config.padding * 0.2
+                if fits_right:
+                    x = right_x
+                    y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
+                else:
+                    x = block.position.x + (block.size.width - self.config.marker_size.width) / 2
+                    y = block.position.y + block.size.height + (self.config.gap_y * 0.4)
                 markers.append(
                     MarkerPlacement(
                         procedure_id=procedure.procedure_id,
@@ -141,9 +155,11 @@ class GridLayoutEngine(LayoutEngine):
 
         indegree: Dict[str, int] = {b: 0 for b in all_blocks}
         adj: Dict[str, List[str]] = {b: [] for b in all_blocks}
+        preds: Dict[str, List[str]] = {b: [] for b in all_blocks}
         for src, targets in branches.items():
             for tgt in targets:
                 adj[src].append(tgt)
+                preds[tgt].append(src)
                 indegree[tgt] = indegree.get(tgt, 0) + 1
 
         queue = sorted(all_blocks, key=lambda b: (0 if b in start_blocks else 1, b))
@@ -172,75 +188,30 @@ class GridLayoutEngine(LayoutEngine):
             level_counts[lvl] = level_counts.get(lvl, 0) + 1
         if not order:
             order = sorted(levels.keys())
-        return levels, max_level, level_counts, order
+        # Reorder blocks inside each level to reduce crossings using predecessor positions.
+        level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
+        for block_id, lvl in levels.items():
+            level_buckets.setdefault(lvl, []).append(block_id)
+
+        ordered: List[str] = []
+        prev_positions: Dict[str, int] = {}
+        for lvl in range(max_level + 1):
+            bucket = level_buckets.get(lvl, [])
+            if lvl == 0:
+                bucket.sort()
+            else:
+                def anchor(b: str) -> float:
+                    relevant_preds = [p for p in preds.get(b, []) if levels.get(p) == lvl - 1]
+                    if relevant_preds:
+                        return sum(prev_positions.get(p, 0) for p in relevant_preds) / len(relevant_preds)
+                    return float("inf")
+
+                bucket.sort(key=lambda b: (anchor(b), indegree.get(b, 0), b))
+            for idx, b in enumerate(bucket):
+                prev_positions[b] = idx
+            ordered.extend(bucket)
+        return levels, max_level, level_counts, ordered
 
     def _compute_procedure_levels(self, document: MarkupDocument) -> Dict[str, int]:
-        block_to_proc: Dict[str, str] = {}
-        for procedure in document.procedures:
-            for block_id in procedure.block_ids():
-                block_to_proc[block_id] = procedure.procedure_id
-
-        edges: List[Tuple[str, str]] = []
-        for procedure in document.procedures:
-            for source_block, targets in procedure.branches.items():
-                for target in targets:
-                    target_proc = block_to_proc.get(target)
-                    if target_proc and target_proc != procedure.procedure_id:
-                        edges.append((procedure.procedure_id, target_proc))
-
-        nodes = {proc.procedure_id for proc in document.procedures}
-        indegree: Dict[str, int] = {node: 0 for node in nodes}
-        adj: Dict[str, List[str]] = {node: [] for node in nodes}
-        for src, dst in edges:
-            adj[src].append(dst)
-            indegree[dst] += 1
-
-        def is_start(proc_id: str) -> bool:
-            proc = next(p for p in document.procedures if p.procedure_id == proc_id)
-            return bool(proc.start_block_ids)
-
-        def is_end(proc_id: str) -> bool:
-            proc = next(p for p in document.procedures if p.procedure_id == proc_id)
-            return bool(proc.end_block_ids)
-
-        def start_count(proc_id: str) -> int:
-            proc = next(p for p in document.procedures if p.procedure_id == proc_id)
-            return len(proc.start_block_ids)
-
-        queue = [
-            node
-            for node in sorted(nodes)
-            if indegree.get(node, 0) == 0
-        ]
-        # Prioritize start procedures at the head.
-        queue.sort(key=lambda n: (0 if is_start(n) else 1, -start_count(n), n))
-
-        level: Dict[str, int] = {node: 0 for node in nodes}
-        visited = 0
-        order_offset = 0
-        while queue:
-            node = queue.pop(0)
-            if level[node] == 0:
-                level[node] = order_offset
-                order_offset += 1
-            visited += 1
-            for neighbor in adj.get(node, []):
-                level[neighbor] = max(level[neighbor], level[node] + 1)
-                indegree[neighbor] -= 1
-                if indegree[neighbor] == 0:
-                    queue.append(neighbor)
-                    queue.sort(key=lambda n: (0 if is_start(n) else 1, -start_count(n), n))
-
-        # Push end procedures to the rightmost layer.
-        max_level = max(level.values() or [0])
-        for node in nodes:
-            if is_end(node):
-                level[node] = max_level + 1
-        # Ensure unique ordering left->right even if levels equal.
-        deduped: Dict[str, int] = {}
-        current = 0
-        for proc_id in sorted(nodes, key=lambda n: (level[n], 0 if is_start(n) else 1, -start_count(n), n)):
-            deduped[proc_id] = current
-            current += 1
-
-        return deduped
+        # Use declared order in JSON to keep left->right flow consistent.
+        return {proc.procedure_id: idx for idx, proc in enumerate(document.procedures)}
