@@ -134,7 +134,7 @@ class MarkupToExcalidrawConverter:
                         base_metadata,
                     ),
                     max_width=block.size.width - 20,
-                    max_height=40.0,
+                    max_height=min(48.0, block.size.height - 20),
                 )
             )
         return placement_index
@@ -190,6 +190,8 @@ class MarkupToExcalidrawConverter:
                         },
                         base_metadata,
                     ),
+                    max_width=marker.size.width - 12,
+                    max_height=min(28.0, marker.size.height - 12),
                 )
             )
         return marker_index
@@ -504,9 +506,9 @@ class MarkupToExcalidrawConverter:
         max_width: float | None = None,
         max_height: float | None = None,
     ) -> dict:
-        width = max(80.0, len(text) * 8.0)
+        width = max(80.0, len(text) * 9.0)
         if max_width is not None:
-            width = min(max_width, max(width, max_width))
+            width = min(max_width, max(width, 40.0))
         height = 30.0 if max_height is None else max_height
         x = center.x - width / 2
         y = center.y - height / 2

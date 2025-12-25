@@ -19,7 +19,7 @@ from domain.ports.layout import LayoutEngine
 @dataclass(frozen=True)
 class LayoutConfig:
     block_size: Size = Size(260, 120)
-    marker_size: Size = Size(70, 50)
+    marker_size: Size = Size(100, 60)
     padding: float = 150.0
     gap_x: float = 120.0
     gap_y: float = 80.0

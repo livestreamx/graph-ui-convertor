@@ -81,3 +81,15 @@ def test_roundtrip_from_example_json_fixture() -> None:
     reconstructed = backward.convert(excal.to_dict())
 
     assert normalize(reconstructed) == normalize(markup)
+
+
+def test_roundtrip_with_links_fixture() -> None:
+    markup = load_markup_fixture("with_links.json")
+    layout = GridLayoutEngine()
+    forward = MarkupToExcalidrawConverter(layout)
+    backward = ExcalidrawToMarkupConverter()
+
+    excal = forward.convert(markup)
+    reconstructed = backward.convert(excal.to_dict())
+
+    assert normalize(reconstructed) == normalize(markup)

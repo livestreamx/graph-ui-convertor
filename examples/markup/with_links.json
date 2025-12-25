@@ -1,0 +1,31 @@
+{
+  "finedog_unit_id": 12345,
+  "markup_type": "service",
+  "procedures": [
+    {
+      "procedure_id": "some_initial_proc",
+      "start_block_ids": ["block_id_1", "block_id_2"],
+      "end_block_ids": [],
+      "branches": {
+        "block_id_3": ["block_id_4", "block_id_5"]
+      }
+    },
+    {
+      "procedure_id": "some_middle_proc",
+      "start_block_ids": [],
+      "end_block_ids": ["block_id_8", "block_id_9"],
+      "branches": {
+        "block_id_4": ["block_id_7", "block_id_8"],
+        "block_id_5": ["block_id_9", "block_id_10"]
+      }
+    },
+    {
+      "procedure_id": "some_end_proc",
+      "start_block_ids": [],
+      "end_block_ids": ["block_id_12", "block_id_13"],
+      "branches": {
+        "block_id_10": ["block_id_11", "block_id_12"]
+      }
+    }
+  ]
+}
