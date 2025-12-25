@@ -46,16 +46,19 @@ class MarkupToExcalidrawConverter:
         blocks = self._build_blocks(plan.blocks, frame_ids, add_element, base_metadata)
 
         start_label_index: Dict[Tuple[str, str], int] = {}
+        included_procs = {frame.procedure_id for frame in plan.frames}
         start_blocks_global = [
             (proc.procedure_id, blk_id)
             for proc in document.procedures
+            if proc.procedure_id in included_procs
             for blk_id in proc.start_block_ids
         ]
         for idx, (proc_id, blk_id) in enumerate(start_blocks_global, start=1):
             start_label_index[(proc_id, blk_id)] = idx
-        end_type_lookup = {
+        end_block_type_lookup = {
             (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
             for proc in document.procedures
+            if proc.procedure_id in included_procs
             for block_id in proc.end_block_ids
         }
         markers = self._build_markers(
@@ -64,11 +67,19 @@ class MarkupToExcalidrawConverter:
             add_element,
             base_metadata,
             start_label_index,
-            end_type_lookup,
+            end_block_type_lookup,
         )
 
         self._build_start_edges(document, blocks, markers, add_element, element_index, base_metadata)
-        self._build_end_edges(document, blocks, markers, add_element, element_index, base_metadata)
+        self._build_end_edges(
+            document,
+            blocks,
+            markers,
+            add_element,
+            element_index,
+            base_metadata,
+            end_block_type_lookup,
+        )
         self._build_branch_edges(document, blocks, add_element, element_index, base_metadata)
         self._build_procedure_flow_edges(
             document, plan.frames, frame_ids, add_element, element_index, base_metadata
@@ -165,25 +176,31 @@ class MarkupToExcalidrawConverter:
         add_element: callable,
         base_metadata: dict,
         start_label_index: Dict[Tuple[str, str], int],
-        end_type_lookup: Dict[Tuple[str, str], str],
-    ) -> Dict[Tuple[str, str, str], MarkerPlacement]:
-        marker_index: Dict[Tuple[str, str, str], MarkerPlacement] = {}
+        end_block_type_lookup: Dict[Tuple[str, str], str],
+    ) -> Dict[Tuple[str, str, str, str | None], MarkerPlacement]:
+        marker_index: Dict[Tuple[str, str, str, str | None], MarkerPlacement] = {}
         for marker in markers:
-            marker_index[(marker.procedure_id, marker.block_id, marker.role)] = marker
-            element_id = self._stable_id("marker", marker.procedure_id, marker.role, marker.block_id)
+            marker_index[
+                (marker.procedure_id, marker.block_id, marker.role, marker.end_type)
+            ] = marker
+            element_id = self._marker_element_id(
+                marker.procedure_id, marker.role, marker.block_id, marker.end_type
+            )
             marker_meta = {
                 "procedure_id": marker.procedure_id,
                 "block_id": marker.block_id,
                 "role": marker.role,
             }
             end_type = None
+            block_end_type = None
             background_color = None
             if marker.role == "end_marker":
-                end_type = end_type_lookup.get(
+                end_type = marker.end_type or END_TYPE_DEFAULT
+                block_end_type = end_block_type_lookup.get(
                     (marker.procedure_id, marker.block_id), END_TYPE_DEFAULT
                 )
+                marker_meta["end_block_type"] = block_end_type
                 marker_meta["end_type"] = end_type
-                marker_meta["tags"] = [end_type]
                 background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
             add_element(
                 self._ellipse_element(
@@ -196,14 +213,14 @@ class MarkupToExcalidrawConverter:
                 )
             )
             label_id = self._stable_id(
-                "marker-text", marker.procedure_id, marker.role, marker.block_id
+                "marker-text", marker.procedure_id, marker.role, marker.block_id, marker.end_type or ""
             )
             label_text = "START"
             if marker.role == "start_marker":
                 idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
                 label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
             elif marker.role == "end_marker":
-                label_text = "END"
+                label_text = "END" if end_type != "exit" else "EXIT"
             add_element(
                 self._text_element(
                     element_id=label_id,
@@ -223,14 +240,16 @@ class MarkupToExcalidrawConverter:
         self,
         document: MarkupDocument,
         blocks: Dict[Tuple[str, str], BlockPlacement],
-        markers: Dict[Tuple[str, str, str], MarkerPlacement],
+        markers: Dict[Tuple[str, str, str, str | None], MarkerPlacement],
         add_element: callable,
         element_index: Dict[str, dict],
         base_metadata: dict,
     ) -> None:
         for procedure in document.procedures:
             for start_block_id in procedure.start_block_ids:
-                marker = markers.get((procedure.procedure_id, start_block_id, "start_marker"))
+                marker = markers.get(
+                    (procedure.procedure_id, start_block_id, "start_marker", None)
+                )
                 block = blocks.get((procedure.procedure_id, start_block_id))
                 if not marker or not block:
                     continue
@@ -249,8 +268,8 @@ class MarkupToExcalidrawConverter:
                             },
                             base_metadata,
                         ),
-                        start_binding=self._stable_id(
-                            "marker", procedure.procedure_id, "start_marker", start_block_id
+                        start_binding=self._marker_element_id(
+                            procedure.procedure_id, "start_marker", start_block_id, None
                         ),
                         end_binding=self._stable_id(
                             "block", procedure.procedure_id, start_block_id
@@ -263,43 +282,46 @@ class MarkupToExcalidrawConverter:
         self,
         document: MarkupDocument,
         blocks: Dict[Tuple[str, str], BlockPlacement],
-        markers: Dict[Tuple[str, str, str], MarkerPlacement],
+        markers: Dict[Tuple[str, str, str, str | None], MarkerPlacement],
         add_element: callable,
         element_index: Dict[str, dict],
         base_metadata: dict,
+        end_block_type_lookup: Dict[Tuple[str, str], str],
     ) -> None:
-        for procedure in document.procedures:
-            for end_block_id in procedure.end_block_ids:
-                block = blocks.get((procedure.procedure_id, end_block_id))
-                marker = markers.get((procedure.procedure_id, end_block_id, "end_marker"))
-                if not block or not marker:
-                    continue
-                end_type = procedure.end_block_types.get(end_block_id, END_TYPE_DEFAULT)
-                start_center = self._block_anchor(block, side="right")
-                end_center = self._marker_anchor(marker, side="left")
-                arrow = self._arrow_element(
-                        start=start_center,
-                        end=end_center,
-                        label="end",
-                        metadata=self._with_base_metadata(
-                            {
-                                "procedure_id": procedure.procedure_id,
-                                "role": "edge",
-                                "edge_type": "end",
-                                "end_type": end_type,
-                                "source_block_id": end_block_id,
-                            },
-                            base_metadata,
-                        ),
-                        start_binding=self._stable_id(
-                            "block", procedure.procedure_id, end_block_id
-                        ),
-                        end_binding=self._stable_id(
-                            "marker", procedure.procedure_id, "end_marker", end_block_id
-                        ),
-                    )
-                add_element(arrow)
-                self._bind_arrow(element_index, arrow)
+        for (proc_id, block_id, role, marker_end_type), marker in markers.items():
+            if role != "end_marker":
+                continue
+            block = blocks.get((proc_id, block_id))
+            if not block:
+                continue
+            end_type = marker_end_type or END_TYPE_DEFAULT
+            block_end_type = end_block_type_lookup.get((proc_id, block_id), end_type)
+            start_center = self._block_anchor(block, side="right")
+            end_center = self._marker_anchor(marker, side="left")
+            arrow = self._arrow_element(
+                    start=start_center,
+                    end=end_center,
+                    label="end",
+                    metadata=self._with_base_metadata(
+                        {
+                            "procedure_id": proc_id,
+                            "role": "edge",
+                            "edge_type": "end",
+                            "end_type": end_type,
+                            "end_block_type": block_end_type,
+                            "source_block_id": block_id,
+                        },
+                        base_metadata,
+                    ),
+                    start_binding=self._stable_id(
+                        "block", proc_id, block_id
+                    ),
+                    end_binding=self._marker_element_id(
+                        proc_id, "end_marker", block_id, marker_end_type
+                    ),
+                )
+            add_element(arrow)
+            self._bind_arrow(element_index, arrow)
 
     def _build_branch_edges(
         self,
@@ -576,6 +598,17 @@ class MarkupToExcalidrawConverter:
             "containerId": container_id,
             "customData": {CUSTOM_DATA_KEY: metadata},
         }
+
+    def _marker_element_id(
+        self,
+        procedure_id: str,
+        role: str,
+        block_id: str,
+        end_type: str | None,
+    ) -> str:
+        if role == "end_marker" and end_type:
+            return self._stable_id("marker", procedure_id, role, block_id, end_type)
+        return self._stable_id("marker", procedure_id, role, block_id)
 
     def _arrow_element(
         self,

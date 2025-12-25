@@ -36,11 +36,13 @@ This project converts CJM markup JSON <-> Excalidraw scenes while preserving ide
 
 - Frame per procedure (`type=frame`, `name=procedure_id`).
 - Rectangle per block with text overlay.
-- Ellipse markers for START/END (left/right of block).
+- Ellipse markers for START/END.
+- END markers are placed as separate nodes in the grid (like branch targets).
 - END marker fill color varies by `end_type` for visual distinction.
 - Arrows:
   - START -> block (label `start`, `edge_type=start`)
-  - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate`)
+  - block -> END (label `end`, `edge_type=end`, `end_type=end|exit`)
+  - `all`/`intermediate` in markup are rendered as both `end` and `exit` transitions.
   - branch arrows block -> block (label `branch`, `edge_type=branch`)
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 
@@ -55,7 +57,8 @@ Stored on every shape/arrow/text:
 - `block_id` (when applicable)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
 - `edge_type`: `start|end|branch` (edges only)
-- `end_type`: `end|exit|all|intermediate` (end markers and end edges)
+- `end_type`: `end|exit` (end markers and end edges)
+- `end_block_type`: `end|exit|all|intermediate` (original markup type for the block)
 
 This metadata enables round-trip even if elements are moved in UI.
 

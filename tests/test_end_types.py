@@ -44,7 +44,33 @@ def test_end_type_roundtrip_and_service_name() -> None:
     assert marker_elements
     colors = {element.get("backgroundColor") for element in marker_elements}
     assert END_TYPE_COLORS["exit"] in colors
-    assert END_TYPE_COLORS["intermediate"] in colors
+    assert END_TYPE_COLORS["end"] in colors
 
     serialized = markup.to_markup_dict()
     assert serialized["procedures"][0]["end_block_ids"] == ["b::exit", "c::intermediate"]
+
+
+def test_skip_empty_procedures_in_excalidraw() -> None:
+    payload = {
+        "finedog_unit_id": 9002,
+        "markup_type": "service",
+        "procedures": [
+            {"proc_id": "empty"},
+            {
+                "proc_id": "with_blocks",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    frame_procs = {
+        element.get("customData", {}).get("cjm", {}).get("procedure_id")
+        for element in excal.elements
+        if element.get("type") == "frame"
+    }
+    assert "empty" not in frame_procs
+    assert "with_blocks" in frame_procs

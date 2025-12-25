@@ -249,6 +249,7 @@ class MarkerPlacement:
     role: str  # "start_marker" or "end_marker"
     position: Point
     size: Size
+    end_type: Optional[str] = None
 
 
 @dataclass(frozen=True)

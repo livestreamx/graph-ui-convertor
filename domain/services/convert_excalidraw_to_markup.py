@@ -295,12 +295,15 @@ class ExcalidrawToMarkupConverter:
         source_block: str,
         markers: Dict[str, MarkerCandidate],
     ) -> str:
-        end_type = normalize_end_type(meta.get("end_type"))
-        if end_type:
-            return end_type
         tagged = self._end_type_from_tags(arrow, meta)
         if tagged:
             return tagged
+        end_type = normalize_end_type(meta.get("end_block_type"))
+        if end_type:
+            return end_type
+        end_type = normalize_end_type(meta.get("end_type"))
+        if end_type:
+            return end_type
         end_type = marker_end_types.get((procedure_id, source_block))
         if end_type:
             return end_type
@@ -311,12 +314,15 @@ class ExcalidrawToMarkupConverter:
         return END_TYPE_DEFAULT
 
     def _infer_end_type_from_element(self, element: dict, meta: dict) -> Optional[str]:
-        end_type = normalize_end_type(meta.get("end_type"))
-        if end_type:
-            return end_type
         tagged = self._end_type_from_tags(element, meta)
         if tagged:
             return tagged
+        end_type = normalize_end_type(meta.get("end_block_type"))
+        if end_type:
+            return end_type
+        end_type = normalize_end_type(meta.get("end_type"))
+        if end_type:
+            return end_type
         return self._end_type_from_color(element.get("backgroundColor"))
 
     def _end_type_from_tags(self, element: dict, meta: dict) -> Optional[str]:
