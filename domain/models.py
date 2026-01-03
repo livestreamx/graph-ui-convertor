@@ -58,6 +58,10 @@ class Procedure(BaseModel):
         min_length=1,
         validation_alias=AliasChoices("procedure_id", "proc_id"),
     )
+    procedure_name: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("procedure_name", "proc_name"),
+    )
     start_block_ids: List[str] = Field(default_factory=list)
     end_block_ids: List[str] = Field(default_factory=list)
     end_block_types: Dict[str, str] = Field(default_factory=dict)
@@ -139,6 +143,8 @@ class Procedure(BaseModel):
             ),
             "branches": _sorted_branches(self.branches),
         }
+        if self.procedure_name:
+            payload["proc_name"] = self.procedure_name
         if self.block_id_to_block_name:
             payload["block_id_to_block_name"] = dict(self.block_id_to_block_name)
         return payload

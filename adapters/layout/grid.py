@@ -45,14 +45,16 @@ class GridLayoutEngine(LayoutEngine):
         markers: List[MarkerPlacement] = []
 
         procedures = [proc for proc in document.procedures if proc.block_ids()]
-        ordered_procedures = self._order_procedures(procedures, document.procedure_graph)
-        procedure_levels = {
-            proc.procedure_id: idx for idx, proc in enumerate(ordered_procedures)
-        }
+        if not procedures:
+            return LayoutPlan(frames=frames, blocks=blocks, markers=markers)
+        proc_ids = [proc.procedure_id for proc in procedures]
+        order_hint = self._procedure_order_hint(procedures, document.procedure_graph)
+        order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
+        adjacency = self._normalize_procedure_graph(proc_ids, document.procedure_graph)
         sizing: Dict[str, Size] = {}
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
-        for procedure in ordered_procedures:
+        for procedure in procedures:
             _, max_level, row_counts, _, _, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
             rows = max(row_counts.values() or [1])
@@ -72,19 +74,63 @@ class GridLayoutEngine(LayoutEngine):
             )
 
         lane_span = max((size.width for size in sizing.values()), default=0) + self.config.lane_gap
+        components = self._procedure_components(proc_ids, adjacency)
+        components.sort(
+            key=lambda component: min(order_index.get(proc_id, 0) for proc_id in component)
+        )
 
-        for procedure in ordered_procedures:
-            level = procedure_levels.get(procedure.procedure_id, 0)
-            frame_size = sizing[procedure.procedure_id]
-            origin_x = level * lane_span
-            origin_y = 0.0
-            frame = FramePlacement(
-                procedure_id=procedure.procedure_id,
-                origin=Point(origin_x, origin_y),
-                size=frame_size,
-            )
-            frames.append(frame)
+        origin_x = 0.0
+        origin_y = 0.0
+        proc_gap_y = self.config.lane_gap
 
+        for component in components:
+            component_adjacency = {
+                proc_id: [child for child in adjacency.get(proc_id, []) if child in component]
+                for proc_id in component
+            }
+            cycle_edges = self._find_cycle_edges(component_adjacency)
+            for source, target in cycle_edges:
+                component_adjacency[source] = [
+                    child for child in component_adjacency.get(source, []) if child != target
+                ]
+
+            levels = self._procedure_levels(component, component_adjacency, order_index)
+            max_level = max(levels.values() or [0])
+            level_nodes: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
+            for proc_id, lvl in levels.items():
+                level_nodes.setdefault(lvl, []).append(proc_id)
+            for lvl, nodes in level_nodes.items():
+                nodes.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+
+            level_heights: Dict[int, float] = {}
+            for lvl, nodes in level_nodes.items():
+                if not nodes:
+                    level_heights[lvl] = 0.0
+                    continue
+                total = sum(sizing[node].height for node in nodes)
+                total += proc_gap_y * (len(nodes) - 1)
+                level_heights[lvl] = total
+
+            component_height = max(level_heights.values() or [0.0])
+            for lvl, nodes in level_nodes.items():
+                y = origin_y
+                for proc_id in nodes:
+                    frame_size = sizing[proc_id]
+                    frame = FramePlacement(
+                        procedure_id=proc_id,
+                        origin=Point(origin_x + lvl * lane_span, y),
+                        size=frame_size,
+                    )
+                    frames.append(frame)
+                    y += frame_size.height + proc_gap_y
+
+            origin_y += component_height + proc_gap_y
+
+        procedure_map = {proc.procedure_id: proc for proc in procedures}
+        for frame in frames:
+            procedure = procedure_map.get(frame.procedure_id)
+            if procedure is None:
+                continue
             placement_by_block: Dict[str, BlockPlacement] = {}
             node_levels, max_level, _, order, row_positions, node_info = self._compute_block_levels(
                 procedure
@@ -146,11 +192,9 @@ class GridLayoutEngine(LayoutEngine):
 
         return LayoutPlan(frames=frames, blocks=blocks, markers=markers)
 
-    def _order_procedures(
+    def _procedure_order_hint(
         self, procedures: List[object], procedure_graph: Dict[str, List[str]]
-    ) -> List[object]:
-        if not procedure_graph:
-            return procedures
+    ) -> List[str]:
         proc_ids = [proc.procedure_id for proc in procedures]
         proc_by_id = {proc.procedure_id: proc for proc in procedures}
         order_hint: List[str] = []
@@ -168,8 +212,11 @@ class GridLayoutEngine(LayoutEngine):
         for proc_id in proc_ids:
             if proc_id not in seen_hint:
                 order_hint.append(proc_id)
-        proc_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
+        return order_hint
 
+    def _normalize_procedure_graph(
+        self, proc_ids: List[str], procedure_graph: Dict[str, List[str]]
+    ) -> Dict[str, List[str]]:
         adjacency: Dict[str, List[str]] = {proc_id: [] for proc_id in proc_ids}
         for parent, children in procedure_graph.items():
             if parent not in adjacency or not isinstance(children, list):
@@ -182,34 +229,60 @@ class GridLayoutEngine(LayoutEngine):
                     seen.add(child)
             if cleaned:
                 adjacency[parent].extend(cleaned)
+        return adjacency
 
-        cycle_edges = self._find_cycle_edges(adjacency)
-        if cycle_edges:
-            for source, target in cycle_edges:
-                adjacency[source] = [child for child in adjacency.get(source, []) if child != target]
-
-        indegree: Dict[str, int] = {proc_id: 0 for proc_id in proc_ids}
+    def _procedure_components(
+        self, proc_ids: List[str], adjacency: Dict[str, List[str]]
+    ) -> List[set[str]]:
+        undirected: Dict[str, set[str]] = {proc_id: set() for proc_id in proc_ids}
         for parent, children in adjacency.items():
             for child in children:
-                indegree[child] += 1
+                if child not in undirected:
+                    continue
+                undirected[parent].add(child)
+                undirected[child].add(parent)
+        visited: set[str] = set()
+        components: List[set[str]] = []
+        for node in proc_ids:
+            if node in visited:
+                continue
+            stack = [node]
+            component: set[str] = set()
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                component.add(current)
+                stack.extend(undirected.get(current, set()) - visited)
+            components.append(component)
+        return components
 
+    def _procedure_levels(
+        self,
+        component: set[str],
+        adjacency: Dict[str, List[str]],
+        order_index: Dict[str, int],
+    ) -> Dict[str, int]:
+        indegree: Dict[str, int] = {proc_id: 0 for proc_id in component}
+        for parent, children in adjacency.items():
+            for child in children:
+                if child in indegree:
+                    indegree[child] += 1
         queue = [proc_id for proc_id, deg in indegree.items() if deg == 0]
-        queue.sort(key=lambda proc_id: proc_index[proc_id])
-        ordered_ids: List[str] = []
+        queue.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+        levels: Dict[str, int] = {proc_id: 0 for proc_id in component}
         while queue:
             node = queue.pop(0)
-            ordered_ids.append(node)
             for child in adjacency.get(node, []):
+                if child not in levels:
+                    continue
+                levels[child] = max(levels.get(child, 0), levels.get(node, 0) + 1)
                 indegree[child] -= 1
                 if indegree[child] == 0:
                     queue.append(child)
-                    queue.sort(key=lambda proc_id: proc_index[proc_id])
-
-        for proc_id in proc_ids:
-            if proc_id not in ordered_ids:
-                ordered_ids.append(proc_id)
-
-        return [proc_by_id[proc_id] for proc_id in ordered_ids]
+                    queue.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+        return levels
 
     def _find_cycle_edges(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
         nodes = set(adjacency.keys())

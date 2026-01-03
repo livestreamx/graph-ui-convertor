@@ -43,7 +43,14 @@ class MarkupToExcalidrawConverter:
             elements.append(element)
             element_index[element["id"]] = element
 
-        frame_ids = self._build_frames(plan.frames, add_element, base_metadata)
+        proc_name_lookup = {
+            proc.procedure_id: proc.procedure_name
+            for proc in document.procedures
+            if proc.procedure_name
+        }
+        frame_ids = self._build_frames(
+            plan.frames, add_element, base_metadata, proc_name_lookup
+        )
         included_procs = {frame.procedure_id for frame in plan.frames}
         end_block_type_lookup = {
             (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
@@ -109,23 +116,32 @@ class MarkupToExcalidrawConverter:
         return ExcalidrawDocument(elements=elements, app_state=app_state, files={})
 
     def _build_frames(
-        self, frames: Iterable[FramePlacement], add_element: callable, base_metadata: dict
+        self,
+        frames: Iterable[FramePlacement],
+        add_element: callable,
+        base_metadata: dict,
+        proc_name_lookup: Dict[str, str],
     ) -> Dict[str, str]:
         frame_ids: Dict[str, str] = {}
         for frame in frames:
             frame_id = self._stable_id("frame", frame.procedure_id)
             frame_ids[frame.procedure_id] = frame_id
+            procedure_name = proc_name_lookup.get(frame.procedure_id)
+            frame_meta = {
+                "procedure_id": frame.procedure_id,
+                "role": "frame",
+            }
+            if procedure_name:
+                frame_meta["procedure_name"] = procedure_name
             add_element(
                 self._frame_element(
                     element_id=frame_id,
                     frame=frame,
                     metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": frame.procedure_id,
-                            "role": "frame",
-                        },
+                        frame_meta,
                         base_metadata,
                     ),
+                    name=procedure_name,
                 )
             )
         return frame_ids
@@ -190,8 +206,8 @@ class MarkupToExcalidrawConverter:
                     group_ids=[group_id],
                     frame_id=frame_ids.get(block.procedure_id),
                     metadata=self._with_base_metadata(label_meta, base_metadata),
-                    max_width=block.size.width - 20,
-                    max_height=max(20.0, block.size.height - 20),
+                    max_width=max(80.0, block.size.width - 30),
+                    max_height=max(24.0, block.size.height - 30),
                     font_size=18.0,
                 )
             )
@@ -410,7 +426,7 @@ class MarkupToExcalidrawConverter:
                         procedure.procedure_id, set()
                     )
                     edge_type = "branch_cycle" if is_cycle else "branch"
-                    label = "cycle" if is_cycle else "branch"
+                    label = "ЦИКЛ" if is_cycle else "branch"
                     arrow = self._arrow_element(
                             start=start_center,
                             end=end_center,
@@ -435,6 +451,8 @@ class MarkupToExcalidrawConverter:
                     ),
                         smoothing=0.15,
                         stroke_style="dashed" if is_cycle else None,
+                        stroke_color="#d32f2f" if is_cycle else None,
+                        curve_offset=80.0 if is_cycle else None,
                     )
                     add_element(arrow)
                     self._bind_arrow(element_index, arrow)
@@ -496,8 +514,6 @@ class MarkupToExcalidrawConverter:
             ]
             edges_to_draw = list({*cross_edges, *sequential_edges})
 
-        min_height = min((frame.size.height for frame in frames_list), default=0.0)
-        baseline_y = frames_list[0].origin.y + (min_height / 2 if min_height else 0.0)
         for left_id, right_id in edges_to_draw:
             left_frame = frame_lookup.get(left_id)
             right_frame = frame_lookup.get(right_id)
@@ -505,14 +521,14 @@ class MarkupToExcalidrawConverter:
                 continue
             is_cycle = bool(graph_edges) and (left_id, right_id) in cycle_edges
             edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
-            label = "cycle" if is_cycle else "procedure"
+            label = "ЦИКЛ" if is_cycle else "procedure"
             start = Point(
                 x=left_frame.origin.x + left_frame.size.width,
-                y=baseline_y,
+                y=left_frame.origin.y + left_frame.size.height / 2,
             )
             end = Point(
                 x=right_frame.origin.x,
-                y=baseline_y,
+                y=right_frame.origin.y + right_frame.size.height / 2,
             )
             arrow = self._arrow_element(
                 start=start,
@@ -532,11 +548,19 @@ class MarkupToExcalidrawConverter:
                 end_binding=self._stable_id("frame", right_id),
                 smoothing=0.1,
                 stroke_style="dashed" if is_cycle else None,
+                stroke_color="#d32f2f" if is_cycle else None,
+                curve_offset=100.0 if is_cycle else None,
             )
             add_element(arrow)
             self._bind_arrow(element_index, arrow)
 
-    def _frame_element(self, element_id: str, frame: FramePlacement, metadata: dict) -> dict:
+    def _frame_element(
+        self,
+        element_id: str,
+        frame: FramePlacement,
+        metadata: dict,
+        name: str | None = None,
+    ) -> dict:
         return self._base_shape(
             element_id=element_id,
             type_name="frame",
@@ -544,7 +568,7 @@ class MarkupToExcalidrawConverter:
             width=frame.size.width,
             height=frame.size.height,
             extra={
-                "name": frame.procedure_id,
+                "name": name or frame.procedure_id,
                 "strokeColor": "#1e1e1e",
                 "backgroundColor": "transparent",
                 "fillStyle": "solid",
@@ -644,7 +668,7 @@ class MarkupToExcalidrawConverter:
             if max_width is not None and len(text) > 0:
                 ratio = max_width / (len(text) * 7.5)
                 size = max(11.0, min(max_size, max_size * ratio))
-            height = (size * 1.3) if max_height is None else max_height
+            height = (size * 1.35) if max_height is None else max_height
         x = center.x - width / 2
         y = center.y - height / 2
         return {
@@ -702,21 +726,39 @@ class MarkupToExcalidrawConverter:
         end_binding: str | None = None,
         smoothing: float = 0.0,
         stroke_style: str | None = None,
+        stroke_color: str | None = None,
+        curve_offset: float | None = None,
     ) -> dict:
         dx = end.x - start.x
         dy = end.y - start.y
         arrow_id = self._stable_id("arrow", metadata.get("procedure_id", ""), label, str(start), str(end))
         edge_type = metadata.get("edge_type")
         show_text = edge_type in {"branch", "branch_cycle", "procedure_cycle"}
+        points = [[0.0, 0.0], [dx, dy]]
+        roundness = {"type": 2}
+        if curve_offset is not None:
+            mid_x = dx / 2
+            direction = 1.0 if dy >= 0 else -1.0
+            mid_y = dy / 2 + (curve_offset * direction)
+            points = [[0.0, 0.0], [mid_x, mid_y], [dx, dy]]
+            roundness = {"type": 3}
+
+        min_x = min(point[0] for point in points)
+        max_x = max(point[0] for point in points)
+        min_y = min(point[1] for point in points)
+        max_y = max(point[1] for point in points)
+        width = max_x - min_x
+        height = max_y - min_y
+        adjusted_points = [[point[0] - min_x, point[1] - min_y] for point in points]
         return {
             "id": arrow_id,
             "type": "arrow",
-            "x": start.x,
-            "y": start.y,
-            "width": abs(dx),
-            "height": abs(dy),
+            "x": start.x + min_x,
+            "y": start.y + min_y,
+            "width": width,
+            "height": height,
             "angle": 0,
-            "strokeColor": "#1e1e1e",
+            "strokeColor": stroke_color or "#1e1e1e",
             "backgroundColor": "transparent",
             "fillStyle": "solid",
             "strokeWidth": 1,
@@ -724,14 +766,14 @@ class MarkupToExcalidrawConverter:
             "roughness": 0,
             "opacity": 100,
             "groupIds": [],
-            "roundness": {"type": 2},
+            "roundness": roundness,
             "seed": self._rand_seed(),
             "version": 1,
             "versionNonce": self._rand_seed(),
             "isDeleted": False,
             "boundElements": [],
             "locked": False,
-            "points": [[0, 0], [dx, dy]],
+            "points": adjusted_points,
             "startBinding": {"elementId": start_binding, "focus": 0.0, "gap": 8} if start_binding else None,
             "endBinding": {"elementId": end_binding, "focus": 0.0, "gap": 8} if end_binding else None,
             "label": label,
@@ -840,10 +882,12 @@ class MarkupToExcalidrawConverter:
     ) -> Tuple[str, float, float]:
         if not text.strip():
             size = max_size
-            height = min(max_height, size * 1.3)
+            height = min(max_height, size * 1.35)
             return text, size, height
 
         words = text.split()
+        width_factor = 0.6
+        line_height = 1.35
 
         def wrap_words(max_chars: int) -> List[str]:
             lines: List[str] = []
@@ -876,16 +920,16 @@ class MarkupToExcalidrawConverter:
         start = int(max_size)
         end = int(min_size)
         for size in range(start, end - 1, -1):
-            max_chars = max(1, int(max_width / (size * 0.45)))
+            max_chars = max(1, int(max_width / (size * width_factor)))
             lines = wrap_words(max_chars)
-            height_needed = len(lines) * size * 1.3
+            height_needed = len(lines) * size * line_height
             if height_needed <= max_height:
                 return "\n".join(lines), float(size), min(max_height, height_needed)
 
         size = max(min_size, 1.0)
-        max_chars = max(1, int(max_width / (size * 0.45)))
+        max_chars = max(1, int(max_width / (size * width_factor)))
         lines = wrap_words(max_chars)
-        height_needed = len(lines) * size * 1.3
+        height_needed = len(lines) * size * line_height
         return "\n".join(lines), size, min(max_height, height_needed)
 
     def _bind_arrow(self, element_index: Dict[str, dict], arrow: dict) -> None:

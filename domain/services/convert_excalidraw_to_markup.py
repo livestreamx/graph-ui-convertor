@@ -36,7 +36,7 @@ class MarkerCandidate:
 class ExcalidrawToMarkupConverter:
     def convert(self, document: dict) -> MarkupDocument:
         elements: Iterable[dict] = document.get("elements", [])
-        frames = self._collect_frames(elements)
+        frames, proc_names = self._collect_frames(elements)
         blocks = self._collect_blocks(elements, frames)
         markers = self._collect_markers(elements, frames)
         block_names = self._collect_block_names(elements, frames)
@@ -89,7 +89,7 @@ class ExcalidrawToMarkupConverter:
                 branch_map[procedure_id][source_block].add(target_block)
 
         procedures = self._build_procedures(
-            blocks, start_map, end_map, branch_map, frames, block_names
+            blocks, start_map, end_map, branch_map, frames, block_names, proc_names
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
         return MarkupDocument(
@@ -100,8 +100,9 @@ class ExcalidrawToMarkupConverter:
             procedure_graph=procedure_graph,
         )
 
-    def _collect_frames(self, elements: Iterable[dict]) -> Dict[str, str]:
+    def _collect_frames(self, elements: Iterable[dict]) -> Tuple[Dict[str, str], Dict[str, str]]:
         frames: Dict[str, str] = {}
+        proc_names: Dict[str, str] = {}
         for element in elements:
             if element.get("type") != "frame":
                 continue
@@ -109,10 +110,13 @@ class ExcalidrawToMarkupConverter:
             procedure_id = meta.get("procedure_id") or element.get("name")
             if not procedure_id:
                 continue
+            procedure_name = meta.get("procedure_name") or element.get("name")
             frame_id = element.get("id")
             if frame_id:
                 frames[frame_id] = procedure_id
-        return frames
+            if procedure_name:
+                proc_names[procedure_id] = str(procedure_name)
+        return frames, proc_names
 
     def _collect_blocks(
         self,
@@ -197,6 +201,7 @@ class ExcalidrawToMarkupConverter:
         branch_map: Dict[str, Dict[str, set[str]]],
         frames: Dict[str, str],
         block_names: Dict[str, Dict[str, str]],
+        proc_names: Dict[str, str],
     ) -> List[Procedure]:
         procedure_ids = set(start_map.keys()) | set(end_map.keys()) | set(branch_map.keys())
         procedure_ids.update(frame_proc for frame_proc in frames.values())
@@ -217,6 +222,7 @@ class ExcalidrawToMarkupConverter:
             procedures.append(
                 Procedure(
                     procedure_id=procedure_id,
+                    procedure_name=proc_names.get(procedure_id),
                     start_block_ids=start_blocks,
                     end_block_ids=end_blocks,
                     end_block_types=end_types,

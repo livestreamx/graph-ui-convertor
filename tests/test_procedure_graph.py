@@ -78,3 +78,92 @@ def test_block_name_mapping_roundtrip() -> None:
     proc = next(proc for proc in reconstructed.procedures if proc.procedure_id == "p1")
     assert proc.block_id_to_block_name["a"] == "Start A"
     assert proc.block_id_to_block_name["b"] == "End B"
+
+
+def test_proc_name_used_for_frame_label_and_roundtrip() -> None:
+    payload = {
+        "finedog_unit_id": 7,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "proc_internal",
+                "proc_name": "Human Friendly Procedure",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    frame = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "frame"
+        and element.get("customData", {}).get("cjm", {}).get("procedure_id") == "proc_internal"
+    )
+    assert frame.get("name") == "Human Friendly Procedure"
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    proc = reconstructed.procedures[0]
+    assert proc.procedure_name == "Human Friendly Procedure"
+
+
+def test_disconnected_procedure_graphs_are_separated() -> None:
+    payload = {
+        "finedog_unit_id": 8,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert frames["p1"].origin.y != frames["p2"].origin.y
+
+
+def test_multiple_dependencies_stack_vertically() -> None:
+    payload = {
+        "finedog_unit_id": 9,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "root",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "child_one",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "child_two",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {"e": ["f"]},
+            },
+        ],
+        "procedure_graph": {"root": ["child_one", "child_two"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert frames["child_one"].origin.x == frames["child_two"].origin.x
+    assert frames["child_one"].origin.y != frames["child_two"].origin.y

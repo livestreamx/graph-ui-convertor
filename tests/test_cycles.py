@@ -29,7 +29,10 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch_cycle"
     ]
     assert cycle_edges
-    assert all(edge.get("text") == "cycle" for edge in cycle_edges)
+    assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
+    assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
+    assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
+    assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     proc = reconstructed.procedures[0]
@@ -67,7 +70,10 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "procedure_cycle"
     ]
     assert cycle_edges
-    assert all(edge.get("text") == "cycle" for edge in cycle_edges)
+    assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
+    assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
+    assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
+    assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     graph = reconstructed.procedure_graph
