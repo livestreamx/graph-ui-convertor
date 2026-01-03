@@ -39,6 +39,7 @@ class ExcalidrawToMarkupConverter:
         frames = self._collect_frames(elements)
         blocks = self._collect_blocks(elements, frames)
         markers = self._collect_markers(elements, frames)
+        block_names = self._collect_block_names(elements, frames)
 
         finedog_unit_id, markup_type, service_name = self._infer_globals(elements)
         start_map: Dict[str, set[str]] = defaultdict(set)
@@ -79,7 +80,7 @@ class ExcalidrawToMarkupConverter:
                     )
                 continue
 
-            if edge_type == "branch":
+            if edge_type in {"branch", "branch_cycle"}:
                 if source_block and target_block:
                     branch_map[procedure_id][source_block].add(target_block)
                 continue
@@ -87,12 +88,16 @@ class ExcalidrawToMarkupConverter:
             if arrow.get("text", "").lower() == "branch" and source_block and target_block:
                 branch_map[procedure_id][source_block].add(target_block)
 
-        procedures = self._build_procedures(blocks, start_map, end_map, branch_map, frames)
+        procedures = self._build_procedures(
+            blocks, start_map, end_map, branch_map, frames, block_names
+        )
+        procedure_graph = self._collect_procedure_graph(elements, procedures)
         return MarkupDocument(
             finedog_unit_id=finedog_unit_id,
             markup_type=markup_type,
             service_name=service_name,
             procedures=procedures,
+            procedure_graph=procedure_graph,
         )
 
     def _collect_frames(self, elements: Iterable[dict]) -> Dict[str, str]:
@@ -159,6 +164,31 @@ class ExcalidrawToMarkupConverter:
             )
         return markers
 
+    def _collect_block_names(
+        self,
+        elements: Iterable[dict],
+        frames: Dict[str, str],
+    ) -> Dict[str, Dict[str, str]]:
+        names: Dict[str, Dict[str, str]] = defaultdict(dict)
+        for element in elements:
+            if element.get("type") != "text":
+                continue
+            meta = self._metadata(element)
+            if meta.get("role") != "block_label":
+                continue
+            procedure_id = meta.get("procedure_id") or frames.get(element.get("frameId", ""))
+            block_id = meta.get("block_id")
+            if not procedure_id or not block_id:
+                continue
+            block_name = meta.get("block_name")
+            if not block_name:
+                text = element.get("text")
+                if isinstance(text, str):
+                    block_name = text.replace("\n", " ").strip()
+            if block_name and block_name != block_id:
+                names[procedure_id][block_id] = block_name
+        return names
+
     def _build_procedures(
         self,
         blocks: Dict[str, BlockCandidate],
@@ -166,6 +196,7 @@ class ExcalidrawToMarkupConverter:
         end_map: Dict[str, Dict[str, str]],
         branch_map: Dict[str, Dict[str, set[str]]],
         frames: Dict[str, str],
+        block_names: Dict[str, Dict[str, str]],
     ) -> List[Procedure]:
         procedure_ids = set(start_map.keys()) | set(end_map.keys()) | set(branch_map.keys())
         procedure_ids.update(frame_proc for frame_proc in frames.values())
@@ -190,9 +221,32 @@ class ExcalidrawToMarkupConverter:
                     end_block_ids=end_blocks,
                     end_block_types=end_types,
                     branches=branches,
+                    block_id_to_block_name=block_names.get(procedure_id, {}),
                 )
             )
         return procedures
+
+    def _collect_procedure_graph(
+        self, elements: Iterable[dict], procedures: List[Procedure]
+    ) -> Dict[str, List[str]]:
+        graph: Dict[str, List[str]] = {
+            procedure.procedure_id: [] for procedure in procedures
+        }
+        for element in elements:
+            if not self._is_arrow(element):
+                continue
+            meta = self._metadata(element)
+            if meta.get("edge_type") not in {"procedure_flow", "procedure_cycle"}:
+                continue
+            source = meta.get("procedure_id")
+            target = meta.get("target_procedure_id")
+            if not source or not target:
+                continue
+            if source not in graph or target not in graph:
+                continue
+            if target not in graph[source]:
+                graph[source].append(target)
+        return graph
 
     def _metadata(self, element: dict) -> dict:
         meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {})

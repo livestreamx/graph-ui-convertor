@@ -45,11 +45,14 @@ class GridLayoutEngine(LayoutEngine):
         markers: List[MarkerPlacement] = []
 
         procedures = [proc for proc in document.procedures if proc.block_ids()]
-        procedure_levels = {proc.procedure_id: idx for idx, proc in enumerate(procedures)}
+        ordered_procedures = self._order_procedures(procedures, document.procedure_graph)
+        procedure_levels = {
+            proc.procedure_id: idx for idx, proc in enumerate(ordered_procedures)
+        }
         sizing: Dict[str, Size] = {}
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
-        for procedure in procedures:
+        for procedure in ordered_procedures:
             _, max_level, row_counts, _, _, _ = self._compute_block_levels(procedure)
             cols = max_level + 1
             rows = max(row_counts.values() or [1])
@@ -70,7 +73,7 @@ class GridLayoutEngine(LayoutEngine):
 
         lane_span = max((size.width for size in sizing.values()), default=0) + self.config.lane_gap
 
-        for procedure in procedures:
+        for procedure in ordered_procedures:
             level = procedure_levels.get(procedure.procedure_id, 0)
             frame_size = sizing[procedure.procedure_id]
             origin_x = level * lane_span
@@ -143,6 +146,93 @@ class GridLayoutEngine(LayoutEngine):
 
         return LayoutPlan(frames=frames, blocks=blocks, markers=markers)
 
+    def _order_procedures(
+        self, procedures: List[object], procedure_graph: Dict[str, List[str]]
+    ) -> List[object]:
+        if not procedure_graph:
+            return procedures
+        proc_ids = [proc.procedure_id for proc in procedures]
+        proc_by_id = {proc.procedure_id: proc for proc in procedures}
+        order_hint: List[str] = []
+        seen_hint: set[str] = set()
+        for parent, children in procedure_graph.items():
+            if parent in proc_by_id and parent not in seen_hint:
+                order_hint.append(parent)
+                seen_hint.add(parent)
+            if not isinstance(children, list):
+                continue
+            for child in children:
+                if child in proc_by_id and child not in seen_hint:
+                    order_hint.append(child)
+                    seen_hint.add(child)
+        for proc_id in proc_ids:
+            if proc_id not in seen_hint:
+                order_hint.append(proc_id)
+        proc_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
+
+        adjacency: Dict[str, List[str]] = {proc_id: [] for proc_id in proc_ids}
+        for parent, children in procedure_graph.items():
+            if parent not in adjacency or not isinstance(children, list):
+                continue
+            seen: set[str] = set()
+            cleaned: List[str] = []
+            for child in children:
+                if child in adjacency and child != parent and child not in seen:
+                    cleaned.append(child)
+                    seen.add(child)
+            if cleaned:
+                adjacency[parent].extend(cleaned)
+
+        cycle_edges = self._find_cycle_edges(adjacency)
+        if cycle_edges:
+            for source, target in cycle_edges:
+                adjacency[source] = [child for child in adjacency.get(source, []) if child != target]
+
+        indegree: Dict[str, int] = {proc_id: 0 for proc_id in proc_ids}
+        for parent, children in adjacency.items():
+            for child in children:
+                indegree[child] += 1
+
+        queue = [proc_id for proc_id, deg in indegree.items() if deg == 0]
+        queue.sort(key=lambda proc_id: proc_index[proc_id])
+        ordered_ids: List[str] = []
+        while queue:
+            node = queue.pop(0)
+            ordered_ids.append(node)
+            for child in adjacency.get(node, []):
+                indegree[child] -= 1
+                if indegree[child] == 0:
+                    queue.append(child)
+                    queue.sort(key=lambda proc_id: proc_index[proc_id])
+
+        for proc_id in proc_ids:
+            if proc_id not in ordered_ids:
+                ordered_ids.append(proc_id)
+
+        return [proc_by_id[proc_id] for proc_id in ordered_ids]
+
+    def _find_cycle_edges(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
+        nodes = set(adjacency.keys())
+        for children in adjacency.values():
+            nodes.update(children)
+        visited: Dict[str, int] = {}
+        cycle_edges: set[Tuple[str, str]] = set()
+
+        def dfs(node: str) -> None:
+            visited[node] = 1
+            for child in adjacency.get(node, []):
+                state = visited.get(child, 0)
+                if state == 0:
+                    dfs(child)
+                elif state == 1:
+                    cycle_edges.add((node, child))
+            visited[node] = 2
+
+        for node in nodes:
+            if visited.get(node, 0) == 0:
+                dfs(node)
+        return cycle_edges
+
     def _compute_block_levels(
         self, procedure: object
     ) -> Tuple[
@@ -157,6 +247,26 @@ class GridLayoutEngine(LayoutEngine):
         start_blocks = list(getattr(procedure, "start_block_ids"))
         end_blocks = list(getattr(procedure, "end_block_ids"))
         end_block_types = getattr(procedure, "end_block_types", {})
+
+        branches_for_layout: Dict[str, List[str]] = {}
+        for source, targets in branches.items():
+            if not isinstance(targets, list):
+                continue
+            seen: set[str] = set()
+            cleaned: List[str] = []
+            for target in targets:
+                if target in seen:
+                    continue
+                seen.add(target)
+                cleaned.append(target)
+            branches_for_layout[source] = cleaned
+
+        cycle_edges = self._find_cycle_edges(branches_for_layout)
+        if cycle_edges:
+            for source, target in cycle_edges:
+                branches_for_layout[source] = [
+                    child for child in branches_for_layout.get(source, []) if child != target
+                ]
 
         node_info: Dict[str, NodeInfo] = {}
         all_blocks = set(start_blocks) | set(end_blocks)
@@ -180,7 +290,7 @@ class GridLayoutEngine(LayoutEngine):
 
         indegree: Dict[str, int] = {node_id: 0 for node_id in all_nodes}
         adj: Dict[str, List[str]] = {node_id: [] for node_id in all_nodes}
-        for src, targets in branches.items():
+        for src, targets in branches_for_layout.items():
             for tgt in targets:
                 adj[src].append(tgt)
                 indegree[tgt] = indegree.get(tgt, 0) + 1
@@ -239,7 +349,7 @@ class GridLayoutEngine(LayoutEngine):
 
         max_level = max(levels.values() or [0])
 
-        branch_counts = {block: len(targets) for block, targets in branches.items()}
+        branch_counts = {block: len(targets) for block, targets in branches_for_layout.items()}
 
         # Reorder blocks inside each level to reduce crossings using child anchors (right-to-left pass).
         level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}

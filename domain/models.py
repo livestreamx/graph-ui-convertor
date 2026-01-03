@@ -62,6 +62,7 @@ class Procedure(BaseModel):
     end_block_ids: List[str] = Field(default_factory=list)
     end_block_types: Dict[str, str] = Field(default_factory=dict)
     branches: Dict[str, List[str]] = Field(default_factory=dict)
+    block_id_to_block_name: Dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -79,12 +80,14 @@ class Procedure(BaseModel):
         seen_end_ids: Set[str] = set()
 
         for raw in end_block_ids:
-            block_id, end_type = split_end_block_id(str(raw))
+            raw_value = str(raw)
+            has_suffix = END_BLOCK_SEPARATOR in raw_value
+            block_id, end_type = split_end_block_id(raw_value)
             if block_id not in seen_end_ids:
                 normalized_end_ids.append(block_id)
                 seen_end_ids.add(block_id)
             normalized = normalize_end_type(end_type) or END_TYPE_DEFAULT
-            if normalized != END_TYPE_DEFAULT or block_id in end_block_types:
+            if normalized != END_TYPE_DEFAULT or has_suffix:
                 end_block_types[block_id] = merge_end_types(
                     end_block_types.get(block_id), normalized
                 )
@@ -128,7 +131,7 @@ class Procedure(BaseModel):
         return referenced
 
     def to_markup_dict(self) -> dict:
-        return {
+        payload = {
             "proc_id": self.procedure_id,
             "start_block_ids": _sorted_unique(list(self.start_block_ids)),
             "end_block_ids": _merge_end_block_ids(
@@ -136,6 +139,9 @@ class Procedure(BaseModel):
             ),
             "branches": _sorted_branches(self.branches),
         }
+        if self.block_id_to_block_name:
+            payload["block_id_to_block_name"] = dict(self.block_id_to_block_name)
+        return payload
 
 
 class MarkupDocument(BaseModel):
@@ -145,6 +151,7 @@ class MarkupDocument(BaseModel):
     markup_type: str
     service_name: Optional[str] = None
     procedures: List[Procedure] = Field(default_factory=list)
+    procedure_graph: Dict[str, List[str]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -180,6 +187,8 @@ class MarkupDocument(BaseModel):
         }
         if self.service_name:
             payload["finedog_unit_meta"] = {"service_name": self.service_name}
+        if self.procedure_graph:
+            payload["procedure_graph"] = dict(self.procedure_graph)
         return payload
 
 
