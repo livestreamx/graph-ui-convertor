@@ -718,7 +718,7 @@ class GridLayoutEngine(LayoutEngine):
     ) -> Tuple[
         Dict[str, int],
         int,
-        Dict[int, int],
+        Dict[int, float],
         List[str],
         Dict[str, float],
         Dict[str, NodeInfo],
@@ -831,49 +831,134 @@ class GridLayoutEngine(LayoutEngine):
 
         branch_counts = {block: len(targets) for block, targets in branches_for_layout.items()}
 
-        # Reorder blocks inside each level to reduce crossings using child anchors (right-to-left pass).
         level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
         for node_id, lvl in levels.items():
             level_buckets.setdefault(lvl, []).append(node_id)
 
-        positions: Dict[str, int] = {}
-        for lvl in reversed(range(max_level + 1)):
-            bucket = level_buckets.get(lvl, [])
-            if not bucket:
-                continue
+        def base_order_key(node_id: str) -> Tuple[int, int, str, str]:
+            info = node_info.get(node_id)
+            start_rank = 0 if node_id in start_nodes else 1
+            kind_rank = 0 if info and info.kind == "block" else 1
+            block_id = info.block_id if info else node_id
+            end_type = info.end_type or ""
+            return (start_rank, kind_rank, block_id, end_type)
 
-            def anchor_child(node_id: str) -> float:
-                children = [
-                    child
-                    for child in adj.get(node_id, [])
-                    if levels.get(child) == lvl + 1 and child in positions
-                ]
-                if children:
-                    return sum(positions[c] for c in children) / len(children)
-                return float("inf")
+        level_order: Dict[int, List[str]] = {}
+        for lvl in range(max_level + 1):
+            nodes = level_buckets.get(lvl, [])
+            nodes.sort(key=base_order_key)
+            level_order[lvl] = nodes
 
-            bucket.sort(key=lambda n: (anchor_child(n), indegree.get(n, 0), n))
-            for idx, node_id in enumerate(bucket):
-                positions[node_id] = idx
+        incoming: Dict[str, List[str]] = {node_id: [] for node_id in all_nodes}
+        for src, targets in adj.items():
+            for tgt in targets:
+                incoming.setdefault(tgt, []).append(src)
+
+        def update_positions() -> Dict[str, float]:
+            current: Dict[str, float] = {}
+            for nodes in level_order.values():
+                for idx, node_id in enumerate(nodes):
+                    current[node_id] = float(idx)
+            return current
+
+        positions = update_positions()
+
+        # Barycentric sweeps keep connected nodes closer across columns.
+        for _ in range(3):
+            for lvl in range(1, max_level + 1):
+                nodes = level_order.get(lvl, [])
+                if not nodes:
+                    continue
+                index = {node_id: idx for idx, node_id in enumerate(nodes)}
+
+                def anchor_parent(node_id: str) -> float:
+                    parents = [
+                        parent
+                        for parent in incoming.get(node_id, [])
+                        if levels.get(parent, 0) == lvl - 1
+                    ]
+                    if parents:
+                        return sum(positions.get(p, 0.0) for p in parents) / len(parents)
+                    return positions.get(node_id, float(index[node_id]))
+
+                nodes.sort(key=lambda n: (anchor_parent(n), index[n], n))
+                level_order[lvl] = nodes
+            positions = update_positions()
+
+            for lvl in range(max_level - 1, -1, -1):
+                nodes = level_order.get(lvl, [])
+                if not nodes:
+                    continue
+                index = {node_id: idx for idx, node_id in enumerate(nodes)}
+
+                def anchor_child(node_id: str) -> float:
+                    children = [
+                        child
+                        for child in adj.get(node_id, [])
+                        if levels.get(child, 0) == lvl + 1
+                    ]
+                    if children:
+                        return sum(positions.get(c, 0.0) for c in children) / len(children)
+                    return positions.get(node_id, float(index[node_id]))
+
+                nodes.sort(key=lambda n: (anchor_child(n), index[n], n))
+                level_order[lvl] = nodes
+            positions = update_positions()
+
+        def row_span(node_id: str) -> float:
+            info = node_info.get(node_id)
+            if info and info.kind == "block":
+                return float(max(1, branch_counts.get(info.block_id, 0)))
+            return 1.0
+
+        row_positions: Dict[str, float] = {}
+        for lvl in range(max_level + 1):
+            row = 0.0
+            for node_id in level_order.get(lvl, []):
+                row_positions[node_id] = row
+                row += row_span(node_id)
+
+        for _ in range(3):
+            desired: Dict[str, float] = {}
+            for node_id in all_nodes:
+                lvl = levels.get(node_id, 0)
+                anchors: List[float] = []
+                for parent in incoming.get(node_id, []):
+                    if levels.get(parent, 0) == lvl - 1:
+                        anchors.append(row_positions.get(parent, 0.0))
+                for child in adj.get(node_id, []):
+                    if levels.get(child, 0) == lvl + 1:
+                        anchors.append(row_positions.get(child, 0.0))
+                if anchors:
+                    desired[node_id] = sum(anchors) / len(anchors)
+                else:
+                    desired[node_id] = row_positions.get(node_id, 0.0)
+
+            for lvl in range(max_level + 1):
+                nodes = level_order.get(lvl, [])
+                if not nodes:
+                    continue
+                prev_pos: float | None = None
+                prev_span = 0.0
+                for node_id in nodes:
+                    target = desired.get(node_id, 0.0)
+                    if prev_pos is None:
+                        pos = max(0.0, target)
+                    else:
+                        pos = max(target, prev_pos + prev_span)
+                    row_positions[node_id] = pos
+                    prev_pos = pos
+                    prev_span = row_span(node_id)
 
         ordered: List[str] = []
-        row_positions: Dict[str, float] = {}
-        row_counts: Dict[int, int] = {}
+        row_counts: Dict[int, float] = {}
         for lvl in range(max_level + 1):
-            bucket = level_buckets.get(lvl, [])
-            bucket.sort(key=lambda n: positions.get(n, 0))
-            row = 0
-            for node_id in bucket:
+            nodes = level_order.get(lvl, [])
+            for node_id in nodes:
                 ordered.append(node_id)
-                row_positions[node_id] = float(row)
-                info = node_info.get(node_id)
-                if info and info.kind == "block":
-                    step = max(1, branch_counts.get(info.block_id, 0))
-                else:
-                    step = 1
-                row += step
-            if bucket:
-                row_counts[lvl] = max(row, 1)
+            if nodes:
+                level_max = max(row_positions[node_id] + row_span(node_id) for node_id in nodes)
+                row_counts[lvl] = max(level_max, 1.0)
         if not row_counts:
-            row_counts[0] = 1
+            row_counts[0] = 1.0
         return levels, max_level, row_counts, ordered, row_positions, node_info
