@@ -224,7 +224,9 @@ class GridLayoutEngine(LayoutEngine):
             ]
 
         if frames:
-            scenarios = self._build_scenarios(components, frames, procedure_map)
+            scenarios = self._build_scenarios(
+                components, frames, procedure_map, document.procedure_graph
+            )
 
         return LayoutPlan(
             frames=frames,
@@ -239,6 +241,7 @@ class GridLayoutEngine(LayoutEngine):
         components: List[set[str]],
         frames: List[FramePlacement],
         procedure_map: Dict[str, object],
+        procedure_graph: Dict[str, List[str]],
     ) -> List[ScenarioPlacement]:
         scenarios: List[ScenarioPlacement] = []
         component_count = len(components)
@@ -259,7 +262,9 @@ class GridLayoutEngine(LayoutEngine):
             labels = self._component_procedure_labels(
                 component, procedure_map, frame_lookup
             )
-            starts, ends, variants = self._component_stats(component, procedure_map)
+            starts, ends, variants = self._component_stats(
+                component, procedure_map, procedure_graph
+            )
             procedure_lines = [f"- {label}" for label in labels] or ["- (нет данных)"]
             body_lines = [
                 "Процедуры:",
@@ -269,7 +274,7 @@ class GridLayoutEngine(LayoutEngine):
                 "Комплексность сценария:",
                 f"- Входы: {starts}",
                 f"- Выходы: {ends}",
-                f"- Комбинации: {variants}",
+                f"- Ветвления: {variants}",
             ]
             max_width = self.config.scenario_width - (self.config.scenario_padding * 2)
             title_lines = self._wrap_lines(
@@ -368,11 +373,15 @@ class GridLayoutEngine(LayoutEngine):
         return wrapped
 
     def _component_stats(
-        self, component: set[str], procedure_map: Dict[str, object]
+        self,
+        component: set[str],
+        procedure_map: Dict[str, object],
+        procedure_graph: Dict[str, List[str]],
     ) -> Tuple[int, int, int]:
         start_blocks: set[str] = set()
         end_blocks: set[str] = set()
-        variant_edges: set[Tuple[str, str, str]] = set()
+        branch_adjacency: Dict[str, List[str]] = {}
+        branch_edges = 0
         for proc_id in component:
             proc = procedure_map.get(proc_id)
             if proc is None:
@@ -381,14 +390,90 @@ class GridLayoutEngine(LayoutEngine):
                 start_blocks.add(start_id)
             for end_id in getattr(proc, "end_block_ids", []):
                 end_blocks.add(end_id)
-            branches = getattr(proc, "branches", {})
+            branches = getattr(proc, "branches", {}) or {}
             if isinstance(branches, dict):
                 for source, targets in branches.items():
                     if not isinstance(targets, list):
                         continue
-                    for target in targets:
-                        variant_edges.add((proc_id, str(source), str(target)))
-        return len(start_blocks), len(end_blocks), len(variant_edges)
+                    if targets:
+                        branch_edges += len(targets)
+                    branch_adjacency.setdefault(str(source), []).extend(
+                        str(target) for target in targets
+                    )
+
+        if branch_edges > 0:
+            combinations = self._count_paths(branch_adjacency, list(start_blocks))
+            if combinations <= 0 and component:
+                combinations = 1
+        else:
+            combinations = self._procedure_graph_combinations(component, procedure_graph)
+
+        return len(start_blocks), len(end_blocks), combinations
+
+    def _procedure_graph_combinations(
+        self,
+        component: set[str],
+        procedure_graph: Dict[str, List[str]],
+    ) -> int:
+        adjacency: Dict[str, List[str]] = {}
+        for parent, children in procedure_graph.items():
+            if parent not in component or not isinstance(children, list):
+                continue
+            for child in children:
+                if child in component:
+                    adjacency.setdefault(parent, []).append(child)
+
+        combinations = self._count_paths(adjacency, [])
+        if combinations <= 0 and component:
+            return 1
+        return combinations
+
+    def _count_paths(
+        self,
+        adjacency: Dict[str, List[str]],
+        start_nodes: List[str],
+    ) -> int:
+        nodes: set[str] = set(start_nodes)
+        for source, targets in adjacency.items():
+            nodes.add(source)
+            nodes.update(targets)
+        if not nodes:
+            return 0
+
+        if start_nodes:
+            starts = [node for node in start_nodes if node in nodes]
+            if not starts:
+                starts = list(nodes)
+        else:
+            indegree: Dict[str, int] = {node: 0 for node in nodes}
+            for source, targets in adjacency.items():
+                for target in targets:
+                    indegree[target] = indegree.get(target, 0) + 1
+            starts = [node for node, deg in indegree.items() if deg == 0]
+            if not starts:
+                starts = list(nodes)
+
+        terminals = {node for node in nodes if not adjacency.get(node)}
+        memo: Dict[str, int] = {}
+        visiting: set[str] = set()
+
+        def dfs(node: str) -> int:
+            if node in memo:
+                return memo[node]
+            if node in visiting:
+                return 0
+            if node in terminals:
+                memo[node] = 1
+                return 1
+            visiting.add(node)
+            total = 0
+            for child in adjacency.get(node, []):
+                total += dfs(child)
+            visiting.remove(node)
+            memo[node] = total
+            return total
+
+        return sum(dfs(node) for node in starts)
 
     def _procedure_order_hint(
         self, procedures: List[object], procedure_graph: Dict[str, List[str]]

@@ -289,13 +289,13 @@ def test_scenarios_describe_components() -> None:
     assert "Комплексность сценария:" in first_body
     assert "- Входы: 1" in first_body
     assert "- Выходы: 1" in first_body
-    assert "- Комбинации: 1" in first_body
+    assert "- Ветвления: 1" in first_body
     assert "Процедуры:" in second_body
     assert "- Второй сценарий (p2)" in second_body
     assert "Комплексность сценария:" in second_body
     assert "- Входы: 1" in second_body
     assert "- Выходы: 2" in second_body
-    assert "- Комбинации: 2" in second_body
+    assert "- Ветвления: 2" in second_body
 
 
 def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
@@ -331,6 +331,74 @@ def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
     body_text = bodies[0].get("text", "")
     assert "- Proc 7 (p7)" in body_text
     assert "и еще 1" in body_text
+
+
+def test_scenario_combinations_fallback_to_end_blocks() -> None:
+    payload = {
+        "finedog_unit_id": 14,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Без ветвлений",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end", "c::end"],
+                "branches": {},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    body = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+    )
+    body_text = body.get("text", "")
+    assert "- Ветвления: 1" in body_text
+
+
+def test_scenario_combinations_use_procedure_graph_when_no_branches() -> None:
+    payload = {
+        "finedog_unit_id": 15,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "root",
+                "proc_name": "Root",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {},
+            },
+            {
+                "proc_id": "child_one",
+                "proc_name": "Child One",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {},
+            },
+            {
+                "proc_id": "child_two",
+                "proc_name": "Child Two",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {},
+            },
+        ],
+        "procedure_graph": {"root": ["child_one", "child_two"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    body = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+    )
+    body_text = body.get("text", "")
+    assert "- Ветвления: 2" in body_text
 
 
 def test_multiple_dependencies_stack_vertically() -> None:
