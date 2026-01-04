@@ -103,7 +103,7 @@ class GridLayoutEngine(LayoutEngine):
                 proc_id: [child for child in adjacency.get(proc_id, []) if child in component]
                 for proc_id in component
             }
-            cycle_edges = self._find_cycle_edges(component_adjacency)
+            cycle_edges = self._find_cycle_edges(component_adjacency, order_index)
             for source, target in cycle_edges:
                 component_adjacency[source] = [
                     child for child in component_adjacency.get(source, []) if child != target
@@ -567,16 +567,23 @@ class GridLayoutEngine(LayoutEngine):
                     queue.sort(key=lambda proc_id: order_index.get(proc_id, 0))
         return levels
 
-    def _find_cycle_edges(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
+    def _find_cycle_edges(
+        self, adjacency: Dict[str, List[str]], order_index: Dict[str, int] | None = None
+    ) -> set[Tuple[str, str]]:
         nodes = set(adjacency.keys())
         for children in adjacency.values():
             nodes.update(children)
         visited: Dict[str, int] = {}
         cycle_edges: set[Tuple[str, str]] = set()
 
+        def sort_key(node_id: str) -> Tuple[int, str]:
+            if order_index is None:
+                return (0, node_id)
+            return (order_index.get(node_id, 0), node_id)
+
         def dfs(node: str) -> None:
             visited[node] = 1
-            for child in adjacency.get(node, []):
+            for child in sorted(adjacency.get(node, []), key=sort_key):
                 state = visited.get(child, 0)
                 if state == 0:
                     dfs(child)
@@ -584,7 +591,7 @@ class GridLayoutEngine(LayoutEngine):
                     cycle_edges.add((node, child))
             visited[node] = 2
 
-        for node in nodes:
+        for node in sorted(nodes, key=sort_key):
             if visited.get(node, 0) == 0:
                 dfs(node)
         return cycle_edges

@@ -401,6 +401,35 @@ def test_scenario_combinations_use_procedure_graph_when_no_branches() -> None:
     assert "- Ветвления: 2" in body_text
 
 
+def test_cycle_layout_prefers_order_hint() -> None:
+    payload = {
+        "finedog_unit_id": 16,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "close_gold_account",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "product_gold_account",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {
+            "close_gold_account": ["product_gold_account"],
+            "product_gold_account": ["close_gold_account"],
+        },
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert frames["close_gold_account"].origin.x < frames["product_gold_account"].origin.x
+
+
 def test_multiple_dependencies_stack_vertically() -> None:
     payload = {
         "finedog_unit_id": 9,
