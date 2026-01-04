@@ -37,6 +37,12 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
         if element.get("type") == "arrow"
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch_cycle"
     ]
+    branch_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch"
+    ]
     blocks = {
         element.get("customData", {}).get("cjm", {}).get("block_id"): element
         for element in excal.elements
@@ -44,9 +50,11 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
         and element.get("customData", {}).get("cjm", {}).get("role") == "block"
     }
     assert cycle_edges
+    assert not branch_edges
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
+    assert all(edge.get("strokeWidth") == 2 for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
     assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
     assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)
@@ -97,6 +105,12 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         if element.get("type") == "arrow"
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "procedure_cycle"
     ]
+    flow_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "procedure_flow"
+    ]
     frames = {
         element.get("customData", {}).get("cjm", {}).get("procedure_id"): element
         for element in excal.elements
@@ -104,9 +118,11 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         and element.get("customData", {}).get("cjm", {}).get("role") == "frame"
     }
     assert cycle_edges
+    assert not flow_edges
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
+    assert all(edge.get("strokeWidth") == 2 for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
     assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
     assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)

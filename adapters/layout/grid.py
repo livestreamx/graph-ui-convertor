@@ -938,6 +938,9 @@ class GridLayoutEngine(LayoutEngine):
                 nodes = level_order.get(lvl, [])
                 if not nodes:
                     continue
+                index = {node_id: idx for idx, node_id in enumerate(nodes)}
+                nodes.sort(key=lambda n: (desired.get(n, 0.0), index[n], n))
+                level_order[lvl] = nodes
                 prev_pos: float | None = None
                 prev_span = 0.0
                 for node_id in nodes:

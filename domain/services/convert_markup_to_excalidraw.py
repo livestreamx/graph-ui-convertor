@@ -548,7 +548,7 @@ class MarkupToExcalidrawConverter:
         base_metadata: dict,
     ) -> None:
         cycle_edges_by_proc: Dict[str, set[Tuple[str, str]]] = {
-            procedure.procedure_id: self._find_cycle_edges(procedure.branches)
+            procedure.procedure_id: self._edges_in_cycles(procedure.branches)
             for procedure in document.procedures
         }
         branch_offsets: Dict[Tuple[str, str], List[float]] = {}
@@ -627,6 +627,7 @@ class MarkupToExcalidrawConverter:
                         smoothing=0.15,
                         stroke_style="dashed" if is_cycle else None,
                         stroke_color="#d32f2f" if is_cycle else None,
+                        stroke_width=2 if is_cycle else None,
                         curve_offset=80.0 if is_cycle else None,
                         curve_direction=-1.0 if is_cycle else None,
                         start_arrowhead="arrow" if is_cycle else None,
@@ -660,7 +661,6 @@ class MarkupToExcalidrawConverter:
                     graph_edges.append((parent, child))
 
         if graph_edges:
-            cycle_edges = self._find_cycle_edges(document.procedure_graph)
             seen: set[Tuple[str, str]] = set()
             edges_to_draw = []
             for edge in graph_edges:
@@ -689,13 +689,18 @@ class MarkupToExcalidrawConverter:
                     continue
                 seen_edges.add(edge)
                 edges_to_draw.append(edge)
+        if edges_to_draw:
+            adjacency: Dict[str, List[str]] = {}
+            for src, tgt in edges_to_draw:
+                adjacency.setdefault(src, []).append(tgt)
+            cycle_edges = self._edges_in_cycles(adjacency)
 
         for left_id, right_id in edges_to_draw:
             left_frame = frame_lookup.get(left_id)
             right_frame = frame_lookup.get(right_id)
             if not left_frame or not right_frame:
                 continue
-            is_cycle = bool(graph_edges) and (left_id, right_id) in cycle_edges
+            is_cycle = (left_id, right_id) in cycle_edges
             edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
             label = "ЦИКЛ" if is_cycle else "procedure"
             if is_cycle:
@@ -735,6 +740,7 @@ class MarkupToExcalidrawConverter:
                 smoothing=0.1,
                 stroke_style="dashed" if is_cycle else None,
                 stroke_color="#d32f2f" if is_cycle else None,
+                stroke_width=2 if is_cycle else None,
                 curve_offset=100.0 if is_cycle else None,
                 curve_direction=-1.0 if is_cycle else None,
                 start_arrowhead="arrow" if is_cycle else None,
@@ -1069,6 +1075,7 @@ class MarkupToExcalidrawConverter:
         smoothing: float = 0.0,
         stroke_style: str | None = None,
         stroke_color: str | None = None,
+        stroke_width: float | None = None,
         curve_offset: float | None = None,
         curve_direction: float | None = None,
         start_arrowhead: str | None = None,
@@ -1106,7 +1113,7 @@ class MarkupToExcalidrawConverter:
             "strokeColor": stroke_color or "#1e1e1e",
             "backgroundColor": "transparent",
             "fillStyle": "solid",
-            "strokeWidth": 1,
+            "strokeWidth": stroke_width if stroke_width is not None else 1,
             "strokeStyle": stroke_style or "solid",
             "roughness": 0,
             "opacity": 100,
@@ -1131,7 +1138,7 @@ class MarkupToExcalidrawConverter:
             arrow["endArrowhead"] = end_arrowhead
         return arrow
 
-    def _find_cycle_edges(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
+    def _edges_in_cycles(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
         normalized: Dict[str, List[str]] = {}
         for node, children in adjacency.items():
             if isinstance(children, list):
@@ -1142,22 +1149,61 @@ class MarkupToExcalidrawConverter:
         nodes = set(normalized.keys())
         for children in normalized.values():
             nodes.update(children)
-        visited: Dict[str, int] = {}
-        cycle_edges: set[Tuple[str, str]] = set()
+        if not nodes:
+            return set()
 
-        def dfs(node: str) -> None:
-            visited[node] = 1
+        index = 0
+        indices: Dict[str, int] = {}
+        lowlinks: Dict[str, int] = {}
+        stack: List[str] = []
+        on_stack: set[str] = set()
+        components: List[List[str]] = []
+
+        def strongconnect(node: str) -> None:
+            nonlocal index
+            indices[node] = index
+            lowlinks[node] = index
+            index += 1
+            stack.append(node)
+            on_stack.add(node)
+
             for child in normalized.get(node, []):
-                state = visited.get(child, 0)
-                if state == 0:
-                    dfs(child)
-                elif state == 1:
-                    cycle_edges.add((node, child))
-            visited[node] = 2
+                if child not in indices:
+                    strongconnect(child)
+                    lowlinks[node] = min(lowlinks[node], lowlinks[child])
+                elif child in on_stack:
+                    lowlinks[node] = min(lowlinks[node], indices[child])
+
+            if lowlinks[node] == indices[node]:
+                component: List[str] = []
+                while True:
+                    current = stack.pop()
+                    on_stack.remove(current)
+                    component.append(current)
+                    if current == node:
+                        break
+                components.append(component)
 
         for node in nodes:
-            if visited.get(node, 0) == 0:
-                dfs(node)
+            if node not in indices:
+                strongconnect(node)
+
+        component_id: Dict[str, int] = {}
+        component_sizes: Dict[int, int] = {}
+        for idx, component in enumerate(components):
+            component_sizes[idx] = len(component)
+            for node in component:
+                component_id[node] = idx
+
+        cycle_edges: set[Tuple[str, str]] = set()
+        for source, targets in normalized.items():
+            for target in targets:
+                src_id = component_id.get(source)
+                tgt_id = component_id.get(target)
+                if src_id is None or tgt_id is None or src_id != tgt_id:
+                    continue
+                if component_sizes.get(src_id, 0) > 1 or source == target:
+                    cycle_edges.add((source, target))
         return cycle_edges
 
     def _base_shape(
