@@ -185,6 +185,7 @@ class MarkupToExcalidrawConverter:
             panel_id = self._stable_id("scenario-panel", str(idx))
             title_id = self._stable_id("scenario-title", str(idx))
             body_id = self._stable_id("scenario-body", str(idx))
+            cycle_id = self._stable_id("scenario-cycle", str(idx))
             panel_meta = self._with_base_metadata(
                 {"role": "scenario_panel", "scenario_index": idx},
                 base_metadata,
@@ -203,13 +204,25 @@ class MarkupToExcalidrawConverter:
             body_lines = scenario.body_text.splitlines() or [scenario.body_text]
             title_height = len(title_lines) * scenario.title_font_size * 1.35
             body_height = len(body_lines) * scenario.body_font_size * 1.35
+            cycle_height = 0.0
+            cycle_lines = []
+            if scenario.cycle_text:
+                cycle_lines = scenario.cycle_text.splitlines()
+                cycle_height = len(cycle_lines) * scenario.cycle_font_size * 1.35
             title_origin = Point(
                 x=scenario.origin.x + scenario.padding,
                 y=scenario.origin.y + scenario.padding,
             )
-            body_origin = Point(
+            cycle_origin = Point(
                 x=scenario.origin.x + scenario.padding,
                 y=scenario.origin.y + scenario.padding + title_height,
+            )
+            body_origin = Point(
+                x=scenario.origin.x + scenario.padding,
+                y=scenario.origin.y
+                + scenario.padding
+                + title_height
+                + (cycle_height + (scenario.section_gap if scenario.cycle_text else 0.0)),
             )
             add_element(
                 self._text_block_element(
@@ -226,6 +239,23 @@ class MarkupToExcalidrawConverter:
                     font_size=scenario.title_font_size,
                 )
             )
+            if scenario.cycle_text:
+                add_element(
+                    self._text_block_element(
+                        element_id=cycle_id,
+                        text=scenario.cycle_text,
+                        origin=cycle_origin,
+                        width=content_width,
+                        height=cycle_height,
+                        metadata=self._with_base_metadata(
+                            {"role": "scenario_cycle", "scenario_index": idx},
+                            base_metadata,
+                        ),
+                        group_ids=[group_id],
+                        font_size=scenario.cycle_font_size,
+                        text_color="#d32f2f",
+                    )
+                )
             add_element(
                 self._text_block_element(
                     element_id=body_id,
@@ -239,6 +269,49 @@ class MarkupToExcalidrawConverter:
                     ),
                     group_ids=[group_id],
                     font_size=scenario.body_font_size,
+                )
+            )
+            procedures_group = self._stable_id("scenario-procedures-group", str(idx))
+            procedures_panel_id = self._stable_id("scenario-procedures-panel", str(idx))
+            procedures_text_id = self._stable_id("scenario-procedures-text", str(idx))
+            add_element(
+                self._scenario_procedures_panel_element(
+                    element_id=procedures_panel_id,
+                    origin=scenario.procedures_origin,
+                    size=scenario.procedures_size,
+                    metadata=self._with_base_metadata(
+                        {"role": "scenario_procedures_panel", "scenario_index": idx},
+                        base_metadata,
+                    ),
+                    group_ids=[procedures_group],
+                )
+            )
+            procedures_width = scenario.procedures_size.width - (
+                scenario.procedures_padding * 2
+            )
+            procedures_lines = scenario.procedures_text.splitlines() or [
+                scenario.procedures_text
+            ]
+            procedures_height = (
+                len(procedures_lines) * scenario.procedures_font_size * 1.35
+            )
+            procedures_origin = Point(
+                x=scenario.procedures_origin.x + scenario.procedures_padding,
+                y=scenario.procedures_origin.y + scenario.procedures_padding,
+            )
+            add_element(
+                self._text_block_element(
+                    element_id=procedures_text_id,
+                    text=scenario.procedures_text,
+                    origin=procedures_origin,
+                    width=procedures_width,
+                    height=procedures_height,
+                    metadata=self._with_base_metadata(
+                        {"role": "scenario_procedures", "scenario_index": idx},
+                        base_metadata,
+                    ),
+                    group_ids=[procedures_group],
+                    font_size=scenario.procedures_font_size,
                 )
             )
 
@@ -759,6 +832,34 @@ class MarkupToExcalidrawConverter:
             metadata=metadata,
         )
 
+    def _scenario_procedures_panel_element(
+        self,
+        element_id: str,
+        origin: Point,
+        size: Size,
+        metadata: dict,
+        group_ids: List[str],
+    ) -> dict:
+        return self._base_shape(
+            element_id=element_id,
+            type_name="rectangle",
+            position=origin,
+            width=size.width,
+            height=size.height,
+            group_ids=group_ids,
+            extra={
+                "strokeColor": "#7a8aa8",
+                "backgroundColor": "#e9f0fb",
+                "fillStyle": "solid",
+                "roughness": 0,
+                "seed": self._rand_seed(),
+                "version": 1,
+                "versionNonce": self._rand_seed(),
+                "roundness": {"type": 3},
+            },
+            metadata=metadata,
+        )
+
     def _ellipse_element(
         self,
         element_id: str,
@@ -796,6 +897,7 @@ class MarkupToExcalidrawConverter:
         metadata: dict,
         group_ids: List[str] | None = None,
         font_size: float = 16.0,
+        text_color: str | None = None,
     ) -> dict:
         return {
             "id": element_id,
@@ -805,7 +907,7 @@ class MarkupToExcalidrawConverter:
             "width": width,
             "height": height,
             "angle": 0,
-            "strokeColor": "#2b2b2b",
+            "strokeColor": text_color or "#2b2b2b",
             "backgroundColor": "transparent",
             "fillStyle": "solid",
             "strokeWidth": 1,

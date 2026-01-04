@@ -35,6 +35,12 @@ class LayoutConfig:
     scenario_padding: float = 24.0
     scenario_title_font_size: float = 22.0
     scenario_body_font_size: float = 16.0
+    scenario_cycle_font_size: float = 16.0
+    scenario_section_gap: float = 0.0
+    scenario_procedures_font_size: float = 16.0
+    scenario_procedures_padding: float = 20.0
+    scenario_procedures_gap: float = 16.0
+    scenario_procedures_min_height: float = 140.0
     scenario_min_height: float = 180.0
 
 
@@ -225,7 +231,7 @@ class GridLayoutEngine(LayoutEngine):
 
         if frames:
             scenarios = self._build_scenarios(
-                components, frames, procedure_map, document.procedure_graph
+                components, frames, procedure_map, document.procedure_graph, order_index
             )
 
         return LayoutPlan(
@@ -242,6 +248,7 @@ class GridLayoutEngine(LayoutEngine):
         frames: List[FramePlacement],
         procedure_map: Dict[str, object],
         procedure_graph: Dict[str, List[str]],
+        order_index: Dict[str, int],
     ) -> List[ScenarioPlacement]:
         scenarios: List[ScenarioPlacement] = []
         component_count = len(components)
@@ -258,20 +265,21 @@ class GridLayoutEngine(LayoutEngine):
             max_x = max(frame.origin.x + frame.size.width for frame in component_frames)
             min_y = min(frame.origin.y for frame in component_frames)
             max_y = max(frame.origin.y + frame.size.height for frame in component_frames)
-            title = "Сценарий" if component_count == 1 else f"Сценарий {idx}"
+            title = "Граф" if component_count == 1 else f"Граф {idx}"
             labels = self._component_procedure_labels(
                 component, procedure_map, frame_lookup
             )
             starts, ends, variants = self._component_stats(
                 component, procedure_map, procedure_graph
             )
-            procedure_lines = [f"- {label}" for label in labels] or ["- (нет данных)"]
+            properties, cycle_text = self._component_graph_properties(
+                component, procedure_graph, order_index
+            )
             body_lines = [
-                "Процедуры:",
-                *procedure_lines,
+                *properties,
                 "",
                 "",
-                "Комплексность сценария:",
+                "Комплексность:",
                 f"- Входы: {starts}",
                 f"- Выходы: {ends}",
                 f"- Ветвления: {variants}",
@@ -280,6 +288,15 @@ class GridLayoutEngine(LayoutEngine):
             title_lines = self._wrap_lines(
                 [title], max_width, self.config.scenario_title_font_size
             )
+            cycle_lines: List[str] = []
+            cycle_height = 0.0
+            if cycle_text:
+                cycle_lines = self._wrap_lines(
+                    [cycle_text], max_width, self.config.scenario_cycle_font_size
+                )
+                cycle_height = (
+                    len(cycle_lines) * self.config.scenario_cycle_font_size * 1.35
+                )
             body_lines_wrapped = self._wrap_lines(
                 body_lines, max_width, self.config.scenario_body_font_size
             )
@@ -287,22 +304,54 @@ class GridLayoutEngine(LayoutEngine):
             body_text = "\n".join(body_lines_wrapped)
             title_height = len(title_lines) * self.config.scenario_title_font_size * 1.35
             body_height = len(body_lines_wrapped) * self.config.scenario_body_font_size * 1.35
+            gap_after_cycle = self.config.scenario_section_gap if cycle_text else 0.0
             scenario_height = max(
                 self.config.scenario_min_height,
-                title_height + body_height + self.config.scenario_padding * 2,
+                title_height
+                + cycle_height
+                + gap_after_cycle
+                + body_height
+                + self.config.scenario_padding * 2,
             )
             scenario_width = self.config.scenario_width
             x_left = min_x - self.config.scenario_gap - scenario_width
             origin = Point(x=x_left, y=min_y)
+            procedures_lines = [f"- {label}" for label in labels] or ["- (нет данных)"]
+            procedures_body = [
+                "Процедуры:",
+                *procedures_lines,
+            ]
+            procedures_max_width = scenario_width - (self.config.scenario_procedures_padding * 2)
+            procedures_lines_wrapped = self._wrap_lines(
+                procedures_body, procedures_max_width, self.config.scenario_procedures_font_size
+            )
+            procedures_text = "\n".join(procedures_lines_wrapped)
+            procedures_height = max(
+                self.config.scenario_procedures_min_height,
+                len(procedures_lines_wrapped) * self.config.scenario_procedures_font_size * 1.35
+                + self.config.scenario_procedures_padding * 2,
+            )
+            procedures_origin = Point(
+                x=x_left,
+                y=origin.y + scenario_height + self.config.scenario_procedures_gap,
+            )
             scenarios.append(
                 ScenarioPlacement(
                     origin=origin,
                     size=Size(scenario_width, scenario_height),
                     title_text=title_text,
                     body_text=body_text,
+                    cycle_text=cycle_text,
                     title_font_size=self.config.scenario_title_font_size,
                     body_font_size=self.config.scenario_body_font_size,
+                    cycle_font_size=self.config.scenario_cycle_font_size,
                     padding=self.config.scenario_padding,
+                    section_gap=self.config.scenario_section_gap,
+                    procedures_origin=procedures_origin,
+                    procedures_size=Size(scenario_width, procedures_height),
+                    procedures_text=procedures_text,
+                    procedures_font_size=self.config.scenario_procedures_font_size,
+                    procedures_padding=self.config.scenario_procedures_padding,
                 )
             )
         return scenarios
@@ -409,6 +458,74 @@ class GridLayoutEngine(LayoutEngine):
             combinations = self._procedure_graph_combinations(component, procedure_graph)
 
         return len(start_blocks), len(end_blocks), combinations
+
+    def _component_graph_properties(
+        self,
+        component: set[str],
+        procedure_graph: Dict[str, List[str]],
+        order_index: Dict[str, int],
+    ) -> Tuple[List[str], str | None]:
+        adjacency: Dict[str, List[str]] = {node: [] for node in component}
+        edge_count = 0
+        for parent, children in procedure_graph.items():
+            if parent not in component or not isinstance(children, list):
+                continue
+            for child in children:
+                if child in component:
+                    adjacency[parent].append(child)
+                    edge_count += 1
+
+        indegree: Dict[str, int] = {node: 0 for node in component}
+        outdegree: Dict[str, int] = {node: len(adjacency.get(node, [])) for node in component}
+        for parent, children in adjacency.items():
+            for child in children:
+                indegree[child] = indegree.get(child, 0) + 1
+
+        sources = [node for node, deg in indegree.items() if deg == 0]
+        sinks = [node for node, deg in outdegree.items() if deg == 0]
+        has_branching = any(deg > 1 for deg in outdegree.values())
+        has_merging = any(deg > 1 for deg in indegree.values())
+        cycle_edges = self._find_cycle_edges(adjacency, order_index)
+        cycle_count = len(cycle_edges)
+        is_cyclic = cycle_count > 0
+
+        undirected: Dict[str, set[str]] = {node: set() for node in component}
+        for parent, children in adjacency.items():
+            for child in children:
+                undirected[parent].add(child)
+                undirected[child].add(parent)
+        connected = True
+        if component:
+            start = next(iter(component))
+            stack = [start]
+            visited: set[str] = set()
+            while stack:
+                node = stack.pop()
+                if node in visited:
+                    continue
+                visited.add(node)
+                stack.extend(undirected.get(node, set()) - visited)
+            connected = visited == component
+
+        cycle_text = None
+        properties = []
+        if is_cyclic:
+            cycle_text = f"- цикличный, кол-во циклов: {cycle_count}"
+        else:
+            properties.append("- ацикличный")
+        properties.extend(
+            [
+                "- ориентированный",
+                "- слабосвязный" if connected else "- несвязный",
+                f"- вершин: {len(component)}",
+                f"- ребер: {edge_count}",
+                f"- источники: {len(sources)}",
+                f"- стоки: {len(sinks)}",
+                "- разветвляющийся" if has_branching else "- без разветвлений",
+                "- слияния есть" if has_merging else "- без слияний",
+            ]
+        )
+        return properties, cycle_text
 
     def _procedure_graph_combinations(
         self,

@@ -280,9 +280,17 @@ class ScenarioPlacement:
     size: Size
     title_text: str
     body_text: str
+    cycle_text: Optional[str]
     title_font_size: float
     body_font_size: float
+    cycle_font_size: float
     padding: float
+    section_gap: float
+    procedures_origin: Point
+    procedures_size: Size
+    procedures_text: str
+    procedures_font_size: float
+    procedures_padding: float
 
 
 @dataclass(frozen=True)

@@ -261,15 +261,29 @@ def test_scenarios_describe_components() -> None:
         if element.get("type") == "text"
         and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
     ]
+    procedures = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_procedures"
+    ]
     panels = [
         element
         for element in excal.elements
         if element.get("type") == "rectangle"
         and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_panel"
     ]
+    procedures_panels = [
+        element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_procedures_panel"
+    ]
     assert len(titles) == 2
     assert len(bodies) == 2
+    assert len(procedures) == 2
     assert len(panels) == 2
+    assert len(procedures_panels) == 2
     title_by_index = {
         element.get("customData", {}).get("cjm", {}).get("scenario_index"): element
         for element in titles
@@ -278,24 +292,34 @@ def test_scenarios_describe_components() -> None:
         element.get("customData", {}).get("cjm", {}).get("scenario_index"): element
         for element in bodies
     }
+    procedures_by_index = {
+        element.get("customData", {}).get("cjm", {}).get("scenario_index"): element
+        for element in procedures
+    }
     first_title = title_by_index[1].get("text", "")
     second_title = title_by_index[2].get("text", "")
-    assert first_title.strip().startswith("Сценарий 1")
-    assert second_title.strip().startswith("Сценарий 2")
+    assert first_title.strip().startswith("Граф 1")
+    assert second_title.strip().startswith("Граф 2")
     first_body = body_by_index[1].get("text", "")
     second_body = body_by_index[2].get("text", "")
-    assert "Процедуры:" in first_body
-    assert "- Первый сценарий (p1)" in first_body
-    assert "Комплексность сценария:" in first_body
+    assert "- ориентированный" in first_body
+    assert "- ацикличный" in first_body
+    assert "Комплексность:" in first_body
     assert "- Входы: 1" in first_body
     assert "- Выходы: 1" in first_body
     assert "- Ветвления: 1" in first_body
-    assert "Процедуры:" in second_body
-    assert "- Второй сценарий (p2)" in second_body
-    assert "Комплексность сценария:" in second_body
+    assert "- ориентированный" in second_body
+    assert "- ацикличный" in second_body
+    assert "Комплексность:" in second_body
     assert "- Входы: 1" in second_body
     assert "- Выходы: 2" in second_body
     assert "- Ветвления: 2" in second_body
+    first_proc = procedures_by_index[1].get("text", "")
+    second_proc = procedures_by_index[2].get("text", "")
+    assert "Процедуры:" in first_proc
+    assert "- Первый сценарий (p1)" in first_proc
+    assert "Процедуры:" in second_proc
+    assert "- Второй сценарий (p2)" in second_proc
 
 
 def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
@@ -321,16 +345,16 @@ def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
     }
     markup = MarkupDocument.model_validate(payload)
     excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
-    bodies = [
+    procedures_texts = [
         element
         for element in excal.elements
         if element.get("type") == "text"
-        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_procedures"
     ]
-    assert len(bodies) == 1
-    body_text = bodies[0].get("text", "")
-    assert "- Proc 7 (p7)" in body_text
-    assert "и еще 1" in body_text
+    assert len(procedures_texts) == 1
+    procedures_text = procedures_texts[0].get("text", "")
+    assert "- Proc 7 (p7)" in procedures_text
+    assert "и еще 1" in procedures_text
 
 
 def test_scenario_combinations_fallback_to_end_blocks() -> None:
@@ -428,6 +452,47 @@ def test_cycle_layout_prefers_order_hint() -> None:
     plan = GridLayoutEngine().build_plan(markup)
     frames = {frame.procedure_id: frame for frame in plan.frames}
     assert frames["close_gold_account"].origin.x < frames["product_gold_account"].origin.x
+
+
+def test_scenario_cycle_line_is_red() -> None:
+    payload = {
+        "finedog_unit_id": 17,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": ["p1"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    cycles = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_cycle"
+    ]
+    bodies = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+    ]
+    assert cycles
+    assert cycles[0].get("strokeColor") == "#d32f2f"
+    assert "цикличный, кол-во циклов:" in cycles[0].get("text", "")
+    assert bodies
+    assert "цикличный" not in bodies[0].get("text", "")
 
 
 def test_multiple_dependencies_stack_vertically() -> None:
