@@ -4,6 +4,15 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+import pytest
+
+
+def _arrow_endpoint(arrow: dict, index: int) -> tuple[float, float]:
+    points = arrow.get("points", [])
+    return (
+        arrow.get("x", 0.0) + points[index][0],
+        arrow.get("y", 0.0) + points[index][1],
+    )
 
 
 def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
@@ -28,11 +37,30 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
         if element.get("type") == "arrow"
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch_cycle"
     ]
+    blocks = {
+        element.get("customData", {}).get("cjm", {}).get("block_id"): element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "block"
+    }
     assert cycle_edges
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
+    assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
+    assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)
+    for edge in cycle_edges:
+        meta = edge.get("customData", {}).get("cjm", {})
+        source = blocks.get(meta.get("source_block_id"))
+        target = blocks.get(meta.get("target_block_id"))
+        assert source and target
+        start = _arrow_endpoint(edge, 0)
+        end = _arrow_endpoint(edge, -1)
+        assert start[0] == pytest.approx(source.get("x", 0.0) + source.get("width", 0.0) / 2)
+        assert start[1] == pytest.approx(source.get("y", 0.0))
+        assert end[0] == pytest.approx(target.get("x", 0.0) + target.get("width", 0.0) / 2)
+        assert end[1] == pytest.approx(target.get("y", 0.0))
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     proc = reconstructed.procedures[0]
@@ -69,11 +97,30 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         if element.get("type") == "arrow"
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "procedure_cycle"
     ]
+    frames = {
+        element.get("customData", {}).get("cjm", {}).get("procedure_id"): element
+        for element in excal.elements
+        if element.get("type") == "frame"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+    }
     assert cycle_edges
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
+    assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
+    assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)
+    for edge in cycle_edges:
+        meta = edge.get("customData", {}).get("cjm", {})
+        source = frames.get(meta.get("procedure_id"))
+        target = frames.get(meta.get("target_procedure_id"))
+        assert source and target
+        start = _arrow_endpoint(edge, 0)
+        end = _arrow_endpoint(edge, -1)
+        assert start[0] == pytest.approx(source.get("x", 0.0) + source.get("width", 0.0) / 2)
+        assert start[1] == pytest.approx(source.get("y", 0.0))
+        assert end[0] == pytest.approx(target.get("x", 0.0) + target.get("width", 0.0) / 2)
+        assert end[1] == pytest.approx(target.get("y", 0.0))
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     graph = reconstructed.procedure_graph

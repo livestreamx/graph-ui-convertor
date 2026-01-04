@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -269,10 +269,17 @@ class MarkerPlacement:
 
 
 @dataclass(frozen=True)
+class SeparatorPlacement:
+    start: Point
+    end: Point
+
+
+@dataclass(frozen=True)
 class LayoutPlan:
     frames: List[FramePlacement]
     blocks: List[BlockPlacement]
     markers: List[MarkerPlacement]
+    separators: List[SeparatorPlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

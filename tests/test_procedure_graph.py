@@ -103,7 +103,7 @@ def test_proc_name_used_for_frame_label_and_roundtrip() -> None:
         if element.get("type") == "frame"
         and element.get("customData", {}).get("cjm", {}).get("procedure_id") == "proc_internal"
     )
-    assert frame.get("name") == "Human Friendly Procedure"
+    assert frame.get("name") == "Human Friendly Procedure (proc_internal)"
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     proc = reconstructed.procedures[0]
@@ -134,6 +134,61 @@ def test_disconnected_procedure_graphs_are_separated() -> None:
     plan = GridLayoutEngine().build_plan(markup)
     frames = {frame.procedure_id: frame for frame in plan.frames}
     assert frames["p1"].origin.y != frames["p2"].origin.y
+
+
+def test_separators_drawn_between_disconnected_components() -> None:
+    payload = {
+        "finedog_unit_id": 10,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "alpha",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "beta",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    layout = GridLayoutEngine()
+    excal = MarkupToExcalidrawConverter(layout).convert(markup)
+
+    separators = [
+        element
+        for element in excal.elements
+        if element.get("type") == "line"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "separator"
+    ]
+    assert separators
+
+    frames = [
+        element
+        for element in excal.elements
+        if element.get("type") == "frame"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+    ]
+    assert len(frames) == 2
+    top_frame = min(frames, key=lambda frame: frame.get("y", 0.0))
+    bottom_frame = max(frames, key=lambda frame: frame.get("y", 0.0))
+    top_bottom = top_frame.get("y", 0.0) + top_frame.get("height", 0.0)
+    bottom_top = bottom_frame.get("y", 0.0)
+
+    separator = separators[0]
+    points = separator.get("points", [])
+    start_y = separator.get("y", 0.0) + points[0][1]
+    end_y = separator.get("y", 0.0) + points[-1][1]
+    assert start_y == end_y
+    assert start_y > top_bottom
+    assert start_y < bottom_top
+    assert start_y - top_bottom >= layout.config.separator_padding
+    assert bottom_top - start_y >= layout.config.separator_padding
 
 
 def test_multiple_dependencies_stack_vertically() -> None:

@@ -11,6 +11,7 @@ from domain.models import (
     MarkerPlacement,
     MarkupDocument,
     Point,
+    SeparatorPlacement,
     Size,
     normalize_end_type,
 )
@@ -26,6 +27,8 @@ class LayoutConfig:
     gap_y: float = 80.0
     lane_gap: float = 300.0
     max_cols: int = 4
+    separator_padding: float = 220.0
+    separator_margin_x: float = 80.0
 
 
 @dataclass(frozen=True)
@@ -43,10 +46,11 @@ class GridLayoutEngine(LayoutEngine):
         frames: List[FramePlacement] = []
         blocks: List[BlockPlacement] = []
         markers: List[MarkerPlacement] = []
+        separator_ys: List[float] = []
 
         procedures = [proc for proc in document.procedures if proc.block_ids()]
         if not procedures:
-            return LayoutPlan(frames=frames, blocks=blocks, markers=markers)
+            return LayoutPlan(frames=frames, blocks=blocks, markers=markers, separators=[])
         proc_ids = [proc.procedure_id for proc in procedures]
         order_hint = self._procedure_order_hint(procedures, document.procedure_graph)
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
@@ -82,8 +86,9 @@ class GridLayoutEngine(LayoutEngine):
         origin_x = 0.0
         origin_y = 0.0
         proc_gap_y = self.config.lane_gap
+        component_gap = max(proc_gap_y, self.config.separator_padding * 2)
 
-        for component in components:
+        for idx, component in enumerate(components):
             component_adjacency = {
                 proc_id: [child for child in adjacency.get(proc_id, []) if child in component]
                 for proc_id in component
@@ -124,7 +129,11 @@ class GridLayoutEngine(LayoutEngine):
                     frames.append(frame)
                     y += frame_size.height + proc_gap_y
 
-            origin_y += component_height + proc_gap_y
+            if idx < len(components) - 1:
+                separator_ys.append(origin_y + component_height + component_gap / 2)
+                origin_y += component_height + component_gap
+            else:
+                origin_y += component_height + proc_gap_y
 
         procedure_map = {proc.procedure_id: proc for proc in procedures}
         for frame in frames:
@@ -190,7 +199,21 @@ class GridLayoutEngine(LayoutEngine):
                     )
                 )
 
-        return LayoutPlan(frames=frames, blocks=blocks, markers=markers)
+        separators: List[SeparatorPlacement] = []
+        if frames and separator_ys:
+            min_x = min(frame.origin.x for frame in frames)
+            max_x = max(frame.origin.x + frame.size.width for frame in frames)
+            x_start = min_x - self.config.separator_margin_x
+            x_end = max_x + self.config.separator_margin_x
+            separators = [
+                SeparatorPlacement(
+                    start=Point(x_start, y),
+                    end=Point(x_end, y),
+                )
+                for y in separator_ys
+            ]
+
+        return LayoutPlan(frames=frames, blocks=blocks, markers=markers, separators=separators)
 
     def _procedure_order_hint(
         self, procedures: List[object], procedure_graph: Dict[str, List[str]]

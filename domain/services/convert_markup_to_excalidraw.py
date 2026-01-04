@@ -17,6 +17,7 @@ from domain.models import (
     METADATA_SCHEMA_VERSION,
     MarkerPlacement,
     Point,
+    SeparatorPlacement,
     Size,
 )
 from domain.ports.layout import LayoutEngine
@@ -51,6 +52,7 @@ class MarkupToExcalidrawConverter:
         frame_ids = self._build_frames(
             plan.frames, add_element, base_metadata, proc_name_lookup
         )
+        self._build_separators(plan.separators, add_element, base_metadata)
         included_procs = {frame.procedure_id for frame in plan.frames}
         end_block_type_lookup = {
             (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
@@ -127,6 +129,7 @@ class MarkupToExcalidrawConverter:
             frame_id = self._stable_id("frame", frame.procedure_id)
             frame_ids[frame.procedure_id] = frame_id
             procedure_name = proc_name_lookup.get(frame.procedure_id)
+            label = self._format_procedure_label(procedure_name, frame.procedure_id)
             frame_meta = {
                 "procedure_id": frame.procedure_id,
                 "role": "frame",
@@ -141,10 +144,33 @@ class MarkupToExcalidrawConverter:
                         frame_meta,
                         base_metadata,
                     ),
-                    name=procedure_name,
+                    name=label,
                 )
             )
         return frame_ids
+
+    def _build_separators(
+        self,
+        separators: Iterable[SeparatorPlacement],
+        add_element: callable,
+        base_metadata: dict,
+    ) -> None:
+        for idx, separator in enumerate(separators):
+            element_id = self._stable_id("separator", str(idx), str(separator.start), str(separator.end))
+            add_element(
+                self._line_element(
+                    element_id=element_id,
+                    start=separator.start,
+                    end=separator.end,
+                    metadata=self._with_base_metadata(
+                        {"role": "separator", "separator_index": idx},
+                        base_metadata,
+                    ),
+                    stroke_color="#9e9e9e",
+                    stroke_style="dashed",
+                    stroke_width=2,
+                )
+            )
 
     def _build_blocks(
         self,
@@ -303,25 +329,25 @@ class MarkupToExcalidrawConverter:
                 start_center = self._marker_anchor(marker, side="right")
                 end_center = self._block_anchor(block, side="left")
                 arrow = self._arrow_element(
-                        start=start_center,
-                        end=end_center,
-                        label="start",
-                        metadata=self._with_base_metadata(
-                            {
-                                "procedure_id": procedure.procedure_id,
-                                "role": "edge",
-                                "edge_type": "start",
-                                "target_block_id": start_block_id,
-                            },
-                            base_metadata,
-                        ),
-                        start_binding=self._marker_element_id(
-                            procedure.procedure_id, "start_marker", start_block_id, None
-                        ),
-                        end_binding=self._stable_id(
-                            "block", procedure.procedure_id, start_block_id
-                        ),
-                    )
+                    start=start_center,
+                    end=end_center,
+                    label="start",
+                    metadata=self._with_base_metadata(
+                        {
+                            "procedure_id": procedure.procedure_id,
+                            "role": "edge",
+                            "edge_type": "start",
+                            "target_block_id": start_block_id,
+                        },
+                        base_metadata,
+                    ),
+                    start_binding=self._marker_element_id(
+                        procedure.procedure_id, "start_marker", start_block_id, None
+                    ),
+                    end_binding=self._stable_id(
+                        "block", procedure.procedure_id, start_block_id
+                    ),
+                )
                 add_element(arrow)
                 self._bind_arrow(element_index, arrow)
 
@@ -346,27 +372,27 @@ class MarkupToExcalidrawConverter:
             start_center = self._block_anchor(block, side="right")
             end_center = self._marker_anchor(marker, side="left")
             arrow = self._arrow_element(
-                    start=start_center,
-                    end=end_center,
-                    label="end",
-                    metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": proc_id,
-                            "role": "edge",
-                            "edge_type": "end",
-                            "end_type": end_type,
-                            "end_block_type": block_end_type,
-                            "source_block_id": block_id,
-                        },
-                        base_metadata,
-                    ),
-                    start_binding=self._stable_id(
-                        "block", proc_id, block_id
-                    ),
-                    end_binding=self._marker_element_id(
-                        proc_id, "end_marker", block_id, marker_end_type
-                    ),
-                )
+                start=start_center,
+                end=end_center,
+                label="end",
+                metadata=self._with_base_metadata(
+                    {
+                        "procedure_id": proc_id,
+                        "role": "edge",
+                        "edge_type": "end",
+                        "end_type": end_type,
+                        "end_block_type": block_end_type,
+                        "source_block_id": block_id,
+                    },
+                    base_metadata,
+                ),
+                start_binding=self._stable_id(
+                    "block", proc_id, block_id
+                ),
+                end_binding=self._marker_element_id(
+                    proc_id, "end_marker", block_id, marker_end_type
+                ),
+            )
             add_element(arrow)
             self._bind_arrow(element_index, arrow)
 
@@ -415,44 +441,53 @@ class MarkupToExcalidrawConverter:
                     offset_key = (procedure.procedure_id, source_block)
                     offset_idx = branch_index.get(offset_key, 0)
                     branch_index[offset_key] = offset_idx + 1
-                    dy = branch_offsets.get(offset_key, [0])[min(offset_idx, len(branch_offsets.get(offset_key, [0])) - 1)]
-                    start_center = self._block_anchor(
-                        source, side="right", y_offset=dy
-                    )
-                    end_center = self._block_anchor(
-                        target, side="left", y_offset=dy
-                    )
                     is_cycle = (source_block, target_block) in cycle_edges_by_proc.get(
                         procedure.procedure_id, set()
                     )
+                    dy = branch_offsets.get(offset_key, [0])[
+                        min(offset_idx, len(branch_offsets.get(offset_key, [0])) - 1)
+                    ]
+                    if is_cycle:
+                        start_center = self._block_anchor(source, side="top")
+                        end_center = self._block_anchor(target, side="top")
+                    else:
+                        start_center = self._block_anchor(
+                            source, side="right", y_offset=dy
+                        )
+                        end_center = self._block_anchor(
+                            target, side="left", y_offset=dy
+                        )
                     edge_type = "branch_cycle" if is_cycle else "branch"
                     label = "ЦИКЛ" if is_cycle else "branch"
                     arrow = self._arrow_element(
-                            start=start_center,
-                            end=end_center,
-                            label=label,
-                            metadata=self._with_base_metadata(
-                                {
-                                    "procedure_id": procedure.procedure_id,
-                                    "target_procedure_id": target_proc_id,
-                                    "role": "edge",
-                            "edge_type": edge_type,
-                            "is_cycle": is_cycle,
-                            "source_block_id": source_block,
-                            "target_block_id": target_block,
-                        },
-                        base_metadata,
-                    ),
-                    start_binding=self._stable_id(
-                        "block", procedure.procedure_id, source_block
-                    ),
-                    end_binding=self._stable_id(
-                        "block", target_proc_id, target_block
-                    ),
+                        start=start_center,
+                        end=end_center,
+                        label=label,
+                        metadata=self._with_base_metadata(
+                            {
+                                "procedure_id": procedure.procedure_id,
+                                "target_procedure_id": target_proc_id,
+                                "role": "edge",
+                                "edge_type": edge_type,
+                                "is_cycle": is_cycle,
+                                "source_block_id": source_block,
+                                "target_block_id": target_block,
+                            },
+                            base_metadata,
+                        ),
+                        start_binding=self._stable_id(
+                            "block", procedure.procedure_id, source_block
+                        ),
+                        end_binding=self._stable_id(
+                            "block", target_proc_id, target_block
+                        ),
                         smoothing=0.15,
                         stroke_style="dashed" if is_cycle else None,
                         stroke_color="#d32f2f" if is_cycle else None,
                         curve_offset=80.0 if is_cycle else None,
+                        curve_direction=-1.0 if is_cycle else None,
+                        start_arrowhead="arrow" if is_cycle else None,
+                        end_arrowhead="arrow" if is_cycle else None,
                     )
                     add_element(arrow)
                     self._bind_arrow(element_index, arrow)
@@ -522,14 +557,24 @@ class MarkupToExcalidrawConverter:
             is_cycle = bool(graph_edges) and (left_id, right_id) in cycle_edges
             edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
             label = "ЦИКЛ" if is_cycle else "procedure"
-            start = Point(
-                x=left_frame.origin.x + left_frame.size.width,
-                y=left_frame.origin.y + left_frame.size.height / 2,
-            )
-            end = Point(
-                x=right_frame.origin.x,
-                y=right_frame.origin.y + right_frame.size.height / 2,
-            )
+            if is_cycle:
+                start = Point(
+                    x=left_frame.origin.x + left_frame.size.width / 2,
+                    y=left_frame.origin.y,
+                )
+                end = Point(
+                    x=right_frame.origin.x + right_frame.size.width / 2,
+                    y=right_frame.origin.y,
+                )
+            else:
+                start = Point(
+                    x=left_frame.origin.x + left_frame.size.width,
+                    y=left_frame.origin.y + left_frame.size.height / 2,
+                )
+                end = Point(
+                    x=right_frame.origin.x,
+                    y=right_frame.origin.y + right_frame.size.height / 2,
+                )
             arrow = self._arrow_element(
                 start=start,
                 end=end,
@@ -550,9 +595,17 @@ class MarkupToExcalidrawConverter:
                 stroke_style="dashed" if is_cycle else None,
                 stroke_color="#d32f2f" if is_cycle else None,
                 curve_offset=100.0 if is_cycle else None,
+                curve_direction=-1.0 if is_cycle else None,
+                start_arrowhead="arrow" if is_cycle else None,
+                end_arrowhead="arrow" if is_cycle else None,
             )
             add_element(arrow)
             self._bind_arrow(element_index, arrow)
+
+    def _format_procedure_label(self, procedure_name: str | None, procedure_id: str) -> str:
+        if procedure_name:
+            return f"{procedure_name} ({procedure_id})"
+        return procedure_id
 
     def _frame_element(
         self,
@@ -716,6 +769,53 @@ class MarkupToExcalidrawConverter:
             return self._stable_id("marker", procedure_id, role, block_id, end_type)
         return self._stable_id("marker", procedure_id, role, block_id)
 
+    def _line_element(
+        self,
+        element_id: str,
+        start: Point,
+        end: Point,
+        metadata: dict,
+        stroke_color: str | None = None,
+        stroke_style: str | None = None,
+        stroke_width: float = 1.0,
+    ) -> dict:
+        dx = end.x - start.x
+        dy = end.y - start.y
+        points = [[0.0, 0.0], [dx, dy]]
+        min_x = min(point[0] for point in points)
+        max_x = max(point[0] for point in points)
+        min_y = min(point[1] for point in points)
+        max_y = max(point[1] for point in points)
+        width = max_x - min_x
+        height = max_y - min_y
+        adjusted_points = [[point[0] - min_x, point[1] - min_y] for point in points]
+        return {
+            "id": element_id,
+            "type": "line",
+            "x": start.x + min_x,
+            "y": start.y + min_y,
+            "width": width,
+            "height": height,
+            "angle": 0,
+            "strokeColor": stroke_color or "#1e1e1e",
+            "backgroundColor": "transparent",
+            "fillStyle": "solid",
+            "strokeWidth": stroke_width,
+            "strokeStyle": stroke_style or "solid",
+            "roughness": 0,
+            "opacity": 100,
+            "groupIds": [],
+            "roundness": None,
+            "seed": self._rand_seed(),
+            "version": 1,
+            "versionNonce": self._rand_seed(),
+            "isDeleted": False,
+            "boundElements": [],
+            "locked": False,
+            "points": adjusted_points,
+            "customData": {CUSTOM_DATA_KEY: metadata},
+        }
+
     def _arrow_element(
         self,
         start: Point,
@@ -728,6 +828,9 @@ class MarkupToExcalidrawConverter:
         stroke_style: str | None = None,
         stroke_color: str | None = None,
         curve_offset: float | None = None,
+        curve_direction: float | None = None,
+        start_arrowhead: str | None = None,
+        end_arrowhead: str | None = None,
     ) -> dict:
         dx = end.x - start.x
         dy = end.y - start.y
@@ -738,7 +841,7 @@ class MarkupToExcalidrawConverter:
         roundness = {"type": 2}
         if curve_offset is not None:
             mid_x = dx / 2
-            direction = 1.0 if dy >= 0 else -1.0
+            direction = curve_direction if curve_direction is not None else (1.0 if dy >= 0 else -1.0)
             mid_y = dy / 2 + (curve_offset * direction)
             points = [[0.0, 0.0], [mid_x, mid_y], [dx, dy]]
             roundness = {"type": 3}
@@ -750,7 +853,7 @@ class MarkupToExcalidrawConverter:
         width = max_x - min_x
         height = max_y - min_y
         adjusted_points = [[point[0] - min_x, point[1] - min_y] for point in points]
-        return {
+        arrow = {
             "id": arrow_id,
             "type": "arrow",
             "x": start.x + min_x,
@@ -780,6 +883,11 @@ class MarkupToExcalidrawConverter:
             "text": label if show_text else "",
             "customData": {CUSTOM_DATA_KEY: metadata},
         }
+        if start_arrowhead is not None:
+            arrow["startArrowhead"] = start_arrowhead
+        if end_arrowhead is not None:
+            arrow["endArrowhead"] = end_arrowhead
+        return arrow
 
     def _find_cycle_edges(self, adjacency: Dict[str, List[str]]) -> set[Tuple[str, str]]:
         normalized: Dict[str, List[str]] = {}
@@ -850,14 +958,25 @@ class MarkupToExcalidrawConverter:
     def _center(self, position: Point, width: float, height: float) -> Point:
         return Point(x=position.x + width / 2, y=position.y + height / 2)
 
-    def _block_anchor(self, block: BlockPlacement, side: str, y_offset: float = 0.0) -> Point:
+    def _block_anchor(
+        self,
+        block: BlockPlacement,
+        side: str,
+        x_offset: float = 0.0,
+        y_offset: float = 0.0,
+    ) -> Point:
         if side == "left":
             return Point(
-                x=block.position.x,
+                x=block.position.x + x_offset,
                 y=block.position.y + block.size.height / 2 + y_offset,
             )
+        if side == "top":
+            return Point(
+                x=block.position.x + block.size.width / 2 + x_offset,
+                y=block.position.y + y_offset,
+            )
         return Point(
-            x=block.position.x + block.size.width,
+            x=block.position.x + block.size.width + x_offset,
             y=block.position.y + block.size.height / 2 + y_offset,
         )
 
