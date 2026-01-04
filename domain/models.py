@@ -275,11 +275,23 @@ class SeparatorPlacement:
 
 
 @dataclass(frozen=True)
+class ScenarioPlacement:
+    origin: Point
+    size: Size
+    title_text: str
+    body_text: str
+    title_font_size: float
+    body_font_size: float
+    padding: float
+
+
+@dataclass(frozen=True)
 class LayoutPlan:
     frames: List[FramePlacement]
     blocks: List[BlockPlacement]
     markers: List[MarkerPlacement]
     separators: List[SeparatorPlacement] = field(default_factory=list)
+    scenarios: List[ScenarioPlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

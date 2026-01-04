@@ -11,6 +11,7 @@ from domain.models import (
     MarkerPlacement,
     MarkupDocument,
     Point,
+    ScenarioPlacement,
     SeparatorPlacement,
     Size,
     normalize_end_type,
@@ -29,6 +30,12 @@ class LayoutConfig:
     max_cols: int = 4
     separator_padding: float = 220.0
     separator_margin_x: float = 80.0
+    scenario_width: float = 360.0
+    scenario_gap: float = 120.0
+    scenario_padding: float = 24.0
+    scenario_title_font_size: float = 22.0
+    scenario_body_font_size: float = 16.0
+    scenario_min_height: float = 180.0
 
 
 @dataclass(frozen=True)
@@ -47,10 +54,13 @@ class GridLayoutEngine(LayoutEngine):
         blocks: List[BlockPlacement] = []
         markers: List[MarkerPlacement] = []
         separator_ys: List[float] = []
+        scenarios: List[ScenarioPlacement] = []
 
         procedures = [proc for proc in document.procedures if proc.block_ids()]
         if not procedures:
-            return LayoutPlan(frames=frames, blocks=blocks, markers=markers, separators=[])
+            return LayoutPlan(
+                frames=frames, blocks=blocks, markers=markers, separators=[], scenarios=[]
+            )
         proc_ids = [proc.procedure_id for proc in procedures]
         order_hint = self._procedure_order_hint(procedures, document.procedure_graph)
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
@@ -213,7 +223,172 @@ class GridLayoutEngine(LayoutEngine):
                 for y in separator_ys
             ]
 
-        return LayoutPlan(frames=frames, blocks=blocks, markers=markers, separators=separators)
+        if frames:
+            scenarios = self._build_scenarios(components, frames, procedure_map)
+
+        return LayoutPlan(
+            frames=frames,
+            blocks=blocks,
+            markers=markers,
+            separators=separators,
+            scenarios=scenarios,
+        )
+
+    def _build_scenarios(
+        self,
+        components: List[set[str]],
+        frames: List[FramePlacement],
+        procedure_map: Dict[str, object],
+    ) -> List[ScenarioPlacement]:
+        scenarios: List[ScenarioPlacement] = []
+        component_count = len(components)
+        frame_lookup = {frame.procedure_id: frame for frame in frames}
+        for idx, component in enumerate(components, start=1):
+            component_frames = [
+                frame_lookup[proc_id]
+                for proc_id in component
+                if proc_id in frame_lookup
+            ]
+            if not component_frames:
+                continue
+            min_x = min(frame.origin.x for frame in component_frames)
+            max_x = max(frame.origin.x + frame.size.width for frame in component_frames)
+            min_y = min(frame.origin.y for frame in component_frames)
+            max_y = max(frame.origin.y + frame.size.height for frame in component_frames)
+            title = "Сценарий" if component_count == 1 else f"Сценарий {idx}"
+            labels = self._component_procedure_labels(
+                component, procedure_map, frame_lookup
+            )
+            starts, ends, variants = self._component_stats(component, procedure_map)
+            procedure_lines = [f"- {label}" for label in labels] or ["- (нет данных)"]
+            body_lines = [
+                "Процедуры:",
+                *procedure_lines,
+                "",
+                "",
+                "Комплексность сценария:",
+                f"- Входы: {starts}",
+                f"- Выходы: {ends}",
+                f"- Комбинации: {variants}",
+            ]
+            max_width = self.config.scenario_width - (self.config.scenario_padding * 2)
+            title_lines = self._wrap_lines(
+                [title], max_width, self.config.scenario_title_font_size
+            )
+            body_lines_wrapped = self._wrap_lines(
+                body_lines, max_width, self.config.scenario_body_font_size
+            )
+            title_text = "\n".join(title_lines)
+            body_text = "\n".join(body_lines_wrapped)
+            title_height = len(title_lines) * self.config.scenario_title_font_size * 1.35
+            body_height = len(body_lines_wrapped) * self.config.scenario_body_font_size * 1.35
+            scenario_height = max(
+                self.config.scenario_min_height,
+                title_height + body_height + self.config.scenario_padding * 2,
+            )
+            scenario_width = self.config.scenario_width
+            x_left = min_x - self.config.scenario_gap - scenario_width
+            origin = Point(x=x_left, y=min_y)
+            scenarios.append(
+                ScenarioPlacement(
+                    origin=origin,
+                    size=Size(scenario_width, scenario_height),
+                    title_text=title_text,
+                    body_text=body_text,
+                    title_font_size=self.config.scenario_title_font_size,
+                    body_font_size=self.config.scenario_body_font_size,
+                    padding=self.config.scenario_padding,
+                )
+            )
+        return scenarios
+
+    def _component_procedure_labels(
+        self,
+        component: set[str],
+        procedure_map: Dict[str, object],
+        frame_lookup: Dict[str, FramePlacement],
+    ) -> List[str]:
+        entries: List[Tuple[float, bool, str, str]] = []
+        for proc_id in sorted(component):
+            proc = procedure_map.get(proc_id)
+            if proc is None:
+                continue
+            frame = frame_lookup.get(proc_id)
+            x_pos = frame.origin.x if frame else 0.0
+            proc_name = getattr(proc, "procedure_name", None)
+            label = f"{proc_name} ({proc_id})" if proc_name else proc_id
+            has_start = bool(getattr(proc, "start_block_ids", []))
+            entries.append((x_pos, has_start, label, proc_id))
+
+        entries.sort(key=lambda item: (item[0], item[3]))
+        labels = [entry[2] for entry in entries]
+        limit = 6
+        if len(labels) <= limit:
+            return labels
+
+        start_entries = [entry for entry in entries if entry[1]]
+        other_entries = [entry for entry in entries if not entry[1]]
+        combined = start_entries + other_entries
+        trimmed = [entry[2] for entry in combined[:limit]]
+        trimmed.append(f"и еще {len(entries) - limit}")
+        return trimmed
+
+    def _wrap_lines(self, lines: List[str], max_width: float, font_size: float) -> List[str]:
+        max_chars = max(1, int(max_width / (font_size * 0.6)))
+        wrapped: List[str] = []
+        for line in lines:
+            if not line:
+                wrapped.append("")
+                continue
+            words = line.split()
+            current: List[str] = []
+            count = 0
+            for word in words:
+                if not current:
+                    if len(word) <= max_chars:
+                        current = [word]
+                        count = len(word)
+                    else:
+                        for idx in range(0, len(word), max_chars):
+                            chunk = word[idx : idx + max_chars]
+                            if current:
+                                wrapped.append(" ".join(current))
+                            current = [chunk]
+                            count = len(chunk)
+                    continue
+                if count + 1 + len(word) <= max_chars:
+                    current.append(word)
+                    count += 1 + len(word)
+                else:
+                    wrapped.append(" ".join(current))
+                    current = [word]
+                    count = len(word)
+            if current:
+                wrapped.append(" ".join(current))
+        return wrapped
+
+    def _component_stats(
+        self, component: set[str], procedure_map: Dict[str, object]
+    ) -> Tuple[int, int, int]:
+        start_blocks: set[str] = set()
+        end_blocks: set[str] = set()
+        variant_edges: set[Tuple[str, str, str]] = set()
+        for proc_id in component:
+            proc = procedure_map.get(proc_id)
+            if proc is None:
+                continue
+            for start_id in getattr(proc, "start_block_ids", []):
+                start_blocks.add(start_id)
+            for end_id in getattr(proc, "end_block_ids", []):
+                end_blocks.add(end_id)
+            branches = getattr(proc, "branches", {})
+            if isinstance(branches, dict):
+                for source, targets in branches.items():
+                    if not isinstance(targets, list):
+                        continue
+                    for target in targets:
+                        variant_edges.add((proc_id, str(source), str(target)))
+        return len(start_blocks), len(end_blocks), len(variant_edges)
 
     def _procedure_order_hint(
         self, procedures: List[object], procedure_graph: Dict[str, List[str]]

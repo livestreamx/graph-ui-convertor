@@ -17,6 +17,7 @@ from domain.models import (
     METADATA_SCHEMA_VERSION,
     MarkerPlacement,
     Point,
+    ScenarioPlacement,
     SeparatorPlacement,
     Size,
 )
@@ -53,6 +54,7 @@ class MarkupToExcalidrawConverter:
             plan.frames, add_element, base_metadata, proc_name_lookup
         )
         self._build_separators(plan.separators, add_element, base_metadata)
+        self._build_scenarios(plan.scenarios, add_element, base_metadata)
         included_procs = {frame.procedure_id for frame in plan.frames}
         end_block_type_lookup = {
             (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
@@ -169,6 +171,74 @@ class MarkupToExcalidrawConverter:
                     stroke_color="#9e9e9e",
                     stroke_style="dashed",
                     stroke_width=2,
+                )
+            )
+
+    def _build_scenarios(
+        self,
+        scenarios: Iterable[ScenarioPlacement],
+        add_element: callable,
+        base_metadata: dict,
+    ) -> None:
+        for idx, scenario in enumerate(scenarios, start=1):
+            group_id = self._stable_id("scenario-group", str(idx))
+            panel_id = self._stable_id("scenario-panel", str(idx))
+            title_id = self._stable_id("scenario-title", str(idx))
+            body_id = self._stable_id("scenario-body", str(idx))
+            panel_meta = self._with_base_metadata(
+                {"role": "scenario_panel", "scenario_index": idx},
+                base_metadata,
+            )
+            add_element(
+                self._scenario_panel_element(
+                    element_id=panel_id,
+                    origin=scenario.origin,
+                    size=scenario.size,
+                    metadata=panel_meta,
+                    group_ids=[group_id],
+                )
+            )
+            content_width = scenario.size.width - (scenario.padding * 2)
+            title_lines = scenario.title_text.splitlines() or [scenario.title_text]
+            body_lines = scenario.body_text.splitlines() or [scenario.body_text]
+            title_height = len(title_lines) * scenario.title_font_size * 1.35
+            body_height = len(body_lines) * scenario.body_font_size * 1.35
+            title_origin = Point(
+                x=scenario.origin.x + scenario.padding,
+                y=scenario.origin.y + scenario.padding,
+            )
+            body_origin = Point(
+                x=scenario.origin.x + scenario.padding,
+                y=scenario.origin.y + scenario.padding + title_height,
+            )
+            add_element(
+                self._text_block_element(
+                    element_id=title_id,
+                    text=scenario.title_text,
+                    origin=title_origin,
+                    width=content_width,
+                    height=title_height,
+                    metadata=self._with_base_metadata(
+                        {"role": "scenario_title", "scenario_index": idx},
+                        base_metadata,
+                    ),
+                    group_ids=[group_id],
+                    font_size=scenario.title_font_size,
+                )
+            )
+            add_element(
+                self._text_block_element(
+                    element_id=body_id,
+                    text=scenario.body_text,
+                    origin=body_origin,
+                    width=content_width,
+                    height=body_height,
+                    metadata=self._with_base_metadata(
+                        {"role": "scenario_body", "scenario_index": idx},
+                        base_metadata,
+                    ),
+                    group_ids=[group_id],
+                    font_size=scenario.body_font_size,
                 )
             )
 
@@ -661,6 +731,34 @@ class MarkupToExcalidrawConverter:
             metadata=metadata,
         )
 
+    def _scenario_panel_element(
+        self,
+        element_id: str,
+        origin: Point,
+        size: Size,
+        metadata: dict,
+        group_ids: List[str],
+    ) -> dict:
+        return self._base_shape(
+            element_id=element_id,
+            type_name="rectangle",
+            position=origin,
+            width=size.width,
+            height=size.height,
+            group_ids=group_ids,
+            extra={
+                "strokeColor": "#c7bba3",
+                "backgroundColor": "#f7f3ea",
+                "fillStyle": "solid",
+                "roughness": 0,
+                "seed": self._rand_seed(),
+                "version": 1,
+                "versionNonce": self._rand_seed(),
+                "roundness": {"type": 3},
+            },
+            metadata=metadata,
+        )
+
     def _ellipse_element(
         self,
         element_id: str,
@@ -687,6 +785,50 @@ class MarkupToExcalidrawConverter:
             },
             metadata=metadata,
         )
+
+    def _text_block_element(
+        self,
+        element_id: str,
+        text: str,
+        origin: Point,
+        width: float,
+        height: float,
+        metadata: dict,
+        group_ids: List[str] | None = None,
+        font_size: float = 16.0,
+    ) -> dict:
+        return {
+            "id": element_id,
+            "type": "text",
+            "x": origin.x,
+            "y": origin.y,
+            "width": width,
+            "height": height,
+            "angle": 0,
+            "strokeColor": "#2b2b2b",
+            "backgroundColor": "transparent",
+            "fillStyle": "solid",
+            "strokeWidth": 1,
+            "strokeStyle": "solid",
+            "roughness": 0,
+            "opacity": 100,
+            "groupIds": group_ids or [],
+            "frameId": None,
+            "roundness": None,
+            "seed": self._rand_seed(),
+            "version": 1,
+            "versionNonce": self._rand_seed(),
+            "isDeleted": False,
+            "boundElements": [],
+            "locked": False,
+            "text": text,
+            "fontSize": font_size,
+            "fontFamily": 1,
+            "textAlign": "left",
+            "verticalAlign": "top",
+            "baseline": font_size,
+            "customData": {CUSTOM_DATA_KEY: metadata},
+        }
 
     def _text_element(
         self,

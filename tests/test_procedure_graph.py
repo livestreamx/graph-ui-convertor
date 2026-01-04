@@ -224,6 +224,115 @@ def test_no_procedure_edges_without_links() -> None:
     assert not procedure_edges
 
 
+def test_scenarios_describe_components() -> None:
+    payload = {
+        "finedog_unit_id": 12,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Первый сценарий",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Второй сценарий",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end", "e::end"],
+                "branches": {"c": ["d", "e"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    titles = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_title"
+    ]
+    bodies = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+    ]
+    panels = [
+        element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_panel"
+    ]
+    assert len(titles) == 2
+    assert len(bodies) == 2
+    assert len(panels) == 2
+    title_by_index = {
+        element.get("customData", {}).get("cjm", {}).get("scenario_index"): element
+        for element in titles
+    }
+    body_by_index = {
+        element.get("customData", {}).get("cjm", {}).get("scenario_index"): element
+        for element in bodies
+    }
+    first_title = title_by_index[1].get("text", "")
+    second_title = title_by_index[2].get("text", "")
+    assert first_title.strip().startswith("Сценарий 1")
+    assert second_title.strip().startswith("Сценарий 2")
+    first_body = body_by_index[1].get("text", "")
+    second_body = body_by_index[2].get("text", "")
+    assert "Процедуры:" in first_body
+    assert "- Первый сценарий (p1)" in first_body
+    assert "Комплексность сценария:" in first_body
+    assert "- Входы: 1" in first_body
+    assert "- Выходы: 1" in first_body
+    assert "- Комбинации: 1" in first_body
+    assert "Процедуры:" in second_body
+    assert "- Второй сценарий (p2)" in second_body
+    assert "Комплексность сценария:" in second_body
+    assert "- Входы: 1" in second_body
+    assert "- Выходы: 2" in second_body
+    assert "- Комбинации: 2" in second_body
+
+
+def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
+    procedures = []
+    for idx in range(1, 8):
+        proc_id = f"p{idx}"
+        proc = {
+            "proc_id": proc_id,
+            "proc_name": f"Proc {idx}",
+            "end_block_ids": [f"b{idx}::end"],
+            "branches": {f"a{idx}": [f"b{idx}"]},
+        }
+        if idx in {1, 7}:
+            proc["start_block_ids"] = [f"a{idx}"]
+        procedures.append(proc)
+    procedure_graph = {f"p{idx}": [f"p{idx+1}"] for idx in range(1, 7)}
+
+    payload = {
+        "finedog_unit_id": 13,
+        "markup_type": "service",
+        "procedures": procedures,
+        "procedure_graph": procedure_graph,
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    bodies = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "scenario_body"
+    ]
+    assert len(bodies) == 1
+    body_text = bodies[0].get("text", "")
+    assert "- Proc 7 (p7)" in body_text
+    assert "и еще 1" in body_text
+
+
 def test_multiple_dependencies_stack_vertically() -> None:
     payload = {
         "finedog_unit_id": 9,
