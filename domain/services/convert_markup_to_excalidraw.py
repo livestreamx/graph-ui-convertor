@@ -539,15 +539,13 @@ class MarkupToExcalidrawConverter:
                         tgt_proc = proc_for_block.get(tgt)
                         if tgt_proc and tgt_proc != proc.procedure_id:
                             cross_edges.append((proc.procedure_id, tgt_proc))
-
-            ordered = sorted(
-                [proc for proc in document.procedures if proc.procedure_id in frame_lookup],
-                key=lambda p: frame_lookup.get(p.procedure_id).origin.x if frame_lookup.get(p.procedure_id) else 0.0,
-            )
-            sequential_edges = [
-                (left.procedure_id, right.procedure_id) for left, right in zip(ordered, ordered[1:])
-            ]
-            edges_to_draw = list({*cross_edges, *sequential_edges})
+            seen_edges: set[Tuple[str, str]] = set()
+            edges_to_draw = []
+            for edge in cross_edges:
+                if edge in seen_edges:
+                    continue
+                seen_edges.add(edge)
+                edges_to_draw.append(edge)
 
         for left_id, right_id in edges_to_draw:
             left_frame = frame_lookup.get(left_id)

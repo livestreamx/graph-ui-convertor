@@ -191,6 +191,39 @@ def test_separators_drawn_between_disconnected_components() -> None:
     assert bottom_top - start_y >= layout.config.separator_padding
 
 
+def test_no_procedure_edges_without_links() -> None:
+    payload = {
+        "finedog_unit_id": 11,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    procedure_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        in {"procedure_flow", "procedure_cycle"}
+    ]
+    assert not procedure_edges
+
+
 def test_multiple_dependencies_stack_vertically() -> None:
     payload = {
         "finedog_unit_id": 9,
