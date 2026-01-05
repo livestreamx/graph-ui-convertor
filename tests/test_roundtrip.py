@@ -135,3 +135,57 @@ def test_roundtrip_with_links_fixture() -> None:
     reconstructed = backward.convert(excal.to_dict())
 
     assert normalize(reconstructed) == normalize(markup)
+
+
+def test_extra_block_names_not_rendered() -> None:
+    payload = {
+        "finedog_unit_id": 21,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+                "block_id_to_block_name": {"a": "Alpha", "ghost": "Ghost"},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    ghost_elements = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("block_id") == "ghost"
+        or element.get("customData", {}).get("cjm", {}).get("block_name") == "Ghost"
+    ]
+    assert not ghost_elements
+
+
+def test_first_frame_centered_on_origin() -> None:
+    payload = {
+        "finedog_unit_id": 22,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    frame = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "frame"
+        and element.get("customData", {}).get("cjm", {}).get("procedure_id") == "p1"
+    )
+    center_x = frame.get("x", 0.0) + frame.get("width", 0.0) / 2
+    center_y = frame.get("y", 0.0) + frame.get("height", 0.0) / 2
+    assert abs(center_x) < 1e-6
+    assert abs(center_y) < 1e-6

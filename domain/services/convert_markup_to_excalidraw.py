@@ -66,7 +66,7 @@ class MarkupToExcalidrawConverter:
             (proc.procedure_id, block_id): name
             for proc in document.procedures
             for block_id, name in proc.block_id_to_block_name.items()
-            if name
+            if name and block_id in proc.block_ids()
         }
         blocks = self._build_blocks(
             plan.blocks,
@@ -109,6 +109,7 @@ class MarkupToExcalidrawConverter:
         self._build_procedure_flow_edges(
             document, plan.frames, frame_ids, add_element, element_index, base_metadata
         )
+        self._center_on_first_frame(plan, elements)
 
         app_state = {
             "viewBackgroundColor": "#ffffff",
@@ -118,6 +119,20 @@ class MarkupToExcalidrawConverter:
             "currentItemStrokeColor": "#1e1e1e",
         }
         return ExcalidrawDocument(elements=elements, app_state=app_state, files={})
+
+    def _center_on_first_frame(self, plan: LayoutPlan, elements: List[dict]) -> None:
+        if not plan.frames:
+            return
+        first_frame = min(plan.frames, key=lambda frame: (frame.origin.x, frame.origin.y))
+        offset_x = -(first_frame.origin.x + first_frame.size.width / 2)
+        offset_y = -(first_frame.origin.y + first_frame.size.height / 2)
+        if offset_x == 0 and offset_y == 0:
+            return
+        for element in elements:
+            if "x" not in element or "y" not in element:
+                continue
+            element["x"] = float(element.get("x", 0.0)) + offset_x
+            element["y"] = float(element.get("y", 0.0)) + offset_y
 
     def _build_frames(
         self,
