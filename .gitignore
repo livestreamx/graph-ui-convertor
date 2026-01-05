@@ -3,3 +3,4 @@ __pycache__/
 data/excalidraw_in/*
 data/excalidraw_out/*
 data/markup/*
+data/screens/*

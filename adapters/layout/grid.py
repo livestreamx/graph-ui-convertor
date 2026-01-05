@@ -928,6 +928,16 @@ class GridLayoutEngine(LayoutEngine):
                         anchors.append(row_positions.get(parent, 0.0))
                 for child in adj.get(node_id, []):
                     if levels.get(child, 0) == lvl + 1:
+                        info = node_info.get(node_id)
+                        child_info = node_info.get(child)
+                        # Keep end markers aligned to blocks without pulling block rows.
+                        if (
+                            info
+                            and info.kind == "block"
+                            and child_info
+                            and child_info.kind == "end_marker"
+                        ):
+                            continue
                         anchors.append(row_positions.get(child, 0.0))
                 if anchors:
                     desired[node_id] = sum(anchors) / len(anchors)
