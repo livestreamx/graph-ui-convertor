@@ -835,18 +835,48 @@ class GridLayoutEngine(LayoutEngine):
         for node_id, lvl in levels.items():
             level_buckets.setdefault(lvl, []).append(node_id)
 
-        def base_order_key(node_id: str) -> Tuple[int, int, str, str]:
+        end_block_set = set(end_blocks)
+
+        def base_order_key(node_id: str) -> Tuple[int, int, int, str, str]:
             info = node_info.get(node_id)
             start_rank = 0 if node_id in start_nodes else 1
             kind_rank = 0 if info and info.kind == "block" else 1
+            end_type = (
+                normalize_end_type(end_block_types.get(info.block_id))
+                if info and info.kind == "block"
+                else None
+            )
+            normalized_end_type = end_type or END_TYPE_DEFAULT
+            end_rank = (
+                1
+                if info
+                and info.kind == "block"
+                and info.block_id in end_block_set
+                and normalized_end_type != "intermediate"
+                else 0
+            )
             block_id = info.block_id if info else node_id
-            end_type = info.end_type or ""
-            return (start_rank, kind_rank, block_id, end_type)
+            end_sort = info.end_type or ""
+            return (start_rank, kind_rank, end_rank, block_id, end_sort)
 
+        order_index = {node_id: idx for idx, node_id in enumerate(order)}
         level_order: Dict[int, List[str]] = {}
         for lvl in range(max_level + 1):
             nodes = level_buckets.get(lvl, [])
-            nodes.sort(key=base_order_key)
+
+            def combined_key(node_id: str) -> Tuple[int, int, int, int, str, str]:
+                base = base_order_key(node_id)
+                end_bias = 1 if base[2] == 1 else 0
+                return (
+                    base[0],
+                    base[1],
+                    order_index.get(node_id, 0) + end_bias,
+                    base[2],
+                    base[3],
+                    base[4],
+                )
+
+            nodes.sort(key=combined_key)
             level_order[lvl] = nodes
 
         incoming: Dict[str, List[str]] = {node_id: [] for node_id in all_nodes}
@@ -925,6 +955,13 @@ class GridLayoutEngine(LayoutEngine):
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
 
                 def anchor_child(node_id: str) -> float:
+                    parents = [
+                        parent
+                        for parent in incoming.get(node_id, [])
+                        if levels.get(parent, 0) == lvl - 1
+                    ]
+                    if not parents:
+                        return positions.get(node_id, float(index[node_id]))
                     children = [
                         child
                         for child in adj.get(node_id, [])
@@ -950,6 +987,7 @@ class GridLayoutEngine(LayoutEngine):
             for node_id in level_order.get(lvl, []):
                 row_positions[node_id] = row
                 row += row_span(node_id)
+        base_row_positions = dict(row_positions)
 
         def apply_row_smoothing() -> None:
             for lvl in range(max_level + 1):
@@ -958,27 +996,31 @@ class GridLayoutEngine(LayoutEngine):
                     continue
                 desired: Dict[str, float] = {}
                 for node_id in nodes:
-                    anchors: List[float] = []
+                    parent_anchors: List[float] = []
                     for parent in incoming.get(node_id, []):
                         if levels.get(parent, 0) == lvl - 1:
-                            anchors.append(row_positions.get(parent, 0.0))
-                    for child in adj.get(node_id, []):
-                        if levels.get(child, 0) == lvl + 1:
-                            info = node_info.get(node_id)
-                            child_info = node_info.get(child)
-                            # Keep end markers aligned to blocks without pulling block rows.
-                            if (
-                                info
-                                and info.kind == "block"
-                                and child_info
-                                and child_info.kind == "end_marker"
-                            ):
-                                continue
-                            anchors.append(row_positions.get(child, 0.0))
+                            parent_anchors.append(row_positions.get(parent, 0.0))
+                    anchors = list(parent_anchors)
+                    if parent_anchors:
+                        for child in adj.get(node_id, []):
+                            if levels.get(child, 0) == lvl + 1:
+                                info = node_info.get(node_id)
+                                child_info = node_info.get(child)
+                                # Keep end markers aligned to blocks without pulling block rows.
+                                if (
+                                    info
+                                    and info.kind == "block"
+                                    and child_info
+                                    and child_info.kind == "end_marker"
+                                ):
+                                    continue
+                                anchors.append(row_positions.get(child, 0.0))
                     if anchors:
                         desired[node_id] = sum(anchors) / len(anchors)
                     else:
-                        desired[node_id] = row_positions.get(node_id, 0.0)
+                        desired[node_id] = base_row_positions.get(
+                            node_id, row_positions.get(node_id, 0.0)
+                        )
                     parent = primary_parent.get(node_id)
                     if (
                         parent

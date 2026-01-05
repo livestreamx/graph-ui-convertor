@@ -120,3 +120,29 @@ def test_primary_branch_aligns_rows_in_large_procedure() -> None:
 
     ys = [blocks[block_id].position.y for block_id in block_ids]
     assert max(ys) - min(ys) < 1e-6
+
+
+def test_large_procedure_orders_source_blocks() -> None:
+    payload = json.loads(
+        Path("data/markup/43285.json").read_text(encoding="utf-8")
+    )
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+
+    proc_id = "arrest_how_to_remove_chatbot_sme"
+    block_ids = {
+        "start": "LyemLgE_jSkJSoJVLsuJVw",
+        "what": "NqQmDbgenrSRpCboizdqEk",
+        "noecp": "Lyfju_KvjpSWLkseRzcvJn",
+    }
+    blocks = {
+        block.block_id: block
+        for block in plan.blocks
+        if block.procedure_id == proc_id and block.block_id in block_ids.values()
+    }
+    assert set(blocks.keys()) == set(block_ids.values())
+
+    start_y = blocks[block_ids["start"]].position.y
+    what_y = blocks[block_ids["what"]].position.y
+    noecp_y = blocks[block_ids["noecp"]].position.y
+    assert start_y < what_y < noecp_y
