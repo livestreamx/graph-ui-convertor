@@ -60,6 +60,48 @@ def test_branch_metadata_persists() -> None:
     assert branch_edges, "Branch edges should be rendered with metadata"
 
 
+def test_branch_edges_match_markup() -> None:
+    payload = {
+        "finedog_unit_id": 11,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["d::end"],
+                "branches": {"a": ["b", "c"], "b": ["d"], "c": ["a"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    branch_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        in {"branch", "branch_cycle"}
+    ]
+    expected_count = sum(len(targets) for targets in markup.procedures[0].branches.values())
+    edge_pairs = {
+        (
+            element.get("customData", {}).get("cjm", {}).get("procedure_id"),
+            element.get("customData", {}).get("cjm", {}).get("source_block_id"),
+            element.get("customData", {}).get("cjm", {}).get("target_block_id"),
+        )
+        for element in branch_edges
+    }
+    expected_pairs = {
+        ("p1", source, target)
+        for source, targets in markup.procedures[0].branches.items()
+        for target in targets
+    }
+
+    assert len(branch_edges) == expected_count
+    assert edge_pairs == expected_pairs
+
+
 def test_metadata_contains_globals() -> None:
     markup = load_markup_fixture("basic.json")
     excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)

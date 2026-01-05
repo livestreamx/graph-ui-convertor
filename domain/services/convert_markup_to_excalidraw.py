@@ -593,6 +593,7 @@ class MarkupToExcalidrawConverter:
                     if is_cycle:
                         start_center = self._block_anchor(source, side="top")
                         end_center = self._block_anchor(target, side="top")
+                        cycle_points = self._elbow_points(start_center, end_center, 80.0)
                     else:
                         start_center = self._block_anchor(
                             source, side="right", y_offset=dy
@@ -600,6 +601,7 @@ class MarkupToExcalidrawConverter:
                         end_center = self._block_anchor(
                             target, side="left", y_offset=dy
                         )
+                        cycle_points = None
                     edge_type = "branch_cycle" if is_cycle else "branch"
                     label = "ЦИКЛ" if is_cycle else "branch"
                     arrow = self._arrow_element(
@@ -627,10 +629,8 @@ class MarkupToExcalidrawConverter:
                         smoothing=0.15,
                         stroke_style="dashed" if is_cycle else None,
                         stroke_color="#d32f2f" if is_cycle else None,
-                        stroke_width=2 if is_cycle else None,
-                        curve_offset=80.0 if is_cycle else None,
-                        curve_direction=-1.0 if is_cycle else None,
-                        start_arrowhead="arrow" if is_cycle else None,
+                        stroke_width=1 if is_cycle else None,
+                        points=cycle_points,
                         end_arrowhead="arrow" if is_cycle else None,
                     )
                     add_element(arrow)
@@ -703,6 +703,7 @@ class MarkupToExcalidrawConverter:
             is_cycle = (left_id, right_id) in cycle_edges
             edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
             label = "ЦИКЛ" if is_cycle else "procedure"
+            curve_direction = None
             if is_cycle:
                 start = Point(
                     x=left_frame.origin.x + left_frame.size.width / 2,
@@ -712,6 +713,12 @@ class MarkupToExcalidrawConverter:
                     x=right_frame.origin.x + right_frame.size.width / 2,
                     y=right_frame.origin.y,
                 )
+                dx = end.x - start.x
+                dy = end.y - start.y
+                if dx == 0:
+                    curve_direction = -1.0 if dy >= 0 else 1.0
+                else:
+                    curve_direction = -1.0 if dx > 0 else 1.0
             else:
                 start = Point(
                     x=left_frame.origin.x + left_frame.size.width,
@@ -742,8 +749,7 @@ class MarkupToExcalidrawConverter:
                 stroke_color="#d32f2f" if is_cycle else None,
                 stroke_width=2 if is_cycle else None,
                 curve_offset=100.0 if is_cycle else None,
-                curve_direction=-1.0 if is_cycle else None,
-                start_arrowhead="arrow" if is_cycle else None,
+                curve_direction=curve_direction if is_cycle else None,
                 end_arrowhead="arrow" if is_cycle else None,
             )
             add_element(arrow)
@@ -1064,6 +1070,21 @@ class MarkupToExcalidrawConverter:
             "customData": {CUSTOM_DATA_KEY: metadata},
         }
 
+    def _elbow_points(
+        self,
+        start: Point,
+        end: Point,
+        offset: float,
+    ) -> List[List[float]]:
+        dx = end.x - start.x
+        dy = end.y - start.y
+        if dx == 0:
+            direction = -1.0 if dy >= 0 else 1.0
+        else:
+            direction = -1.0 if dx > 0 else 1.0
+        elbow_offset = offset * direction
+        return [[0.0, 0.0], [0.0, elbow_offset], [dx, elbow_offset], [dx, dy]]
+
     def _arrow_element(
         self,
         start: Point,
@@ -1078,6 +1099,8 @@ class MarkupToExcalidrawConverter:
         stroke_width: float | None = None,
         curve_offset: float | None = None,
         curve_direction: float | None = None,
+        points: List[List[float]] | None = None,
+        roundness: dict | None = None,
         start_arrowhead: str | None = None,
         end_arrowhead: str | None = None,
     ) -> dict:
@@ -1086,14 +1109,16 @@ class MarkupToExcalidrawConverter:
         arrow_id = self._stable_id("arrow", metadata.get("procedure_id", ""), label, str(start), str(end))
         edge_type = metadata.get("edge_type")
         show_text = edge_type in {"branch", "branch_cycle", "procedure_cycle"}
-        points = [[0.0, 0.0], [dx, dy]]
-        roundness = {"type": 2}
-        if curve_offset is not None:
-            mid_x = dx / 2
-            direction = curve_direction if curve_direction is not None else (1.0 if dy >= 0 else -1.0)
-            mid_y = dy / 2 + (curve_offset * direction)
-            points = [[0.0, 0.0], [mid_x, mid_y], [dx, dy]]
-            roundness = {"type": 3}
+        if points is None:
+            points = [[0.0, 0.0], [dx, dy]]
+            if curve_offset is not None:
+                mid_x = dx / 2
+                direction = curve_direction if curve_direction is not None else (1.0 if dy >= 0 else -1.0)
+                mid_y = dy / 2 + (curve_offset * direction)
+                points = [[0.0, 0.0], [mid_x, mid_y], [dx, dy]]
+                roundness = {"type": 3}
+        if roundness is None:
+            roundness = {"type": 2}
 
         min_x = min(point[0] for point in points)
         max_x = max(point[0] for point in points)

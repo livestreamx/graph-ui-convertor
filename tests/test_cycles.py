@@ -14,6 +14,14 @@ def _arrow_endpoint(arrow: dict, index: int) -> tuple[float, float]:
         arrow.get("y", 0.0) + points[index][1],
     )
 
+def _is_orthogonal(points: list[list[float]]) -> bool:
+    if len(points) < 2:
+        return False
+    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+        if x1 != x2 and y1 != y2:
+            return False
+    return True
+
 
 def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
     payload = {
@@ -54,10 +62,11 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
-    assert all(edge.get("strokeWidth") == 2 for edge in cycle_edges)
+    assert all(edge.get("strokeWidth") == 1 for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
-    assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
     assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)
+    assert all(edge.get("startArrowhead") is None for edge in cycle_edges)
+    assert all(_is_orthogonal(edge.get("points", [])) for edge in cycle_edges)
     for edge in cycle_edges:
         meta = edge.get("customData", {}).get("cjm", {})
         source = blocks.get(meta.get("source_block_id"))
@@ -124,8 +133,8 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
     assert all(edge.get("strokeWidth") == 2 for edge in cycle_edges)
     assert all(len(edge.get("points", [])) > 2 for edge in cycle_edges)
-    assert all(edge.get("startArrowhead") == "arrow" for edge in cycle_edges)
     assert all(edge.get("endArrowhead") == "arrow" for edge in cycle_edges)
+    assert all(edge.get("startArrowhead") is None for edge in cycle_edges)
     for edge in cycle_edges:
         meta = edge.get("customData", {}).get("cjm", {})
         source = frames.get(meta.get("procedure_id"))
