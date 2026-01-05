@@ -854,6 +854,39 @@ class GridLayoutEngine(LayoutEngine):
             for tgt in targets:
                 incoming.setdefault(tgt, []).append(src)
 
+        block_children: Dict[str, List[str]] = {}
+        for src, targets in adj.items():
+            src_info = node_info.get(src)
+            if not src_info or src_info.kind != "block":
+                continue
+            block_targets = [
+                tgt
+                for tgt in targets
+                if node_info.get(tgt) and node_info[tgt].kind == "block"
+            ]
+            if block_targets:
+                block_children[src] = block_targets
+
+        descendant_cache: Dict[str, int] = {}
+
+        def descendant_count(node_id: str) -> int:
+            cached = descendant_cache.get(node_id)
+            if cached is not None:
+                return cached
+            total = 0
+            for child in block_children.get(node_id, []):
+                total += 1 + descendant_count(child)
+            descendant_cache[node_id] = total
+            return total
+
+        primary_parent: Dict[str, str] = {}
+        for parent, targets in block_children.items():
+            if len(targets) == 1:
+                primary_parent[targets[0]] = parent
+                continue
+            ranked = sorted(targets, key=lambda tgt: (-descendant_count(tgt), tgt))
+            primary_parent[ranked[0]] = parent
+
         def update_positions() -> Dict[str, float]:
             current: Dict[str, float] = {}
             for nodes in level_order.values():
@@ -918,36 +951,41 @@ class GridLayoutEngine(LayoutEngine):
                 row_positions[node_id] = row
                 row += row_span(node_id)
 
-        for _ in range(3):
-            desired: Dict[str, float] = {}
-            for node_id in all_nodes:
-                lvl = levels.get(node_id, 0)
-                anchors: List[float] = []
-                for parent in incoming.get(node_id, []):
-                    if levels.get(parent, 0) == lvl - 1:
-                        anchors.append(row_positions.get(parent, 0.0))
-                for child in adj.get(node_id, []):
-                    if levels.get(child, 0) == lvl + 1:
-                        info = node_info.get(node_id)
-                        child_info = node_info.get(child)
-                        # Keep end markers aligned to blocks without pulling block rows.
-                        if (
-                            info
-                            and info.kind == "block"
-                            and child_info
-                            and child_info.kind == "end_marker"
-                        ):
-                            continue
-                        anchors.append(row_positions.get(child, 0.0))
-                if anchors:
-                    desired[node_id] = sum(anchors) / len(anchors)
-                else:
-                    desired[node_id] = row_positions.get(node_id, 0.0)
-
+        def apply_row_smoothing() -> None:
             for lvl in range(max_level + 1):
                 nodes = level_order.get(lvl, [])
                 if not nodes:
                     continue
+                desired: Dict[str, float] = {}
+                for node_id in nodes:
+                    anchors: List[float] = []
+                    for parent in incoming.get(node_id, []):
+                        if levels.get(parent, 0) == lvl - 1:
+                            anchors.append(row_positions.get(parent, 0.0))
+                    for child in adj.get(node_id, []):
+                        if levels.get(child, 0) == lvl + 1:
+                            info = node_info.get(node_id)
+                            child_info = node_info.get(child)
+                            # Keep end markers aligned to blocks without pulling block rows.
+                            if (
+                                info
+                                and info.kind == "block"
+                                and child_info
+                                and child_info.kind == "end_marker"
+                            ):
+                                continue
+                            anchors.append(row_positions.get(child, 0.0))
+                    if anchors:
+                        desired[node_id] = sum(anchors) / len(anchors)
+                    else:
+                        desired[node_id] = row_positions.get(node_id, 0.0)
+                    parent = primary_parent.get(node_id)
+                    if (
+                        parent
+                        and levels.get(parent, 0) == lvl - 1
+                        and len(incoming.get(node_id, [])) == 1
+                    ):
+                        desired[node_id] = row_positions.get(parent, desired[node_id])
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
                 nodes.sort(key=lambda n: (desired.get(n, 0.0), index[n], n))
                 level_order[lvl] = nodes
@@ -962,6 +1000,10 @@ class GridLayoutEngine(LayoutEngine):
                     row_positions[node_id] = pos
                     prev_pos = pos
                     prev_span = row_span(node_id)
+
+        for _ in range(3):
+            apply_row_smoothing()
+        apply_row_smoothing()
 
         ordered: List[str] = []
         row_counts: Dict[int, float] = {}

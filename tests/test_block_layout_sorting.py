@@ -96,3 +96,27 @@ def test_end_markers_align_with_blocks_in_large_procedure() -> None:
         assert block is not None
         assert marker is not None
         assert abs(marker.position.y - (block.position.y + offset_y)) < 1e-6
+
+
+def test_primary_branch_aligns_rows_in_large_procedure() -> None:
+    payload = json.loads(
+        Path("data/markup/43285.json").read_text(encoding="utf-8")
+    )
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+
+    proc_id = "arrest_how_to_remove_chatbot_sme"
+    block_ids = [
+        "NqQmDbgenrSRpCboizdqEk",
+        "EfJCMMtxifWXTdNXjNPVKz",
+        "MdUmsRreGHsgu_CttLuabJ",
+    ]
+    blocks = {
+        block.block_id: block
+        for block in plan.blocks
+        if block.procedure_id == proc_id and block.block_id in block_ids
+    }
+    assert set(blocks.keys()) == set(block_ids)
+
+    ys = [blocks[block_id].position.y for block_id in block_ids]
+    assert max(ys) - min(ys) < 1e-6
