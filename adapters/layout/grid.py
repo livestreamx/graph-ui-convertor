@@ -830,6 +830,7 @@ class GridLayoutEngine(LayoutEngine):
         max_level = max(levels.values() or [0])
 
         branch_counts = {block: len(targets) for block, targets in branches_for_layout.items()}
+        end_blocks_set = set(end_blocks)
 
         level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
         for node_id, lvl in levels.items():
@@ -862,7 +863,11 @@ class GridLayoutEngine(LayoutEngine):
         order_index = {node_id: idx for idx, node_id in enumerate(order)}
         level_order: Dict[int, List[str]] = {}
         for lvl in range(max_level + 1):
-            nodes = level_buckets.get(lvl, [])
+            nodes = [
+                node_id
+                for node_id in level_buckets.get(lvl, [])
+                if node_info.get(node_id) and node_info[node_id].kind == "block"
+            ]
 
             def combined_key(node_id: str) -> Tuple[int, int, int, int, str, str]:
                 base = base_order_key(node_id)
@@ -939,6 +944,8 @@ class GridLayoutEngine(LayoutEngine):
                         parent
                         for parent in incoming.get(node_id, [])
                         if levels.get(parent, 0) == lvl - 1
+                        and node_info.get(parent)
+                        and node_info[parent].kind == "block"
                     ]
                     if parents:
                         return sum(positions.get(p, 0.0) for p in parents) / len(parents)
@@ -959,6 +966,8 @@ class GridLayoutEngine(LayoutEngine):
                         parent
                         for parent in incoming.get(node_id, [])
                         if levels.get(parent, 0) == lvl - 1
+                        and node_info.get(parent)
+                        and node_info[parent].kind == "block"
                     ]
                     if not parents:
                         return positions.get(node_id, float(index[node_id]))
@@ -966,6 +975,8 @@ class GridLayoutEngine(LayoutEngine):
                         child
                         for child in adj.get(node_id, [])
                         if levels.get(child, 0) == lvl + 1
+                        and node_info.get(child)
+                        and node_info[child].kind == "block"
                     ]
                     if children:
                         return sum(positions.get(c, 0.0) for c in children) / len(children)
@@ -978,7 +989,10 @@ class GridLayoutEngine(LayoutEngine):
         def row_span(node_id: str) -> float:
             info = node_info.get(node_id)
             if info and info.kind == "block":
-                return float(max(1, branch_counts.get(info.block_id, 0)))
+                branch_count = branch_counts.get(info.block_id, 0)
+                if info.block_id in end_blocks_set and branch_count > 0:
+                    branch_count += 1
+                return float(max(1, branch_count))
             return 1.0
 
         row_positions: Dict[str, float] = {}
@@ -1047,12 +1061,50 @@ class GridLayoutEngine(LayoutEngine):
             apply_row_smoothing()
         apply_row_smoothing()
 
+        occupied_rows: Dict[int, List[float]] = {}
+        for node_id, info in node_info.items():
+            if info.kind != "block":
+                continue
+            lvl = levels.get(node_id, 0)
+            occupied_rows.setdefault(lvl, []).append(row_positions.get(node_id, 0.0))
+
+        def row_taken(level: int, row: float) -> bool:
+            return any(abs(row - occ) < 1e-3 for occ in occupied_rows.get(level, []))
+
+        end_marker_nodes = [
+            node_id for node_id, info in node_info.items() if info.kind == "end_marker"
+        ]
+        end_marker_nodes.sort(
+            key=lambda node_id: (
+                levels.get(node_id, 0),
+                row_positions.get(
+                    node_info[node_id].block_id, row_positions.get(node_id, 0.0)
+                ),
+                node_id,
+            )
+        )
+        for node_id in end_marker_nodes:
+            info = node_info[node_id]
+            level = levels.get(node_id, 0)
+            target_row = row_positions.get(info.block_id, row_positions.get(node_id, 0.0))
+            row = target_row
+            while row_taken(level, row):
+                row += 1.0
+            row_positions[node_id] = row
+            occupied_rows.setdefault(level, []).append(row)
+
         ordered: List[str] = []
         row_counts: Dict[int, float] = {}
         for lvl in range(max_level + 1):
-            nodes = level_order.get(lvl, [])
-            for node_id in nodes:
-                ordered.append(node_id)
+            nodes = [node_id for node_id in all_nodes if levels.get(node_id, 0) == lvl]
+            nodes.sort(
+                key=lambda node_id: (
+                    row_positions.get(node_id, 0.0),
+                    0 if node_info[node_id].kind == "block" else 1,
+                    node_id,
+                )
+            )
+            ordered.extend(nodes)
             if nodes:
                 level_max = max(row_positions[node_id] + row_span(node_id) for node_id in nodes)
                 row_counts[lvl] = max(level_max, 1.0)

@@ -146,3 +146,45 @@ def test_large_procedure_orders_source_blocks() -> None:
     what_y = blocks[block_ids["what"]].position.y
     noecp_y = blocks[block_ids["noecp"]].position.y
     assert start_y < what_y < noecp_y
+
+
+def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
+    payload = json.loads(
+        Path("data/markup/43285.json").read_text(encoding="utf-8")
+    )
+    markup = MarkupDocument.model_validate(payload)
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+
+    proc_id = "sme_cancel_block_fns"
+    blocks = {
+        block.block_id: block
+        for block in plan.blocks
+        if block.procedure_id == proc_id
+    }
+    markers = {
+        marker.block_id: marker
+        for marker in plan.markers
+        if marker.procedure_id == proc_id and marker.role == "end_marker"
+    }
+    offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
+    row_step = layout.config.block_size.height + layout.config.gap_y
+
+    aligned_block = "l1exz64z-hlgm"
+    aligned_marker = markers.get(aligned_block)
+    assert aligned_marker is not None
+    assert abs(
+        aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)
+    ) < 1e-6
+
+    shifted_block = "l1dngroo-b11o"
+    shifted_marker = markers.get(shifted_block)
+    assert shifted_marker is not None
+    assert abs(
+        shifted_marker.position.y
+        - (blocks[shifted_block].position.y + row_step + offset_y)
+    ) < 1e-6
+
+    parent_block = "l52ercgo-mcwr"
+    child_block = "l1ex5zj5-7ri3"
+    assert abs(blocks[parent_block].position.y - blocks[child_block].position.y) < 1e-6
