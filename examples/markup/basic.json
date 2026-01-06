@@ -1,14 +1,14 @@
 {
-  "finedog_unit_id": 12345,
+  "finedog_unit_id": 1001,
   "markup_type": "service",
   "procedures": [
     {
-      "procedure_id": "intake",
-      "start_block_ids": ["block_a"],
-      "end_block_ids": ["block_c"],
+      "procedure_id": "proc_basic",
+      "start_block_ids": ["blk_a"],
+      "end_block_ids": ["blk_c"],
       "branches": {
-        "block_a": ["block_b"],
-        "block_b": ["block_c"]
+        "blk_a": ["blk_b"],
+        "blk_b": ["blk_c"]
       }
     }
   ]

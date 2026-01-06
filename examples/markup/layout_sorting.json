@@ -1,0 +1,38 @@
+{
+  "finedog_unit_id": 1100,
+  "markup_type": "service",
+  "procedures": [
+    {
+      "procedure_id": "proc_end_markers",
+      "start_block_ids": ["root"],
+      "end_block_ids": ["end_a", "end_b", "end_c"],
+      "branches": {
+        "root": ["end_a", "end_b", "end_c"]
+      }
+    },
+    {
+      "procedure_id": "proc_primary_chain",
+      "start_block_ids": ["chain_a"],
+      "end_block_ids": [],
+      "branches": {
+        "chain_a": ["chain_b"],
+        "chain_b": ["chain_c"]
+      }
+    },
+    {
+      "procedure_id": "proc_source_order",
+      "start_block_ids": ["source_a", "source_b", "source_c"],
+      "end_block_ids": [],
+      "branches": {}
+    },
+    {
+      "procedure_id": "proc_marker_shift",
+      "start_block_ids": ["root"],
+      "end_block_ids": ["aligned", "shifted"],
+      "branches": {
+        "root": ["aligned", "shifted"],
+        "shifted": ["blocker"]
+      }
+    }
+  ]
+}

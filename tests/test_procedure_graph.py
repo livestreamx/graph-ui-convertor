@@ -431,27 +431,27 @@ def test_cycle_layout_prefers_order_hint() -> None:
         "markup_type": "service",
         "procedures": [
             {
-                "proc_id": "close_gold_account",
+                "proc_id": "proc_cycle_left",
                 "start_block_ids": ["a"],
                 "end_block_ids": ["b::end"],
                 "branches": {"a": ["b"]},
             },
             {
-                "proc_id": "product_gold_account",
+                "proc_id": "proc_cycle_right",
                 "start_block_ids": ["c"],
                 "end_block_ids": ["d::end"],
                 "branches": {"c": ["d"]},
             },
         ],
         "procedure_graph": {
-            "close_gold_account": ["product_gold_account"],
-            "product_gold_account": ["close_gold_account"],
+            "proc_cycle_left": ["proc_cycle_right"],
+            "proc_cycle_right": ["proc_cycle_left"],
         },
     }
     markup = MarkupDocument.model_validate(payload)
     plan = GridLayoutEngine().build_plan(markup)
     frames = {frame.procedure_id: frame for frame in plan.frames}
-    assert frames["close_gold_account"].origin.x < frames["product_gold_account"].origin.x
+    assert frames["proc_cycle_left"].origin.x < frames["proc_cycle_right"].origin.x
 
 
 def test_scenario_cycle_line_is_red() -> None:

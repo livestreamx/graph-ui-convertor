@@ -7,6 +7,13 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 
 
+def load_markup_fixture(name: str) -> MarkupDocument:
+    fixture_path = Path(__file__).parent.parent / "examples" / "markup" / name
+    return MarkupDocument.model_validate(
+        json.loads(fixture_path.read_text(encoding="utf-8"))
+    )
+
+
 def test_layout_orders_targets_by_incoming_neighbors() -> None:
     payload = {
         "finedog_unit_id": 101,
@@ -64,19 +71,12 @@ def test_end_markers_follow_block_order() -> None:
 
 
 def test_end_markers_align_with_blocks_in_large_procedure() -> None:
-    payload = json.loads(
-        Path("data/markup/43285.json").read_text(encoding="utf-8")
-    )
-    markup = MarkupDocument.model_validate(payload)
+    markup = load_markup_fixture("layout_sorting.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
-    proc_id = "arrest_how_to_remove_chatbot_sme"
-    block_ids = [
-        "-ATBwROMAmnzTBBLdQjQWd",
-        "-oiAwdVJjuoFzUTFExjD-Q",
-        "AHF-bSHmufnFkvosaPAOTj",
-    ]
+    proc_id = "proc_end_markers"
+    block_ids = ["end_a", "end_b", "end_c"]
     blocks = {
         block.block_id: block
         for block in plan.blocks
@@ -99,18 +99,11 @@ def test_end_markers_align_with_blocks_in_large_procedure() -> None:
 
 
 def test_primary_branch_aligns_rows_in_large_procedure() -> None:
-    payload = json.loads(
-        Path("data/markup/43285.json").read_text(encoding="utf-8")
-    )
-    markup = MarkupDocument.model_validate(payload)
+    markup = load_markup_fixture("layout_sorting.json")
     plan = GridLayoutEngine().build_plan(markup)
 
-    proc_id = "arrest_how_to_remove_chatbot_sme"
-    block_ids = [
-        "NqQmDbgenrSRpCboizdqEk",
-        "EfJCMMtxifWXTdNXjNPVKz",
-        "MdUmsRreGHsgu_CttLuabJ",
-    ]
+    proc_id = "proc_primary_chain"
+    block_ids = ["chain_a", "chain_b", "chain_c"]
     blocks = {
         block.block_id: block
         for block in plan.blocks
@@ -123,17 +116,14 @@ def test_primary_branch_aligns_rows_in_large_procedure() -> None:
 
 
 def test_large_procedure_orders_source_blocks() -> None:
-    payload = json.loads(
-        Path("data/markup/43285.json").read_text(encoding="utf-8")
-    )
-    markup = MarkupDocument.model_validate(payload)
+    markup = load_markup_fixture("layout_sorting.json")
     plan = GridLayoutEngine().build_plan(markup)
 
-    proc_id = "arrest_how_to_remove_chatbot_sme"
+    proc_id = "proc_source_order"
     block_ids = {
-        "start": "LyemLgE_jSkJSoJVLsuJVw",
-        "what": "NqQmDbgenrSRpCboizdqEk",
-        "noecp": "Lyfju_KvjpSWLkseRzcvJn",
+        "first": "source_a",
+        "second": "source_b",
+        "third": "source_c",
     }
     blocks = {
         block.block_id: block
@@ -142,21 +132,18 @@ def test_large_procedure_orders_source_blocks() -> None:
     }
     assert set(blocks.keys()) == set(block_ids.values())
 
-    start_y = blocks[block_ids["start"]].position.y
-    what_y = blocks[block_ids["what"]].position.y
-    noecp_y = blocks[block_ids["noecp"]].position.y
-    assert start_y < what_y < noecp_y
+    first_y = blocks[block_ids["first"]].position.y
+    second_y = blocks[block_ids["second"]].position.y
+    third_y = blocks[block_ids["third"]].position.y
+    assert first_y < second_y < third_y
 
 
 def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
-    payload = json.loads(
-        Path("data/markup/43285.json").read_text(encoding="utf-8")
-    )
-    markup = MarkupDocument.model_validate(payload)
+    markup = load_markup_fixture("layout_sorting.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
-    proc_id = "sme_cancel_block_fns"
+    proc_id = "proc_marker_shift"
     blocks = {
         block.block_id: block
         for block in plan.blocks
@@ -170,14 +157,14 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
     row_step = layout.config.block_size.height + layout.config.gap_y
 
-    aligned_block = "l1exz64z-hlgm"
+    aligned_block = "aligned"
     aligned_marker = markers.get(aligned_block)
     assert aligned_marker is not None
     assert abs(
         aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)
     ) < 1e-6
 
-    shifted_block = "l1dngroo-b11o"
+    shifted_block = "shifted"
     shifted_marker = markers.get(shifted_block)
     assert shifted_marker is not None
     assert abs(
@@ -185,24 +172,21 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
         - (blocks[shifted_block].position.y + row_step + offset_y)
     ) < 1e-6
 
-    parent_block = "l52ercgo-mcwr"
-    child_block = "l1ex5zj5-7ri3"
+    parent_block = "shifted"
+    child_block = "blocker"
     assert abs(blocks[parent_block].position.y - blocks[child_block].position.y) < 1e-6
 
 
-def test_shared_child_blocks_group_in_close_gold_account() -> None:
-    payload = json.loads(
-        Path("data/markup/60371.json").read_text(encoding="utf-8")
-    )
-    markup = MarkupDocument.model_validate(payload)
+def test_shared_child_blocks_group_in_shared_children_fixture() -> None:
+    markup = load_markup_fixture("layout_grouping.json")
     plan = GridLayoutEngine().build_plan(markup)
 
-    proc_id = "close_gold_account"
+    proc_id = "proc_shared_children"
     block_ids = {
-        "close_self": "kv8482s1-fj1n",
-        "error": "l4phth8w-griq",
-        "success": "kv2dhy0e-77w",
-        "consult": "kv2955e1-5qhp",
+        "parent": "parent_a",
+        "child_error": "child_err",
+        "child_success": "child_ok",
+        "parent_peer": "parent_b",
     }
     blocks = {
         block.block_id: block
@@ -211,10 +195,10 @@ def test_shared_child_blocks_group_in_close_gold_account() -> None:
     }
     assert set(blocks.keys()) == set(block_ids.values())
 
-    close_self_y = blocks[block_ids["close_self"]].position.y
-    error_y = blocks[block_ids["error"]].position.y
-    success_y = blocks[block_ids["success"]].position.y
-    consult_y = blocks[block_ids["consult"]].position.y
+    parent_y = blocks[block_ids["parent"]].position.y
+    error_y = blocks[block_ids["child_error"]].position.y
+    success_y = blocks[block_ids["child_success"]].position.y
+    peer_y = blocks[block_ids["parent_peer"]].position.y
 
-    assert close_self_y < error_y < success_y
-    assert close_self_y < consult_y < error_y
+    assert parent_y < error_y < success_y
+    assert parent_y < peer_y < error_y

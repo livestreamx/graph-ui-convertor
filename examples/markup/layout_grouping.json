@@ -1,0 +1,15 @@
+{
+  "finedog_unit_id": 1101,
+  "markup_type": "service",
+  "procedures": [
+    {
+      "procedure_id": "proc_shared_children",
+      "start_block_ids": ["parent_a", "parent_b"],
+      "end_block_ids": [],
+      "branches": {
+        "parent_a": ["aux_a", "aux_b", "aux_c", "child_err", "child_ok"],
+        "parent_b": ["aux_a", "aux_b", "aux_c", "child_err", "child_ok"]
+      }
+    }
+  ]
+}
