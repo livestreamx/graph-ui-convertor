@@ -188,3 +188,33 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     parent_block = "l52ercgo-mcwr"
     child_block = "l1ex5zj5-7ri3"
     assert abs(blocks[parent_block].position.y - blocks[child_block].position.y) < 1e-6
+
+
+def test_shared_child_blocks_group_in_close_gold_account() -> None:
+    payload = json.loads(
+        Path("data/markup/60371.json").read_text(encoding="utf-8")
+    )
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+
+    proc_id = "close_gold_account"
+    block_ids = {
+        "close_self": "kv8482s1-fj1n",
+        "error": "l4phth8w-griq",
+        "success": "kv2dhy0e-77w",
+        "consult": "kv2955e1-5qhp",
+    }
+    blocks = {
+        block.block_id: block
+        for block in plan.blocks
+        if block.procedure_id == proc_id and block.block_id in block_ids.values()
+    }
+    assert set(blocks.keys()) == set(block_ids.values())
+
+    close_self_y = blocks[block_ids["close_self"]].position.y
+    error_y = blocks[block_ids["error"]].position.y
+    success_y = blocks[block_ids["success"]].position.y
+    consult_y = blocks[block_ids["consult"]].position.y
+
+    assert close_self_y < error_y < success_y
+    assert close_self_y < consult_y < error_y

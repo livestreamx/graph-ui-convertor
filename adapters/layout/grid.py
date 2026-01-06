@@ -902,6 +902,32 @@ class GridLayoutEngine(LayoutEngine):
             if block_targets:
                 block_children[src] = block_targets
 
+        child_signatures: Dict[str, Tuple[str, ...]] = {}
+        for node_id, children in block_children.items():
+            if children:
+                child_signatures[node_id] = tuple(sorted(children))
+        if child_signatures:
+            for lvl, nodes in level_order.items():
+                if len(nodes) < 2:
+                    continue
+                original_index = {node_id: idx for idx, node_id in enumerate(nodes)}
+                first_index: Dict[Tuple[str, ...], int] = {}
+                for node_id in nodes:
+                    signature = child_signatures.get(node_id)
+                    if signature and signature not in first_index:
+                        first_index[signature] = original_index[node_id]
+                if not first_index:
+                    continue
+
+                def group_key(node_id: str) -> Tuple[int, int, str]:
+                    idx = original_index[node_id]
+                    signature = child_signatures.get(node_id)
+                    anchor = first_index.get(signature, idx)
+                    return (anchor, idx, node_id)
+
+                nodes.sort(key=group_key)
+                level_order[lvl] = nodes
+
         descendant_cache: Dict[str, int] = {}
 
         def descendant_count(node_id: str) -> int:
