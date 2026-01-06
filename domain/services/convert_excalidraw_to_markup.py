@@ -2,26 +2,33 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Any
 
 from domain.models import (
     CUSTOM_DATA_KEY,
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
-    MarkupDocument,
     METADATA_SCHEMA_VERSION,
+    MarkupDocument,
     Procedure,
     merge_end_types,
     normalize_end_type,
 )
+
+_TAG_SPLIT_RE = re.compile(r"[,\\s]+")
+_INLINE_TAG_RE = re.compile(r"(?:#|::)(end|exit|all|intermediate)\\b", re.IGNORECASE)
+
+Metadata = dict[str, Any]
+Element = Mapping[str, Any]
 
 
 @dataclass(frozen=True)
 class BlockCandidate:
     procedure_id: str
     block_id: str
-    element_id: Optional[str]
+    element_id: str | None
 
 
 @dataclass(frozen=True)
@@ -29,22 +36,22 @@ class MarkerCandidate:
     procedure_id: str
     block_id: str
     role: str
-    element_id: Optional[str]
-    end_type: Optional[str]
+    element_id: str | None
+    end_type: str | None
 
 
 class ExcalidrawToMarkupConverter:
-    def convert(self, document: dict) -> MarkupDocument:
-        elements: Iterable[dict] = document.get("elements", [])
+    def convert(self, document: Mapping[str, Any]) -> MarkupDocument:
+        elements: Iterable[Element] = document.get("elements", [])
         frames, proc_names = self._collect_frames(elements)
         blocks = self._collect_blocks(elements, frames)
         markers = self._collect_markers(elements, frames)
         block_names = self._collect_block_names(elements, frames)
 
         finedog_unit_id, markup_type, service_name = self._infer_globals(elements)
-        start_map: Dict[str, set[str]] = defaultdict(set)
-        end_map: Dict[str, Dict[str, str]] = defaultdict(dict)
-        branch_map: Dict[str, Dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        start_map: dict[str, set[str]] = defaultdict(set)
+        end_map: dict[str, dict[str, str]] = defaultdict(dict)
+        branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
 
         marker_end_types = self._merge_marker_end_types(markers)
         for (procedure_id, block_id), end_type in marker_end_types.items():
@@ -54,18 +61,28 @@ class ExcalidrawToMarkupConverter:
 
         for arrow in filter(self._is_arrow, elements):
             meta = self._metadata(arrow)
-            edge_type = meta.get("edge_type") or arrow.get("text", "").lower()
+            raw_edge_type = meta.get("edge_type")
+            edge_type = raw_edge_type if isinstance(raw_edge_type, str) else ""
+            if not edge_type:
+                text = arrow.get("text")
+                edge_type = text.lower() if isinstance(text, str) else ""
             procedure_id = self._infer_procedure_id(meta, blocks, markers, arrow)
-            source_block = meta.get("source_block_id")
-            target_block = meta.get("target_block_id")
+            raw_source = meta.get("source_block_id")
+            raw_target = meta.get("target_block_id")
+            source_block = raw_source if isinstance(raw_source, str) else None
+            target_block = raw_target if isinstance(raw_target, str) else None
 
-            start_binding = arrow.get("startBinding", {}) or {}
-            end_binding = arrow.get("endBinding", {}) or {}
+            raw_start_binding = arrow.get("startBinding")
+            raw_end_binding = arrow.get("endBinding")
+            start_binding = raw_start_binding if isinstance(raw_start_binding, dict) else {}
+            end_binding = raw_end_binding if isinstance(raw_end_binding, dict) else {}
 
             source_block = source_block or self._block_from_binding(start_binding, blocks)
             target_block = target_block or self._block_from_binding(end_binding, blocks)
 
-            if edge_type == "start" or (self._is_start_arrow(arrow, markers, start_binding, end_binding)):
+            if edge_type == "start" or (
+                self._is_start_arrow(arrow, markers, start_binding, end_binding)
+            ):
                 if target_block:
                     start_map[procedure_id].add(target_block)
                 continue
@@ -85,7 +102,8 @@ class ExcalidrawToMarkupConverter:
                     branch_map[procedure_id][source_block].add(target_block)
                 continue
 
-            if arrow.get("text", "").lower() == "branch" and source_block and target_block:
+            text = arrow.get("text")
+            if isinstance(text, str) and text.lower() == "branch" and source_block and target_block:
                 branch_map[procedure_id][source_block].add(target_block)
 
         procedures = self._build_procedures(
@@ -100,17 +118,24 @@ class ExcalidrawToMarkupConverter:
             procedure_graph=procedure_graph,
         )
 
-    def _collect_frames(self, elements: Iterable[dict]) -> Tuple[Dict[str, str], Dict[str, str]]:
-        frames: Dict[str, str] = {}
-        proc_names: Dict[str, str] = {}
+    def _collect_frames(self, elements: Iterable[Element]) -> tuple[dict[str, str], dict[str, str]]:
+        frames: dict[str, str] = {}
+        proc_names: dict[str, str] = {}
         for element in elements:
             if element.get("type") != "frame":
                 continue
             meta = self._metadata(element)
-            procedure_id = meta.get("procedure_id") or element.get("name")
+            meta_proc = meta.get("procedure_id")
+            name_proc = element.get("name")
+            procedure_id = meta_proc if isinstance(meta_proc, str) else None
+            if not procedure_id and isinstance(name_proc, str):
+                procedure_id = name_proc
             if not procedure_id:
                 continue
-            procedure_name = meta.get("procedure_name") or element.get("name")
+            meta_name = meta.get("procedure_name")
+            procedure_name = meta_name if isinstance(meta_name, str) else None
+            if not procedure_name and isinstance(name_proc, str):
+                procedure_name = name_proc
             frame_id = element.get("id")
             if frame_id:
                 frames[frame_id] = procedure_id
@@ -120,19 +145,28 @@ class ExcalidrawToMarkupConverter:
 
     def _collect_blocks(
         self,
-        elements: Iterable[dict],
-        frames: Dict[str, str],
-    ) -> Dict[str, BlockCandidate]:
-        blocks: Dict[str, BlockCandidate] = {}
+        elements: Iterable[Element],
+        frames: dict[str, str],
+    ) -> dict[str, BlockCandidate]:
+        blocks: dict[str, BlockCandidate] = {}
         for element in elements:
             if element.get("type") not in {"rectangle", "text"}:
                 continue
             meta = self._metadata(element)
-            procedure_id = meta.get("procedure_id") or frames.get(element.get("frameId", ""))
-            block_id = meta.get("block_id") or element.get("text")
+            frame_id = element.get("frameId")
+            frame_key = frame_id if isinstance(frame_id, str) else ""
+            meta_proc = meta.get("procedure_id")
+            procedure_id = meta_proc if isinstance(meta_proc, str) else frames.get(frame_key)
+            meta_block = meta.get("block_id")
+            block_id = meta_block if isinstance(meta_block, str) else None
+            if not block_id:
+                text = element.get("text")
+                block_id = text if isinstance(text, str) else None
             if not procedure_id or not block_id:
                 continue
             element_id = element.get("id")
+            if not isinstance(element_id, str):
+                continue
             blocks[element_id] = BlockCandidate(
                 procedure_id=procedure_id,
                 block_id=block_id,
@@ -142,10 +176,10 @@ class ExcalidrawToMarkupConverter:
 
     def _collect_markers(
         self,
-        elements: Iterable[dict],
-        frames: Dict[str, str],
-    ) -> Dict[str, MarkerCandidate]:
-        markers: Dict[str, MarkerCandidate] = {}
+        elements: Iterable[Element],
+        frames: dict[str, str],
+    ) -> dict[str, MarkerCandidate]:
+        markers: dict[str, MarkerCandidate] = {}
         for element in elements:
             if element.get("type") not in {"ellipse", "text"}:
                 continue
@@ -153,12 +187,20 @@ class ExcalidrawToMarkupConverter:
             role = meta.get("role")
             if role not in {"start_marker", "end_marker"}:
                 continue
-            procedure_id = meta.get("procedure_id") or frames.get(element.get("frameId", ""))
-            block_id = meta.get("block_id")
+            frame_id = element.get("frameId")
+            frame_key = frame_id if isinstance(frame_id, str) else ""
+            meta_proc = meta.get("procedure_id")
+            procedure_id = meta_proc if isinstance(meta_proc, str) else frames.get(frame_key)
+            meta_block = meta.get("block_id")
+            block_id = meta_block if isinstance(meta_block, str) else None
             if not procedure_id or not block_id:
                 continue
             element_id = element.get("id")
-            end_type = self._infer_end_type_from_element(element, meta) if role == "end_marker" else None
+            if not isinstance(element_id, str):
+                continue
+            end_type = (
+                self._infer_end_type_from_element(element, meta) if role == "end_marker" else None
+            )
             markers[element_id] = MarkerCandidate(
                 procedure_id=procedure_id,
                 block_id=block_id,
@@ -170,18 +212,22 @@ class ExcalidrawToMarkupConverter:
 
     def _collect_block_names(
         self,
-        elements: Iterable[dict],
-        frames: Dict[str, str],
-    ) -> Dict[str, Dict[str, str]]:
-        names: Dict[str, Dict[str, str]] = defaultdict(dict)
+        elements: Iterable[Element],
+        frames: dict[str, str],
+    ) -> dict[str, dict[str, str]]:
+        names: dict[str, dict[str, str]] = defaultdict(dict)
         for element in elements:
             if element.get("type") != "text":
                 continue
             meta = self._metadata(element)
             if meta.get("role") != "block_label":
                 continue
-            procedure_id = meta.get("procedure_id") or frames.get(element.get("frameId", ""))
-            block_id = meta.get("block_id")
+            frame_id = element.get("frameId")
+            frame_key = frame_id if isinstance(frame_id, str) else ""
+            meta_proc = meta.get("procedure_id")
+            procedure_id = meta_proc if isinstance(meta_proc, str) else frames.get(frame_key)
+            meta_block = meta.get("block_id")
+            block_id = meta_block if isinstance(meta_block, str) else None
             if not procedure_id or not block_id:
                 continue
             block_name = meta.get("block_name")
@@ -195,22 +241,21 @@ class ExcalidrawToMarkupConverter:
 
     def _build_procedures(
         self,
-        blocks: Dict[str, BlockCandidate],
-        start_map: Dict[str, set[str]],
-        end_map: Dict[str, Dict[str, str]],
-        branch_map: Dict[str, Dict[str, set[str]]],
-        frames: Dict[str, str],
-        block_names: Dict[str, Dict[str, str]],
-        proc_names: Dict[str, str],
-    ) -> List[Procedure]:
+        blocks: dict[str, BlockCandidate],
+        start_map: dict[str, set[str]],
+        end_map: dict[str, dict[str, str]],
+        branch_map: dict[str, dict[str, set[str]]],
+        frames: dict[str, str],
+        block_names: dict[str, dict[str, str]],
+        proc_names: dict[str, str],
+    ) -> list[Procedure]:
         procedure_ids = set(start_map.keys()) | set(end_map.keys()) | set(branch_map.keys())
         procedure_ids.update(frame_proc for frame_proc in frames.values())
         for block in blocks.values():
             procedure_ids.add(block.procedure_id)
 
-        procedures: List[Procedure] = []
+        procedures: list[Procedure] = []
         for procedure_id in sorted(procedure_ids):
-            blocks_in_proc = {b.block_id for b in blocks.values() if b.procedure_id == procedure_id}
             branches = {
                 source: sorted(targets)
                 for source, targets in sorted(branch_map.get(procedure_id, {}).items())
@@ -233,11 +278,9 @@ class ExcalidrawToMarkupConverter:
         return procedures
 
     def _collect_procedure_graph(
-        self, elements: Iterable[dict], procedures: List[Procedure]
-    ) -> Dict[str, List[str]]:
-        graph: Dict[str, List[str]] = {
-            procedure.procedure_id: [] for procedure in procedures
-        }
+        self, elements: Iterable[Element], procedures: list[Procedure]
+    ) -> dict[str, list[str]]:
+        graph: dict[str, list[str]] = {procedure.procedure_id: [] for procedure in procedures}
         for element in elements:
             if not self._is_arrow(element):
                 continue
@@ -246,7 +289,7 @@ class ExcalidrawToMarkupConverter:
                 continue
             source = meta.get("procedure_id")
             target = meta.get("target_procedure_id")
-            if not source or not target:
+            if not isinstance(source, str) or not isinstance(target, str):
                 continue
             if source not in graph or target not in graph:
                 continue
@@ -254,38 +297,46 @@ class ExcalidrawToMarkupConverter:
                 graph[source].append(target)
         return graph
 
-    def _metadata(self, element: dict) -> dict:
-        meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {})
-        schema_version = meta.get("schema_version")
+    def _metadata(self, element: Element) -> Metadata:
+        custom = element.get("customData")
+        if not isinstance(custom, dict):
+            return {}
+        meta_raw = custom.get(CUSTOM_DATA_KEY)
+        if not isinstance(meta_raw, dict):
+            return {}
+        schema_version = meta_raw.get("schema_version")
         if schema_version and str(schema_version) != METADATA_SCHEMA_VERSION:
-            return meta
-        return meta
+            return dict(meta_raw)
+        return dict(meta_raw)
 
-    def _is_arrow(self, element: dict) -> bool:
+    def _is_arrow(self, element: Element) -> bool:
         return element.get("type") == "arrow"
 
-    def _block_from_binding(self, binding: dict, blocks: Dict[str, BlockCandidate]) -> Optional[str]:
+    def _block_from_binding(
+        self, binding: Mapping[str, Any], blocks: dict[str, BlockCandidate]
+    ) -> str | None:
         element_id = binding.get("elementId")
-        if not element_id:
+        if not isinstance(element_id, str):
             return None
         block = blocks.get(element_id)
         return block.block_id if block else None
 
     def _infer_procedure_id(
         self,
-        metadata: dict,
-        blocks: Dict[str, BlockCandidate],
-        markers: Dict[str, MarkerCandidate],
-        arrow: dict,
+        metadata: Mapping[str, Any],
+        blocks: dict[str, BlockCandidate],
+        markers: dict[str, MarkerCandidate],
+        arrow: Element,
     ) -> str:
         procedure_id = metadata.get("procedure_id")
-        if procedure_id:
+        if isinstance(procedure_id, str) and procedure_id:
             return procedure_id
 
         for binding_name in ("startBinding", "endBinding"):
-            binding = arrow.get(binding_name) or {}
+            raw_binding = arrow.get(binding_name)
+            binding = raw_binding if isinstance(raw_binding, dict) else {}
             element_id = binding.get("elementId")
-            if not element_id:
+            if not isinstance(element_id, str):
                 continue
             block = blocks.get(element_id)
             if block:
@@ -302,31 +353,34 @@ class ExcalidrawToMarkupConverter:
 
     def _is_start_arrow(
         self,
-        arrow: dict,
-        markers: Dict[str, MarkerCandidate],
-        start_binding: dict,
-        end_binding: dict,
+        arrow: Element,
+        markers: dict[str, MarkerCandidate],
+        start_binding: Mapping[str, Any],
+        end_binding: Mapping[str, Any],
     ) -> bool:
-        start_marker = markers.get(start_binding.get("elementId"))
-        block_target = end_binding.get("elementId")
+        start_id = start_binding.get("elementId")
+        end_id = end_binding.get("elementId")
+        start_marker = markers.get(start_id) if isinstance(start_id, str) else None
+        block_target = end_id if isinstance(end_id, str) else None
         return bool(start_marker and block_target)
 
     def _is_end_arrow(
         self,
-        arrow: dict,
-        markers: Dict[str, MarkerCandidate],
-        start_binding: dict,
-        end_binding: dict,
+        arrow: Element,
+        markers: dict[str, MarkerCandidate],
+        start_binding: Mapping[str, Any],
+        end_binding: Mapping[str, Any],
     ) -> bool:
-        end_marker = markers.get(end_binding.get("elementId"))
+        end_id = end_binding.get("elementId")
+        end_marker = markers.get(end_id) if isinstance(end_id, str) else None
         if not end_marker or end_marker.role != "end_marker":
             return False
-        start_element = start_binding.get("elementId")
-        return bool(start_element and start_element not in markers)
+        start_id = start_binding.get("elementId")
+        return bool(isinstance(start_id, str) and start_id not in markers)
 
-    def _infer_globals(self, elements: Iterable[dict]) -> Tuple[int, str, Optional[str]]:
+    def _infer_globals(self, elements: Iterable[Element]) -> tuple[int, str, str | None]:
         for element in elements:
-            meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {})
+            meta = self._metadata(element)
             finedog = meta.get("finedog_unit_id")
             markup_type = meta.get("markup_type")
             service_name = meta.get("service_name")
@@ -335,9 +389,9 @@ class ExcalidrawToMarkupConverter:
         return 0, "service", None
 
     def _merge_marker_end_types(
-        self, markers: Dict[str, MarkerCandidate]
-    ) -> Dict[Tuple[str, str], str]:
-        end_types: Dict[Tuple[str, str], str] = {}
+        self, markers: dict[str, MarkerCandidate]
+    ) -> dict[tuple[str, str], str]:
+        end_types: dict[tuple[str, str], str] = {}
         for marker in markers.values():
             if marker.role != "end_marker":
                 continue
@@ -348,12 +402,12 @@ class ExcalidrawToMarkupConverter:
 
     def _infer_end_type_from_arrow(
         self,
-        arrow: dict,
-        meta: dict,
-        marker_end_types: Dict[Tuple[str, str], str],
+        arrow: Element,
+        meta: Mapping[str, Any],
+        marker_end_types: dict[tuple[str, str], str],
         procedure_id: str,
         source_block: str,
-        markers: Dict[str, MarkerCandidate],
+        markers: dict[str, MarkerCandidate],
     ) -> str:
         tagged = self._end_type_from_tags(arrow, meta)
         if tagged:
@@ -367,13 +421,15 @@ class ExcalidrawToMarkupConverter:
         end_type = marker_end_types.get((procedure_id, source_block))
         if end_type:
             return end_type
-        end_binding = arrow.get("endBinding") or {}
-        marker = markers.get(end_binding.get("elementId"))
+        raw_binding = arrow.get("endBinding")
+        end_binding = raw_binding if isinstance(raw_binding, dict) else {}
+        element_id = end_binding.get("elementId")
+        marker = markers.get(element_id) if isinstance(element_id, str) else None
         if marker and marker.end_type:
             return marker.end_type
         return END_TYPE_DEFAULT
 
-    def _infer_end_type_from_element(self, element: dict, meta: dict) -> Optional[str]:
+    def _infer_end_type_from_element(self, element: Element, meta: Mapping[str, Any]) -> str | None:
         tagged = self._end_type_from_tags(element, meta)
         if tagged:
             return tagged
@@ -385,20 +441,28 @@ class ExcalidrawToMarkupConverter:
             return end_type
         return self._end_type_from_color(element.get("backgroundColor"))
 
-    def _end_type_from_tags(self, element: dict, meta: dict) -> Optional[str]:
-        tags: List[str] = []
+    def _end_type_from_tags(self, element: Element, meta: Mapping[str, Any]) -> str | None:
+        tags: list[str] = []
+        custom_data = element.get("customData")
+        custom_tags: object | None = None
+        excalidraw_tags: object | None = None
+        if isinstance(custom_data, dict):
+            custom_tags = custom_data.get("tags")
+            excalidraw_meta = custom_data.get("excalidraw")
+            if isinstance(excalidraw_meta, dict):
+                excalidraw_tags = excalidraw_meta.get("tags")
         for source in (
             meta.get("tags"),
             element.get("tags"),
-            element.get("customData", {}).get("tags"),
-            element.get("customData", {}).get("excalidraw", {}).get("tags"),
+            custom_tags,
+            excalidraw_tags,
         ):
             tags.extend(self._split_tags(source))
         for field in ("text", "name"):
             value = element.get(field)
             if isinstance(value, str):
                 tags.extend(self._extract_inline_tags(value))
-        end_type: Optional[str] = None
+        end_type: str | None = None
         for tag in tags:
             normalized = normalize_end_type(tag)
             if not normalized:
@@ -406,7 +470,7 @@ class ExcalidrawToMarkupConverter:
             end_type = merge_end_types(end_type, normalized)
         return end_type
 
-    def _end_type_from_color(self, color: Optional[str]) -> Optional[str]:
+    def _end_type_from_color(self, color: str | None) -> str | None:
         if not color:
             return None
         candidate = str(color).lower()
@@ -415,26 +479,15 @@ class ExcalidrawToMarkupConverter:
                 return end_type
         return None
 
-    def _split_tags(self, value: object) -> List[str]:
-        if isinstance(value, (list, tuple, set)):
+    def _split_tags(self, value: object) -> list[str]:
+        if isinstance(value, list | tuple | set):
             return [self._normalize_tag(str(item)) for item in value]
         if isinstance(value, str):
-            return [
-                self._normalize_tag(chunk)
-                for chunk in re.split(r"[,\\s]+", value)
-                if chunk
-            ]
+            return [self._normalize_tag(chunk) for chunk in _TAG_SPLIT_RE.split(value) if chunk]
         return []
 
-    def _extract_inline_tags(self, value: str) -> List[str]:
-        return [
-            match.lower()
-            for match in re.findall(
-                r"(?:#|::)(end|exit|all|intermediate)\\b",
-                value,
-                flags=re.IGNORECASE,
-            )
-        ]
+    def _extract_inline_tags(self, value: str) -> list[str]:
+        return [match.lower() for match in _INLINE_TAG_RE.findall(value)]
 
     def _normalize_tag(self, value: str) -> str:
         candidate = value.strip()

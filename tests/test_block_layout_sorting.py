@@ -9,9 +9,7 @@ from domain.models import MarkupDocument
 
 def load_markup_fixture(name: str) -> MarkupDocument:
     fixture_path = Path(__file__).parent.parent / "examples" / "markup" / name
-    return MarkupDocument.model_validate(
-        json.loads(fixture_path.read_text(encoding="utf-8"))
-    )
+    return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
 
 
 def test_layout_orders_targets_by_incoming_neighbors() -> None:
@@ -144,11 +142,7 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     plan = layout.build_plan(markup)
 
     proc_id = "proc_marker_shift"
-    blocks = {
-        block.block_id: block
-        for block in plan.blocks
-        if block.procedure_id == proc_id
-    }
+    blocks = {block.block_id: block for block in plan.blocks if block.procedure_id == proc_id}
     markers = {
         marker.block_id: marker
         for marker in plan.markers
@@ -160,17 +154,15 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     aligned_block = "aligned"
     aligned_marker = markers.get(aligned_block)
     assert aligned_marker is not None
-    assert abs(
-        aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)
-    ) < 1e-6
+    assert abs(aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)) < 1e-6
 
     shifted_block = "shifted"
     shifted_marker = markers.get(shifted_block)
     assert shifted_marker is not None
-    assert abs(
-        shifted_marker.position.y
-        - (blocks[shifted_block].position.y + row_step + offset_y)
-    ) < 1e-6
+    assert (
+        abs(shifted_marker.position.y - (blocks[shifted_block].position.y + row_step + offset_y))
+        < 1e-6
+    )
 
     parent_block = "shifted"
     child_block = "blocker"

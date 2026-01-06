@@ -42,9 +42,11 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+src = ["app", "domain", "adapters", "tests"]
+
+[tool.ruff.lint]
 extend-select = ["B", "C4", "I", "UP", "RUF", "W"]
 ignore = ["B008"]
-src = ["app", "domain", "adapters", "tests"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -62,7 +64,7 @@ warn_return_any = true
 warn_unreachable = true
 no_implicit_reexport = true
 explicit_package_bases = true
-mypy_path = "app:domain:adapters"
+mypy_path = "."
 
 [tool.pytest.ini_options]
 addopts = "-q"

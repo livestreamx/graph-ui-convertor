@@ -2,6 +2,15 @@
 
 MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3.14 + Poetry, CLI на Typer, гексагональная архитектура, layout-движок GridLayoutEngine.
 
+## Architecture Guardrails (LLM focus)
+
+- Domain (`domain/`) — чистая логика и модели, без IO/CLI.
+- Ports (`domain/ports/`) — интерфейсы для IO/лейаута.
+- Adapters (`adapters/`) — имплементации портов (filesystem, excalidraw, layout).
+- App (`app/`) — только wiring/CLI, без бизнес-логики.
+- Конвертеры (`domain/services/`) — трансформация markup ↔ excalidraw; не трогать файл-систему напрямую.
+- Взаимодействия только через порты, чтобы сохранять гексагональную архитектуру.
+
 ## Project Structure
 
 - `app/cli.py` — Typer CLI (`cjm convert to-excalidraw|from-excalidraw|validate`).
@@ -27,6 +36,8 @@ MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3
 - START овалы 180x90, вынесены влево; если старт один — текст `START`, иначе глобальная нумерация `START #N`. END — аналогично справа/снизу, стрелка привязана.
 - Стрелки имеют start/end bindings + boundElements, опираются на края элементов; ветки с небольшими offset по Y для разведения.
 - Текст блоков/маркеров подгоняется по ширине/высоте с автоуменьшением шрифта.
+- `customData.cjm` — основной слой метаданных (schema_version, procedure_id, block_id, edge_type, role и т.д.). Любые новые поля добавляй здесь же.
+- stable id через uuid5; не меняй схему id без миграции, иначе нарушится round-trip.
 
 ## Coding Style & Tooling
 
@@ -34,9 +45,22 @@ MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3
 - Linters: ruff, mypy (strict). Tests: pytest. Pre-commit: ruff/format/mypy hooks.
 - ASCII по умолчанию, краткие комментарии только при необходимости.
 
+## Testing Expectations
+
+- Любые изменения кода требуют новых/обновленных тестов.
+- После правок обязательно запускай `make test` или `pytest`.
+- При изменениях лейаута/стрелок фиксируй кейсы в `tests/` (позиции, роли, bindings).
+- По завершению работ обязательно прогоняй линтеры/форматтеры (`make lint`, `make fmt`) и убеждайся, что код соответствует стандартам.
+
 ## Agent Notes
 
 - Сцены для проверки: `data/excalidraw_in/*.excalidraw` генерятся `make convert-to-ui`.
 - Docker UI порт по умолчанию 5010. Если порт занят — задавай `EXCALIDRAW_PORT`.
 - При изменениях лейаута/стрелок убедись, что биндинги сохраняются и тесты зелёные (`pytest`).  
 - Любые изменения кода должны сопровождаться тестовым покрытием и обязательным запуском тестов сразу после правок (`make test` или `pytest`).
+
+## Common Tasks (LLM hints)
+
+- Конвертация в UI: `make convert-to-ui` → `data/excalidraw_in`.
+- Обратная конвертация: `make convert-from-ui` → `data/roundtrip`.
+- Для новых форматов обновляй `docs/FORMAT.md` и тесты round-trip.

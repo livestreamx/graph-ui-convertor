@@ -3,7 +3,7 @@ from __future__ import annotations
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 
 
-def _base_meta(procedure_id: str, block_id: str | None = None) -> dict:
+def _base_meta(procedure_id: str, block_id: str | None = None) -> dict[str, dict[str, object]]:
     meta = {
         "schema_version": "1.0",
         "procedure_id": procedure_id,

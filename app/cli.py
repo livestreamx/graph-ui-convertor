@@ -4,14 +4,13 @@ import json
 from pathlib import Path
 
 import typer
-from rich.console import Console
-
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from rich.console import Console
 
 app = typer.Typer(no_args_is_help=True)
 convert_app = typer.Typer(no_args_is_help=True)
@@ -22,10 +21,12 @@ console = Console()
 @convert_app.command("to-excalidraw")
 def convert_to_excalidraw(
     input_dir: Path = typer.Option(
-        Path("data/markup"), help="Directory with markup JSON files.",
+        Path("data/markup"),
+        help="Directory with markup JSON files.",
     ),
     output_dir: Path = typer.Option(
-        Path("data/excalidraw_in"), help="Directory to write Excalidraw scene files.",
+        Path("data/excalidraw_in"),
+        help="Directory to write Excalidraw scene files.",
     ),
 ) -> None:
     markup_repo = FileSystemMarkupRepository()
@@ -49,10 +50,12 @@ def convert_to_excalidraw(
 @convert_app.command("from-excalidraw")
 def convert_from_excalidraw(
     input_dir: Path = typer.Option(
-        Path("data/excalidraw_out"), help="Directory with .excalidraw/.json files from UI export.",
+        Path("data/excalidraw_out"),
+        help="Directory with .excalidraw/.json files from UI export.",
     ),
     output_dir: Path = typer.Option(
-        Path("data/roundtrip"), help="Directory to write reconstructed markup JSON files.",
+        Path("data/roundtrip"),
+        help="Directory to write reconstructed markup JSON files.",
     ),
 ) -> None:
     excal_repo = FileSystemExcalidrawRepository()
@@ -73,7 +76,9 @@ def convert_from_excalidraw(
 
 
 @app.command("validate")
-def validate(input_path: Path = typer.Argument(..., help="Markup or Excalidraw file to validate.")) -> None:
+def validate(
+    input_path: Path = typer.Argument(..., help="Markup or Excalidraw file to validate."),
+) -> None:
     if not input_path.exists():
         console.print(f"[red]File not found:[/] {input_path}")
         raise typer.Exit(code=1)
@@ -87,7 +92,7 @@ def validate(input_path: Path = typer.Argument(..., help="Markup or Excalidraw f
         else:
             MarkupDocument.model_validate(data)
             console.print(f"[green]Valid markup file:[/] {input_path}")
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]Validation failed:[/] {exc}")
         raise typer.Exit(code=1) from exc
 

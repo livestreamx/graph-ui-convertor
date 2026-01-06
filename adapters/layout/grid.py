@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict, List, Tuple
+import heapq
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 
 from domain.models import (
-    BlockPlacement,
     END_TYPE_DEFAULT,
+    BlockPlacement,
     FramePlacement,
     LayoutPlan,
     MarkerPlacement,
     MarkupDocument,
     Point,
+    Procedure,
     ScenarioPlacement,
     SeparatorPlacement,
     Size,
@@ -21,8 +23,8 @@ from domain.ports.layout import LayoutEngine
 
 @dataclass(frozen=True)
 class LayoutConfig:
-    block_size: Size = Size(260, 120)
-    marker_size: Size = Size(180, 90)
+    block_size: Size = field(default_factory=lambda: Size(260, 120))
+    marker_size: Size = field(default_factory=lambda: Size(180, 90))
     padding: float = 150.0
     gap_x: float = 120.0
     gap_y: float = 80.0
@@ -56,11 +58,11 @@ class GridLayoutEngine(LayoutEngine):
         self.config = config or LayoutConfig()
 
     def build_plan(self, document: MarkupDocument) -> LayoutPlan:
-        frames: List[FramePlacement] = []
-        blocks: List[BlockPlacement] = []
-        markers: List[MarkerPlacement] = []
-        separator_ys: List[float] = []
-        scenarios: List[ScenarioPlacement] = []
+        frames: list[FramePlacement] = []
+        blocks: list[BlockPlacement] = []
+        markers: list[MarkerPlacement] = []
+        separator_ys: list[float] = []
+        scenarios: list[ScenarioPlacement] = []
 
         procedures = [proc for proc in document.procedures if proc.block_ids()]
         if not procedures:
@@ -71,7 +73,7 @@ class GridLayoutEngine(LayoutEngine):
         order_hint = self._procedure_order_hint(procedures, document.procedure_graph)
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
         adjacency = self._normalize_procedure_graph(proc_ids, document.procedure_graph)
-        sizing: Dict[str, Size] = {}
+        sizing: dict[str, Size] = {}
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
@@ -85,8 +87,10 @@ class GridLayoutEngine(LayoutEngine):
                 + cols * self.config.block_size.width
                 + ((cols - 1) * self.config.gap_x)
             )
-            frame_height = self.config.padding * 2 + rows * self.config.block_size.height + (
-                (rows - 1) * self.config.gap_y
+            frame_height = (
+                self.config.padding * 2
+                + rows * self.config.block_size.height
+                + ((rows - 1) * self.config.gap_y)
             )
             sizing[procedure.procedure_id] = Size(
                 frame_width + self.config.marker_size.width + self.config.gap_x * 0.5,
@@ -117,13 +121,13 @@ class GridLayoutEngine(LayoutEngine):
 
             levels = self._procedure_levels(component, component_adjacency, order_index)
             max_level = max(levels.values() or [0])
-            level_nodes: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
+            level_nodes: dict[int, list[str]] = {lvl: [] for lvl in range(max_level + 1)}
             for proc_id, lvl in levels.items():
                 level_nodes.setdefault(lvl, []).append(proc_id)
-            for lvl, nodes in level_nodes.items():
+            for nodes in level_nodes.values():
                 nodes.sort(key=lambda proc_id: order_index.get(proc_id, 0))
 
-            level_heights: Dict[int, float] = {}
+            level_heights: dict[int, float] = {}
             for lvl, nodes in level_nodes.items():
                 if not nodes:
                     level_heights[lvl] = 0.0
@@ -153,32 +157,37 @@ class GridLayoutEngine(LayoutEngine):
 
         procedure_map = {proc.procedure_id: proc for proc in procedures}
         for frame in frames:
-            procedure = procedure_map.get(frame.procedure_id)
-            if procedure is None:
+            frame_proc = procedure_map.get(frame.procedure_id)
+            if frame_proc is None:
                 continue
-            placement_by_block: Dict[str, BlockPlacement] = {}
+            placement_by_block: dict[str, BlockPlacement] = {}
             node_levels, max_level, _, order, row_positions, node_info = self._compute_block_levels(
-                procedure
+                frame_proc
             )
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
-            level_rows: Dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
+            level_rows: dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
             for node_id in order:
                 level_idx = node_levels.get(node_id, 0)
                 row_idx = row_positions.get(node_id, level_rows[level_idx])
                 level_rows[level_idx] = max(level_rows[level_idx], row_idx + 1)
 
-                x = frame.origin.x + self.config.padding + start_extra + level_idx * (
-                    self.config.block_size.width + self.config.gap_x
+                x = (
+                    frame.origin.x
+                    + self.config.padding
+                    + start_extra
+                    + level_idx * (self.config.block_size.width + self.config.gap_x)
                 )
-                y = frame.origin.y + self.config.padding + row_idx * (
-                    self.config.block_size.height + self.config.gap_y
+                y = (
+                    frame.origin.y
+                    + self.config.padding
+                    + row_idx * (self.config.block_size.height + self.config.gap_y)
                 )
                 info = node_info.get(node_id)
                 if not info:
                     continue
                 if info.kind == "block":
                     placement = BlockPlacement(
-                        procedure_id=procedure.procedure_id,
+                        procedure_id=frame_proc.procedure_id,
                         block_id=info.block_id,
                         position=Point(x, y),
                         size=self.config.block_size,
@@ -190,7 +199,7 @@ class GridLayoutEngine(LayoutEngine):
                     offset_y = (self.config.block_size.height - self.config.marker_size.height) / 2
                     markers.append(
                         MarkerPlacement(
-                            procedure_id=procedure.procedure_id,
+                            procedure_id=frame_proc.procedure_id,
                             block_id=info.block_id,
                             role="end_marker",
                             position=Point(x + offset_x, y + offset_y),
@@ -199,7 +208,7 @@ class GridLayoutEngine(LayoutEngine):
                         )
                     )
 
-            for start_block in procedure.start_block_ids:
+            for start_block in frame_proc.start_block_ids:
                 block = placement_by_block.get(start_block)
                 if not block:
                     continue
@@ -207,7 +216,7 @@ class GridLayoutEngine(LayoutEngine):
                 y = block.position.y + (block.size.height - self.config.marker_size.height) / 2
                 markers.append(
                     MarkerPlacement(
-                        procedure_id=procedure.procedure_id,
+                        procedure_id=frame_proc.procedure_id,
                         block_id=start_block,
                         role="start_marker",
                         position=Point(x, y),
@@ -215,7 +224,7 @@ class GridLayoutEngine(LayoutEngine):
                     )
                 )
 
-        separators: List[SeparatorPlacement] = []
+        separators: list[SeparatorPlacement] = []
         if frames and separator_ys:
             min_x = min(frame.origin.x for frame in frames)
             max_x = max(frame.origin.x + frame.size.width for frame in frames)
@@ -244,31 +253,25 @@ class GridLayoutEngine(LayoutEngine):
 
     def _build_scenarios(
         self,
-        components: List[set[str]],
-        frames: List[FramePlacement],
-        procedure_map: Dict[str, object],
-        procedure_graph: Dict[str, List[str]],
-        order_index: Dict[str, int],
-    ) -> List[ScenarioPlacement]:
-        scenarios: List[ScenarioPlacement] = []
+        components: list[set[str]],
+        frames: list[FramePlacement],
+        procedure_map: Mapping[str, Procedure],
+        procedure_graph: dict[str, list[str]],
+        order_index: dict[str, int],
+    ) -> list[ScenarioPlacement]:
+        scenarios: list[ScenarioPlacement] = []
         component_count = len(components)
         frame_lookup = {frame.procedure_id: frame for frame in frames}
         for idx, component in enumerate(components, start=1):
             component_frames = [
-                frame_lookup[proc_id]
-                for proc_id in component
-                if proc_id in frame_lookup
+                frame_lookup[proc_id] for proc_id in component if proc_id in frame_lookup
             ]
             if not component_frames:
                 continue
             min_x = min(frame.origin.x for frame in component_frames)
-            max_x = max(frame.origin.x + frame.size.width for frame in component_frames)
             min_y = min(frame.origin.y for frame in component_frames)
-            max_y = max(frame.origin.y + frame.size.height for frame in component_frames)
             title = "Граф" if component_count == 1 else f"Граф {idx}"
-            labels = self._component_procedure_labels(
-                component, procedure_map, frame_lookup
-            )
+            labels = self._component_procedure_labels(component, procedure_map, frame_lookup)
             starts, ends, variants = self._component_stats(
                 component, procedure_map, procedure_graph
             )
@@ -285,18 +288,14 @@ class GridLayoutEngine(LayoutEngine):
                 f"- Ветвления: {variants}",
             ]
             max_width = self.config.scenario_width - (self.config.scenario_padding * 2)
-            title_lines = self._wrap_lines(
-                [title], max_width, self.config.scenario_title_font_size
-            )
-            cycle_lines: List[str] = []
+            title_lines = self._wrap_lines([title], max_width, self.config.scenario_title_font_size)
+            cycle_lines: list[str] = []
             cycle_height = 0.0
             if cycle_text:
                 cycle_lines = self._wrap_lines(
                     [cycle_text], max_width, self.config.scenario_cycle_font_size
                 )
-                cycle_height = (
-                    len(cycle_lines) * self.config.scenario_cycle_font_size * 1.35
-                )
+                cycle_height = len(cycle_lines) * self.config.scenario_cycle_font_size * 1.35
             body_lines_wrapped = self._wrap_lines(
                 body_lines, max_width, self.config.scenario_body_font_size
             )
@@ -359,19 +358,19 @@ class GridLayoutEngine(LayoutEngine):
     def _component_procedure_labels(
         self,
         component: set[str],
-        procedure_map: Dict[str, object],
-        frame_lookup: Dict[str, FramePlacement],
-    ) -> List[str]:
-        entries: List[Tuple[float, bool, str, str]] = []
+        procedure_map: Mapping[str, Procedure],
+        frame_lookup: dict[str, FramePlacement],
+    ) -> list[str]:
+        entries: list[tuple[float, bool, str, str]] = []
         for proc_id in sorted(component):
             proc = procedure_map.get(proc_id)
             if proc is None:
                 continue
             frame = frame_lookup.get(proc_id)
             x_pos = frame.origin.x if frame else 0.0
-            proc_name = getattr(proc, "procedure_name", None)
+            proc_name = proc.procedure_name
             label = f"{proc_name} ({proc_id})" if proc_name else proc_id
-            has_start = bool(getattr(proc, "start_block_ids", []))
+            has_start = bool(proc.start_block_ids)
             entries.append((x_pos, has_start, label, proc_id))
 
         entries.sort(key=lambda item: (item[0], item[3]))
@@ -387,15 +386,15 @@ class GridLayoutEngine(LayoutEngine):
         trimmed.append(f"и еще {len(entries) - limit}")
         return trimmed
 
-    def _wrap_lines(self, lines: List[str], max_width: float, font_size: float) -> List[str]:
+    def _wrap_lines(self, lines: list[str], max_width: float, font_size: float) -> list[str]:
         max_chars = max(1, int(max_width / (font_size * 0.6)))
-        wrapped: List[str] = []
+        wrapped: list[str] = []
         for line in lines:
             if not line:
                 wrapped.append("")
                 continue
             words = line.split()
-            current: List[str] = []
+            current: list[str] = []
             count = 0
             for word in words:
                 if not current:
@@ -424,31 +423,28 @@ class GridLayoutEngine(LayoutEngine):
     def _component_stats(
         self,
         component: set[str],
-        procedure_map: Dict[str, object],
-        procedure_graph: Dict[str, List[str]],
-    ) -> Tuple[int, int, int]:
+        procedure_map: Mapping[str, Procedure],
+        procedure_graph: dict[str, list[str]],
+    ) -> tuple[int, int, int]:
         start_blocks: set[str] = set()
         end_blocks: set[str] = set()
-        branch_adjacency: Dict[str, List[str]] = {}
+        branch_adjacency: dict[str, list[str]] = {}
         branch_edges = 0
         for proc_id in component:
             proc = procedure_map.get(proc_id)
             if proc is None:
                 continue
-            for start_id in getattr(proc, "start_block_ids", []):
+            for start_id in proc.start_block_ids:
                 start_blocks.add(start_id)
-            for end_id in getattr(proc, "end_block_ids", []):
+            for end_id in proc.end_block_ids:
                 end_blocks.add(end_id)
-            branches = getattr(proc, "branches", {}) or {}
-            if isinstance(branches, dict):
-                for source, targets in branches.items():
-                    if not isinstance(targets, list):
-                        continue
-                    if targets:
-                        branch_edges += len(targets)
-                    branch_adjacency.setdefault(str(source), []).extend(
-                        str(target) for target in targets
-                    )
+            branches = proc.branches
+            for source, targets in branches.items():
+                if targets:
+                    branch_edges += len(targets)
+                branch_adjacency.setdefault(str(source), []).extend(
+                    str(target) for target in targets
+                )
 
         if branch_edges > 0:
             combinations = self._count_paths(branch_adjacency, list(start_blocks))
@@ -462,22 +458,22 @@ class GridLayoutEngine(LayoutEngine):
     def _component_graph_properties(
         self,
         component: set[str],
-        procedure_graph: Dict[str, List[str]],
-        order_index: Dict[str, int],
-    ) -> Tuple[List[str], str | None]:
-        adjacency: Dict[str, List[str]] = {node: [] for node in component}
+        procedure_graph: dict[str, list[str]],
+        order_index: dict[str, int],
+    ) -> tuple[list[str], str | None]:
+        adjacency: dict[str, list[str]] = {node: [] for node in component}
         edge_count = 0
         for parent, children in procedure_graph.items():
-            if parent not in component or not isinstance(children, list):
+            if parent not in component:
                 continue
             for child in children:
                 if child in component:
                     adjacency[parent].append(child)
                     edge_count += 1
 
-        indegree: Dict[str, int] = {node: 0 for node in component}
-        outdegree: Dict[str, int] = {node: len(adjacency.get(node, [])) for node in component}
-        for parent, children in adjacency.items():
+        indegree: dict[str, int] = {node: 0 for node in component}
+        outdegree: dict[str, int] = {node: len(adjacency.get(node, [])) for node in component}
+        for _parent, children in adjacency.items():
             for child in children:
                 indegree[child] = indegree.get(child, 0) + 1
 
@@ -489,7 +485,7 @@ class GridLayoutEngine(LayoutEngine):
         cycle_count = len(cycle_edges)
         is_cyclic = cycle_count > 0
 
-        undirected: Dict[str, set[str]] = {node: set() for node in component}
+        undirected: dict[str, set[str]] = {node: set() for node in component}
         for parent, children in adjacency.items():
             for child in children:
                 undirected[parent].add(child)
@@ -518,7 +514,7 @@ class GridLayoutEngine(LayoutEngine):
                 "- ориентированный",
                 "- слабосвязный" if connected else "- несвязный",
                 f"- вершин: {len(component)}",
-                f"- ребер: {edge_count}",
+                f"- ребер: {edge_count}",  # noqa: RUF001
                 f"- источники: {len(sources)}",
                 f"- стоки: {len(sinks)}",
                 "- разветвляющийся" if has_branching else "- без разветвлений",
@@ -530,11 +526,11 @@ class GridLayoutEngine(LayoutEngine):
     def _procedure_graph_combinations(
         self,
         component: set[str],
-        procedure_graph: Dict[str, List[str]],
+        procedure_graph: dict[str, list[str]],
     ) -> int:
-        adjacency: Dict[str, List[str]] = {}
+        adjacency: dict[str, list[str]] = {}
         for parent, children in procedure_graph.items():
-            if parent not in component or not isinstance(children, list):
+            if parent not in component:
                 continue
             for child in children:
                 if child in component:
@@ -547,8 +543,8 @@ class GridLayoutEngine(LayoutEngine):
 
     def _count_paths(
         self,
-        adjacency: Dict[str, List[str]],
-        start_nodes: List[str],
+        adjacency: dict[str, list[str]],
+        start_nodes: list[str],
     ) -> int:
         nodes: set[str] = set(start_nodes)
         for source, targets in adjacency.items():
@@ -562,8 +558,8 @@ class GridLayoutEngine(LayoutEngine):
             if not starts:
                 starts = list(nodes)
         else:
-            indegree: Dict[str, int] = {node: 0 for node in nodes}
-            for source, targets in adjacency.items():
+            indegree: dict[str, int] = {node: 0 for node in nodes}
+            for _source, targets in adjacency.items():
                 for target in targets:
                     indegree[target] = indegree.get(target, 0) + 1
             starts = [node for node, deg in indegree.items() if deg == 0]
@@ -571,7 +567,7 @@ class GridLayoutEngine(LayoutEngine):
                 starts = list(nodes)
 
         terminals = {node for node in nodes if not adjacency.get(node)}
-        memo: Dict[str, int] = {}
+        memo: dict[str, int] = {}
         visiting: set[str] = set()
 
         def dfs(node: str) -> int:
@@ -593,18 +589,16 @@ class GridLayoutEngine(LayoutEngine):
         return sum(dfs(node) for node in starts)
 
     def _procedure_order_hint(
-        self, procedures: List[object], procedure_graph: Dict[str, List[str]]
-    ) -> List[str]:
+        self, procedures: Sequence[Procedure], procedure_graph: dict[str, list[str]]
+    ) -> list[str]:
         proc_ids = [proc.procedure_id for proc in procedures]
         proc_by_id = {proc.procedure_id: proc for proc in procedures}
-        order_hint: List[str] = []
+        order_hint: list[str] = []
         seen_hint: set[str] = set()
         for parent, children in procedure_graph.items():
             if parent in proc_by_id and parent not in seen_hint:
                 order_hint.append(parent)
                 seen_hint.add(parent)
-            if not isinstance(children, list):
-                continue
             for child in children:
                 if child in proc_by_id and child not in seen_hint:
                     order_hint.append(child)
@@ -615,14 +609,14 @@ class GridLayoutEngine(LayoutEngine):
         return order_hint
 
     def _normalize_procedure_graph(
-        self, proc_ids: List[str], procedure_graph: Dict[str, List[str]]
-    ) -> Dict[str, List[str]]:
-        adjacency: Dict[str, List[str]] = {proc_id: [] for proc_id in proc_ids}
+        self, proc_ids: list[str], procedure_graph: dict[str, list[str]]
+    ) -> dict[str, list[str]]:
+        adjacency: dict[str, list[str]] = {proc_id: [] for proc_id in proc_ids}
         for parent, children in procedure_graph.items():
-            if parent not in adjacency or not isinstance(children, list):
+            if parent not in adjacency:
                 continue
             seen: set[str] = set()
-            cleaned: List[str] = []
+            cleaned: list[str] = []
             for child in children:
                 if child in adjacency and child != parent and child not in seen:
                     cleaned.append(child)
@@ -632,9 +626,9 @@ class GridLayoutEngine(LayoutEngine):
         return adjacency
 
     def _procedure_components(
-        self, proc_ids: List[str], adjacency: Dict[str, List[str]]
-    ) -> List[set[str]]:
-        undirected: Dict[str, set[str]] = {proc_id: set() for proc_id in proc_ids}
+        self, proc_ids: list[str], adjacency: dict[str, list[str]]
+    ) -> list[set[str]]:
+        undirected: dict[str, set[str]] = {proc_id: set() for proc_id in proc_ids}
         for parent, children in adjacency.items():
             for child in children:
                 if child not in undirected:
@@ -642,7 +636,7 @@ class GridLayoutEngine(LayoutEngine):
                 undirected[parent].add(child)
                 undirected[child].add(parent)
         visited: set[str] = set()
-        components: List[set[str]] = []
+        components: list[set[str]] = []
         for node in proc_ids:
             if node in visited:
                 continue
@@ -661,39 +655,40 @@ class GridLayoutEngine(LayoutEngine):
     def _procedure_levels(
         self,
         component: set[str],
-        adjacency: Dict[str, List[str]],
-        order_index: Dict[str, int],
-    ) -> Dict[str, int]:
-        indegree: Dict[str, int] = {proc_id: 0 for proc_id in component}
-        for parent, children in adjacency.items():
+        adjacency: dict[str, list[str]],
+        order_index: dict[str, int],
+    ) -> dict[str, int]:
+        indegree: dict[str, int] = {proc_id: 0 for proc_id in component}
+        for _parent, children in adjacency.items():
             for child in children:
                 if child in indegree:
                     indegree[child] += 1
-        queue = [proc_id for proc_id, deg in indegree.items() if deg == 0]
-        queue.sort(key=lambda proc_id: order_index.get(proc_id, 0))
-        levels: Dict[str, int] = {proc_id: 0 for proc_id in component}
+        queue = [
+            (order_index.get(proc_id, 0), proc_id) for proc_id, deg in indegree.items() if deg == 0
+        ]
+        heapq.heapify(queue)
+        levels: dict[str, int] = {proc_id: 0 for proc_id in component}
         while queue:
-            node = queue.pop(0)
+            _, node = heapq.heappop(queue)
             for child in adjacency.get(node, []):
                 if child not in levels:
                     continue
                 levels[child] = max(levels.get(child, 0), levels.get(node, 0) + 1)
                 indegree[child] -= 1
                 if indegree[child] == 0:
-                    queue.append(child)
-                    queue.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+                    heapq.heappush(queue, (order_index.get(child, 0), child))
         return levels
 
     def _find_cycle_edges(
-        self, adjacency: Dict[str, List[str]], order_index: Dict[str, int] | None = None
-    ) -> set[Tuple[str, str]]:
+        self, adjacency: dict[str, list[str]], order_index: dict[str, int] | None = None
+    ) -> set[tuple[str, str]]:
         nodes = set(adjacency.keys())
         for children in adjacency.values():
             nodes.update(children)
-        visited: Dict[str, int] = {}
-        cycle_edges: set[Tuple[str, str]] = set()
+        visited: dict[str, int] = {}
+        cycle_edges: set[tuple[str, str]] = set()
 
-        def sort_key(node_id: str) -> Tuple[int, str]:
+        def sort_key(node_id: str) -> tuple[int, str]:
             if order_index is None:
                 return (0, node_id)
             return (order_index.get(node_id, 0), node_id)
@@ -714,26 +709,24 @@ class GridLayoutEngine(LayoutEngine):
         return cycle_edges
 
     def _compute_block_levels(
-        self, procedure: object
-    ) -> Tuple[
-        Dict[str, int],
+        self, procedure: Procedure
+    ) -> tuple[
+        dict[str, int],
         int,
-        Dict[int, float],
-        List[str],
-        Dict[str, float],
-        Dict[str, NodeInfo],
+        dict[int, float],
+        list[str],
+        dict[str, float],
+        dict[str, NodeInfo],
     ]:
-        branches = getattr(procedure, "branches")
-        start_blocks = list(getattr(procedure, "start_block_ids"))
-        end_blocks = list(getattr(procedure, "end_block_ids"))
-        end_block_types = getattr(procedure, "end_block_types", {})
+        branches = procedure.branches
+        start_blocks = list(procedure.start_block_ids)
+        end_blocks = list(procedure.end_block_ids)
+        end_block_types = procedure.end_block_types
 
-        branches_for_layout: Dict[str, List[str]] = {}
+        branches_for_layout: dict[str, list[str]] = {}
         for source, targets in branches.items():
-            if not isinstance(targets, list):
-                continue
             seen: set[str] = set()
-            cleaned: List[str] = []
+            cleaned: list[str] = []
             for target in targets:
                 if target in seen:
                     continue
@@ -748,7 +741,7 @@ class GridLayoutEngine(LayoutEngine):
                     child for child in branches_for_layout.get(source, []) if child != target
                 ]
 
-        node_info: Dict[str, NodeInfo] = {}
+        node_info: dict[str, NodeInfo] = {}
         all_blocks = set(start_blocks) | set(end_blocks)
         for src, targets in branches.items():
             all_blocks.add(src)
@@ -757,19 +750,17 @@ class GridLayoutEngine(LayoutEngine):
         for block_id in all_blocks:
             node_info.setdefault(block_id, NodeInfo(kind="block", block_id=block_id))
 
-        end_nodes: Dict[str, NodeInfo] = {}
+        end_nodes: dict[str, NodeInfo] = {}
         for block_id in end_blocks:
             base_type = normalize_end_type(end_block_types.get(block_id)) or END_TYPE_DEFAULT
             node_id = f"__end_marker__{base_type}::{block_id}"
-            end_nodes[node_id] = NodeInfo(
-                kind="end_marker", block_id=block_id, end_type=base_type
-            )
+            end_nodes[node_id] = NodeInfo(kind="end_marker", block_id=block_id, end_type=base_type)
 
         node_info.update(end_nodes)
         all_nodes = set(node_info.keys())
 
-        indegree: Dict[str, int] = {node_id: 0 for node_id in all_nodes}
-        adj: Dict[str, List[str]] = {node_id: [] for node_id in all_nodes}
+        indegree: dict[str, int] = {node_id: 0 for node_id in all_nodes}
+        adj: dict[str, list[str]] = {node_id: [] for node_id in all_nodes}
         for src, targets in branches_for_layout.items():
             for tgt in targets:
                 adj[src].append(tgt)
@@ -781,19 +772,21 @@ class GridLayoutEngine(LayoutEngine):
 
         start_nodes = set(start_blocks)
 
-        def sort_key(node_id: str, levels: Dict[str, int] | None = None) -> Tuple:
+        def sort_key(
+            node_id: str, levels: dict[str, int] | None = None
+        ) -> tuple[int, int, int, str, str]:
             info = node_info.get(node_id)
             level = 0 if levels is None else levels.get(node_id, 0)
             start_rank = 0 if node_id in start_nodes else 1
             kind_rank = 0 if info and info.kind == "block" else 1
             block_id = info.block_id if info else node_id
-            end_type = info.end_type or ""
+            end_type = info.end_type if info and info.end_type else ""
             return (level, start_rank, kind_rank, block_id, end_type)
 
         queue = sorted(all_nodes, key=lambda n: sort_key(n))
         queue = [n for n in queue if indegree.get(n, 0) == 0]
-        levels: Dict[str, int] = {}
-        order: List[str] = []
+        levels: dict[str, int] = {}
+        order: list[str] = []
         while queue:
             node = queue.pop(0)
             level = levels.get(node, 0)
@@ -832,13 +825,13 @@ class GridLayoutEngine(LayoutEngine):
         branch_counts = {block: len(targets) for block, targets in branches_for_layout.items()}
         end_blocks_set = set(end_blocks)
 
-        level_buckets: Dict[int, List[str]] = {lvl: [] for lvl in range(max_level + 1)}
+        level_buckets: dict[int, list[str]] = {lvl: [] for lvl in range(max_level + 1)}
         for node_id, lvl in levels.items():
             level_buckets.setdefault(lvl, []).append(node_id)
 
         end_block_set = set(end_blocks)
 
-        def base_order_key(node_id: str) -> Tuple[int, int, int, str, str]:
+        def base_order_key(node_id: str) -> tuple[int, int, int, str, str]:
             info = node_info.get(node_id)
             start_rank = 0 if node_id in start_nodes else 1
             kind_rank = 0 if info and info.kind == "block" else 1
@@ -857,11 +850,11 @@ class GridLayoutEngine(LayoutEngine):
                 else 0
             )
             block_id = info.block_id if info else node_id
-            end_sort = info.end_type or ""
+            end_sort = info.end_type if info and info.end_type else ""
             return (start_rank, kind_rank, end_rank, block_id, end_sort)
 
         order_index = {node_id: idx for idx, node_id in enumerate(order)}
-        level_order: Dict[int, List[str]] = {}
+        level_order: dict[int, list[str]] = {}
         for lvl in range(max_level + 1):
             nodes = [
                 node_id
@@ -869,7 +862,7 @@ class GridLayoutEngine(LayoutEngine):
                 if node_info.get(node_id) and node_info[node_id].kind == "block"
             ]
 
-            def combined_key(node_id: str) -> Tuple[int, int, int, int, str, str]:
+            def combined_key(node_id: str) -> tuple[int, int, int, int, str, str]:
                 base = base_order_key(node_id)
                 end_bias = 1 if base[2] == 1 else 0
                 return (
@@ -884,25 +877,23 @@ class GridLayoutEngine(LayoutEngine):
             nodes.sort(key=combined_key)
             level_order[lvl] = nodes
 
-        incoming: Dict[str, List[str]] = {node_id: [] for node_id in all_nodes}
+        incoming: dict[str, list[str]] = {node_id: [] for node_id in all_nodes}
         for src, targets in adj.items():
             for tgt in targets:
                 incoming.setdefault(tgt, []).append(src)
 
-        block_children: Dict[str, List[str]] = {}
+        block_children: dict[str, list[str]] = {}
         for src, targets in adj.items():
             src_info = node_info.get(src)
             if not src_info or src_info.kind != "block":
                 continue
             block_targets = [
-                tgt
-                for tgt in targets
-                if node_info.get(tgt) and node_info[tgt].kind == "block"
+                tgt for tgt in targets if node_info.get(tgt) and node_info[tgt].kind == "block"
             ]
             if block_targets:
                 block_children[src] = block_targets
 
-        child_signatures: Dict[str, Tuple[str, ...]] = {}
+        child_signatures: dict[str, tuple[str, ...]] = {}
         for node_id, children in block_children.items():
             if children:
                 child_signatures[node_id] = tuple(sorted(children))
@@ -911,7 +902,7 @@ class GridLayoutEngine(LayoutEngine):
                 if len(nodes) < 2:
                     continue
                 original_index = {node_id: idx for idx, node_id in enumerate(nodes)}
-                first_index: Dict[Tuple[str, ...], int] = {}
+                first_index: dict[tuple[str, ...], int] = {}
                 for node_id in nodes:
                     signature = child_signatures.get(node_id)
                     if signature and signature not in first_index:
@@ -919,16 +910,23 @@ class GridLayoutEngine(LayoutEngine):
                 if not first_index:
                     continue
 
-                def group_key(node_id: str) -> Tuple[int, int, str]:
-                    idx = original_index[node_id]
+                def group_key(
+                    node_id: str,
+                    _original_index: dict[str, int] = original_index,
+                    _first_index: dict[tuple[str, ...], int] = first_index,
+                ) -> tuple[int, int, str]:
+                    idx = _original_index[node_id]
                     signature = child_signatures.get(node_id)
-                    anchor = first_index.get(signature, idx)
+                    if signature is None:
+                        anchor = idx
+                    else:
+                        anchor = _first_index.get(signature, idx)
                     return (anchor, idx, node_id)
 
                 nodes.sort(key=group_key)
                 level_order[lvl] = nodes
 
-        descendant_cache: Dict[str, int] = {}
+        descendant_cache: dict[str, int] = {}
 
         def descendant_count(node_id: str) -> int:
             cached = descendant_cache.get(node_id)
@@ -940,7 +938,7 @@ class GridLayoutEngine(LayoutEngine):
             descendant_cache[node_id] = total
             return total
 
-        primary_parent: Dict[str, str] = {}
+        primary_parent: dict[str, str] = {}
         for parent, targets in block_children.items():
             if len(targets) == 1:
                 primary_parent[targets[0]] = parent
@@ -948,8 +946,8 @@ class GridLayoutEngine(LayoutEngine):
             ranked = sorted(targets, key=lambda tgt: (-descendant_count(tgt), tgt))
             primary_parent[ranked[0]] = parent
 
-        def update_positions() -> Dict[str, float]:
-            current: Dict[str, float] = {}
+        def update_positions() -> dict[str, float]:
+            current: dict[str, float] = {}
             for nodes in level_order.values():
                 for idx, node_id in enumerate(nodes):
                     current[node_id] = float(idx)
@@ -965,17 +963,22 @@ class GridLayoutEngine(LayoutEngine):
                     continue
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
 
-                def anchor_parent(node_id: str) -> float:
+                def anchor_parent(
+                    node_id: str,
+                    _lvl: int = lvl,
+                    _positions: dict[str, float] = positions,
+                    _index: dict[str, int] = index,
+                ) -> float:
                     parents = [
                         parent
                         for parent in incoming.get(node_id, [])
-                        if levels.get(parent, 0) == lvl - 1
+                        if levels.get(parent, 0) == _lvl - 1
                         and node_info.get(parent)
                         and node_info[parent].kind == "block"
                     ]
                     if parents:
-                        return sum(positions.get(p, 0.0) for p in parents) / len(parents)
-                    return positions.get(node_id, float(index[node_id]))
+                        return sum(_positions.get(p, 0.0) for p in parents) / len(parents)
+                    return _positions.get(node_id, float(_index[node_id]))
 
                 nodes.sort(key=lambda n: (anchor_parent(n), index[n], n))
                 level_order[lvl] = nodes
@@ -987,26 +990,31 @@ class GridLayoutEngine(LayoutEngine):
                     continue
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
 
-                def anchor_child(node_id: str) -> float:
+                def anchor_child(
+                    node_id: str,
+                    _lvl: int = lvl,
+                    _positions: dict[str, float] = positions,
+                    _index: dict[str, int] = index,
+                ) -> float:
                     parents = [
                         parent
                         for parent in incoming.get(node_id, [])
-                        if levels.get(parent, 0) == lvl - 1
+                        if levels.get(parent, 0) == _lvl - 1
                         and node_info.get(parent)
                         and node_info[parent].kind == "block"
                     ]
                     if not parents:
-                        return positions.get(node_id, float(index[node_id]))
+                        return _positions.get(node_id, float(_index[node_id]))
                     children = [
                         child
                         for child in adj.get(node_id, [])
-                        if levels.get(child, 0) == lvl + 1
+                        if levels.get(child, 0) == _lvl + 1
                         and node_info.get(child)
                         and node_info[child].kind == "block"
                     ]
                     if children:
-                        return sum(positions.get(c, 0.0) for c in children) / len(children)
-                    return positions.get(node_id, float(index[node_id]))
+                        return sum(_positions.get(c, 0.0) for c in children) / len(children)
+                    return _positions.get(node_id, float(_index[node_id]))
 
                 nodes.sort(key=lambda n: (anchor_child(n), index[n], n))
                 level_order[lvl] = nodes
@@ -1021,7 +1029,7 @@ class GridLayoutEngine(LayoutEngine):
                 return float(max(1, branch_count))
             return 1.0
 
-        row_positions: Dict[str, float] = {}
+        row_positions: dict[str, float] = {}
         for lvl in range(max_level + 1):
             row = 0.0
             for node_id in level_order.get(lvl, []):
@@ -1034,9 +1042,9 @@ class GridLayoutEngine(LayoutEngine):
                 nodes = level_order.get(lvl, [])
                 if not nodes:
                     continue
-                desired: Dict[str, float] = {}
+                desired: dict[str, float] = {}
                 for node_id in nodes:
-                    parent_anchors: List[float] = []
+                    parent_anchors: list[float] = []
                     for parent in incoming.get(node_id, []):
                         if levels.get(parent, 0) == lvl - 1:
                             parent_anchors.append(row_positions.get(parent, 0.0))
@@ -1061,13 +1069,13 @@ class GridLayoutEngine(LayoutEngine):
                         desired[node_id] = base_row_positions.get(
                             node_id, row_positions.get(node_id, 0.0)
                         )
-                    parent = primary_parent.get(node_id)
+                    parent_id = primary_parent.get(node_id)
                     if (
-                        parent
-                        and levels.get(parent, 0) == lvl - 1
+                        parent_id
+                        and levels.get(parent_id, 0) == lvl - 1
                         and len(incoming.get(node_id, [])) == 1
                     ):
-                        desired[node_id] = row_positions.get(parent, desired[node_id])
+                        desired[node_id] = row_positions.get(parent_id, desired[node_id])
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
                 nodes.sort(key=lambda n: (desired.get(n, 0.0), index[n], n))
                 level_order[lvl] = nodes
@@ -1087,7 +1095,7 @@ class GridLayoutEngine(LayoutEngine):
             apply_row_smoothing()
         apply_row_smoothing()
 
-        occupied_rows: Dict[int, List[float]] = {}
+        occupied_rows: dict[int, list[float]] = {}
         for node_id, info in node_info.items():
             if info.kind != "block":
                 continue
@@ -1103,9 +1111,7 @@ class GridLayoutEngine(LayoutEngine):
         end_marker_nodes.sort(
             key=lambda node_id: (
                 levels.get(node_id, 0),
-                row_positions.get(
-                    node_info[node_id].block_id, row_positions.get(node_id, 0.0)
-                ),
+                row_positions.get(node_info[node_id].block_id, row_positions.get(node_id, 0.0)),
                 node_id,
             )
         )
@@ -1119,8 +1125,8 @@ class GridLayoutEngine(LayoutEngine):
             row_positions[node_id] = row
             occupied_rows.setdefault(level, []).append(row)
 
-        ordered: List[str] = []
-        row_counts: Dict[int, float] = {}
+        ordered: list[str] = []
+        row_counts: dict[int, float] = {}
         for lvl in range(max_level + 1):
             nodes = [node_id for node_id in all_nodes if levels.get(node_id, 0) == lvl]
             nodes.sort(

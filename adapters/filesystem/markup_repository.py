@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, List
 
 from domain.models import MarkupDocument
 from domain.ports.repositories import MarkupRepository
 
 
 class FileSystemMarkupRepository(MarkupRepository):
-    def load_all(self, directory: Path) -> List[MarkupDocument]:
+    def load_all(self, directory: Path) -> list[MarkupDocument]:
         return [document for _, document in self.load_all_with_paths(directory)]
 
-    def load_all_with_paths(self, directory: Path) -> List[tuple[Path, MarkupDocument]]:
-        documents: List[tuple[Path, MarkupDocument]] = []
+    def load_all_with_paths(self, directory: Path) -> list[tuple[Path, MarkupDocument]]:
+        documents: list[tuple[Path, MarkupDocument]] = []
         for path in sorted(self._iter_paths(directory)):
             text = path.read_text(encoding="utf-8")
             content = json.loads(self._strip_comments(text))
@@ -34,7 +34,7 @@ class FileSystemMarkupRepository(MarkupRepository):
             yield path
 
     def _strip_comments(self, content: str) -> str:
-        result_lines: List[str] = []
+        result_lines: list[str] = []
         for line in content.splitlines():
             in_string = False
             escaped = False

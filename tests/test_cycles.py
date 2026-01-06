@@ -1,23 +1,27 @@
 from __future__ import annotations
 
+from itertools import pairwise
+from typing import Any
+
+import pytest
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-import pytest
 
 
-def _arrow_endpoint(arrow: dict, index: int) -> tuple[float, float]:
+def _arrow_endpoint(arrow: dict[str, Any], index: int) -> tuple[float, float]:
     points = arrow.get("points", [])
     return (
         arrow.get("x", 0.0) + points[index][0],
         arrow.get("y", 0.0) + points[index][1],
     )
 
+
 def _is_orthogonal(points: list[list[float]]) -> bool:
     if len(points) < 2:
         return False
-    for (x1, y1), (x2, y2) in zip(points, points[1:]):
+    for (x1, y1), (x2, y2) in pairwise(points):
         if x1 != x2 and y1 != y2:
             return False
     return True

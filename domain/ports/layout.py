@@ -6,5 +6,4 @@ from domain.models import LayoutPlan, MarkupDocument
 
 
 class LayoutEngine(Protocol):
-    def build_plan(self, document: MarkupDocument) -> LayoutPlan:
-        ...
+    def build_plan(self, document: MarkupDocument) -> LayoutPlan: ...

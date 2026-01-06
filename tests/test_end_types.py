@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, cast
+
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import END_TYPE_COLORS, MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
@@ -47,7 +49,8 @@ def test_end_type_roundtrip_and_service_name() -> None:
     assert END_TYPE_COLORS["intermediate"] in colors
 
     serialized = markup.to_markup_dict()
-    assert serialized["procedures"][0]["end_block_ids"] == ["b::exit", "c::intermediate"]
+    procedures = cast(list[dict[str, Any]], serialized["procedures"])
+    assert procedures[0]["end_block_ids"] == ["b::exit", "c::intermediate"]
 
 
 def test_skip_empty_procedures_in_excalidraw() -> None:

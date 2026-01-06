@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -19,14 +19,14 @@ END_TYPE_COLORS = {
 INTERMEDIATE_BLOCK_COLOR = "#ffb347"
 
 
-def normalize_end_type(value: Optional[str]) -> Optional[str]:
+def normalize_end_type(value: str | None) -> str | None:
     if not value:
         return None
     candidate = str(value).strip().lower()
     return candidate if candidate in END_TYPE_VALUES else None
 
 
-def split_end_block_id(raw: str) -> Tuple[str, str]:
+def split_end_block_id(raw: str) -> tuple[str, str]:
     base = str(raw)
     if END_BLOCK_SEPARATOR in base:
         head, suffix = base.rsplit(END_BLOCK_SEPARATOR, 1)
@@ -36,7 +36,7 @@ def split_end_block_id(raw: str) -> Tuple[str, str]:
     return base, END_TYPE_DEFAULT
 
 
-def merge_end_types(existing: Optional[str], new: str) -> str:
+def merge_end_types(existing: str | None, new: str) -> str:
     if not existing:
         return new
     if existing == new:
@@ -58,15 +58,15 @@ class Procedure(BaseModel):
         min_length=1,
         validation_alias=AliasChoices("procedure_id", "proc_id"),
     )
-    procedure_name: Optional[str] = Field(
+    procedure_name: str | None = Field(
         default=None,
         validation_alias=AliasChoices("procedure_name", "proc_name"),
     )
-    start_block_ids: List[str] = Field(default_factory=list)
-    end_block_ids: List[str] = Field(default_factory=list)
-    end_block_types: Dict[str, str] = Field(default_factory=dict)
-    branches: Dict[str, List[str]] = Field(default_factory=dict)
-    block_id_to_block_name: Dict[str, str] = Field(default_factory=dict)
+    start_block_ids: list[str] = Field(default_factory=list)
+    end_block_ids: list[str] = Field(default_factory=list)
+    end_block_types: dict[str, str] = Field(default_factory=dict)
+    branches: dict[str, list[str]] = Field(default_factory=dict)
+    block_id_to_block_name: dict[str, str] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -75,13 +75,13 @@ class Procedure(BaseModel):
             return data
         end_block_ids = list(data.get("end_block_ids") or [])
         raw_end_block_types = dict(data.get("end_block_types") or {})
-        end_block_types: Dict[str, str] = {}
+        end_block_types: dict[str, str] = {}
         for block_id, end_type in raw_end_block_types.items():
             normalized = normalize_end_type(end_type)
             if normalized:
                 end_block_types[str(block_id)] = normalized
-        normalized_end_ids: List[str] = []
-        seen_end_ids: Set[str] = set()
+        normalized_end_ids: list[str] = []
+        seen_end_ids: set[str] = set()
 
         for raw in end_block_ids:
             raw_value = str(raw)
@@ -97,11 +97,11 @@ class Procedure(BaseModel):
                 )
 
         branches = data.get("branches") or {}
-        cleaned_branches: Dict[str, List[str]] = {}
+        cleaned_branches: dict[str, list[str]] = {}
         for source, targets in branches.items():
             if not isinstance(targets, list):
                 continue
-            cleaned_targets: List[str] = []
+            cleaned_targets: list[str] = []
             for target in targets:
                 if isinstance(target, str) and target.lower() == "end":
                     if source not in seen_end_ids:
@@ -123,24 +123,22 @@ class Procedure(BaseModel):
 
     @field_validator("branches", mode="after")
     @classmethod
-    def ensure_unique_targets(cls, branches: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    def ensure_unique_targets(cls, branches: dict[str, list[str]]) -> dict[str, list[str]]:
         return {key: sorted(set(value)) for key, value in branches.items()}
 
-    def block_ids(self) -> Set[str]:
-        referenced: Set[str] = set(self.start_block_ids) | set(self.end_block_ids) | set(
-            self.branches.keys()
+    def block_ids(self) -> set[str]:
+        referenced: set[str] = (
+            set(self.start_block_ids) | set(self.end_block_ids) | set(self.branches.keys())
         )
         for targets in self.branches.values():
             referenced.update(targets)
         return referenced
 
-    def to_markup_dict(self) -> dict:
-        payload = {
+    def to_markup_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
             "proc_id": self.procedure_id,
             "start_block_ids": _sorted_unique(list(self.start_block_ids)),
-            "end_block_ids": _merge_end_block_ids(
-                list(self.end_block_ids), self.end_block_types
-            ),
+            "end_block_ids": _merge_end_block_ids(list(self.end_block_ids), self.end_block_types),
             "branches": _sorted_branches(self.branches),
         }
         if self.procedure_name:
@@ -155,9 +153,9 @@ class MarkupDocument(BaseModel):
 
     finedog_unit_id: int
     markup_type: str
-    service_name: Optional[str] = None
-    procedures: List[Procedure] = Field(default_factory=list)
-    procedure_graph: Dict[str, List[str]] = Field(default_factory=dict)
+    service_name: str | None = None
+    procedures: list[Procedure] = Field(default_factory=list)
+    procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -176,8 +174,8 @@ class MarkupDocument(BaseModel):
 
     @field_validator("procedures", mode="after")
     @classmethod
-    def ensure_unique_procedure_ids(cls, procedures: List[Procedure]) -> List[Procedure]:
-        seen: Set[str] = set()
+    def ensure_unique_procedure_ids(cls, procedures: list[Procedure]) -> list[Procedure]:
+        seen: set[str] = set()
         for procedure in procedures:
             if procedure.procedure_id in seen:
                 msg = f"Duplicate procedure_id found: {procedure.procedure_id}"
@@ -185,8 +183,8 @@ class MarkupDocument(BaseModel):
             seen.add(procedure.procedure_id)
         return procedures
 
-    def to_markup_dict(self) -> dict:
-        payload = {
+    def to_markup_dict(self) -> dict[str, object]:
+        payload: dict[str, object] = {
             "finedog_unit_id": self.finedog_unit_id,
             "markup_type": self.markup_type,
             "procedures": [proc.to_markup_dict() for proc in self.procedures],
@@ -198,16 +196,16 @@ class MarkupDocument(BaseModel):
         return payload
 
 
-def _format_end_block_id(block_id: str, end_type: Optional[str]) -> str:
+def _format_end_block_id(block_id: str, end_type: str | None) -> str:
     normalized = normalize_end_type(end_type) or END_TYPE_DEFAULT
     if normalized == END_TYPE_DEFAULT:
         return block_id
     return f"{block_id}{END_BLOCK_SEPARATOR}{normalized}"
 
 
-def _sorted_unique(values: List[str]) -> List[str]:
-    seen: Set[str] = set()
-    result: List[str] = []
+def _sorted_unique(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
     for value in values:
         if value in seen:
             continue
@@ -216,19 +214,15 @@ def _sorted_unique(values: List[str]) -> List[str]:
     return result
 
 
-def _sorted_branches(branches: Dict[str, List[str]]) -> Dict[str, List[str]]:
+def _sorted_branches(branches: dict[str, list[str]]) -> dict[str, list[str]]:
     return {key: sorted(set(values)) for key, values in branches.items()}
 
 
-def _merge_end_block_ids(
-    block_ids: List[str], end_types: Dict[str, str]
-) -> List[str]:
+def _merge_end_block_ids(block_ids: list[str], end_types: dict[str, str]) -> list[str]:
     return [
         _format_end_block_id(block_id, end_types.get(block_id))
         for block_id in _sorted_unique(block_ids)
     ]
-
-
 
 
 @dataclass(frozen=True)
@@ -265,7 +259,7 @@ class MarkerPlacement:
     role: str  # "start_marker" or "end_marker"
     position: Point
     size: Size
-    end_type: Optional[str] = None
+    end_type: str | None = None
 
 
 @dataclass(frozen=True)
@@ -280,7 +274,7 @@ class ScenarioPlacement:
     size: Size
     title_text: str
     body_text: str
-    cycle_text: Optional[str]
+    cycle_text: str | None
     title_font_size: float
     body_font_size: float
     cycle_font_size: float
@@ -295,20 +289,20 @@ class ScenarioPlacement:
 
 @dataclass(frozen=True)
 class LayoutPlan:
-    frames: List[FramePlacement]
-    blocks: List[BlockPlacement]
-    markers: List[MarkerPlacement]
-    separators: List[SeparatorPlacement] = field(default_factory=list)
-    scenarios: List[ScenarioPlacement] = field(default_factory=list)
+    frames: list[FramePlacement]
+    blocks: list[BlockPlacement]
+    markers: list[MarkerPlacement]
+    separators: list[SeparatorPlacement] = field(default_factory=list)
+    scenarios: list[ScenarioPlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ExcalidrawDocument:
-    elements: List[dict]
-    app_state: dict
-    files: dict
+    elements: list[dict[str, Any]]
+    app_state: dict[str, Any]
+    files: dict[str, Any]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {
             "type": "excalidraw",
             "version": 2,

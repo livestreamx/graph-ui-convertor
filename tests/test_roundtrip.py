@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
@@ -15,8 +15,8 @@ def load_markup_fixture(name: str) -> MarkupDocument:
     return MarkupDocument.model_validate(json.loads(fixture_path.read_text()))
 
 
-def normalize(document: MarkupDocument) -> Dict[str, Any]:
-    normalized_procedures: List[Dict[str, Any]] = []
+def normalize(document: MarkupDocument) -> dict[str, Any]:
+    normalized_procedures: list[dict[str, Any]] = []
     for procedure in sorted(document.procedures, key=lambda p: p.procedure_id):
         normalized_procedures.append(
             {
@@ -189,3 +189,34 @@ def test_first_frame_centered_on_origin() -> None:
     center_y = frame.get("y", 0.0) + frame.get("height", 0.0) / 2
     assert abs(center_x) < 1e-6
     assert abs(center_y) < 1e-6
+
+
+def test_arrow_bindings_attach_to_elements() -> None:
+    payload = {
+        "finedog_unit_id": 23,
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    elements_by_id = {element.get("id"): element for element in excal.elements}
+    arrows = [element for element in excal.elements if element.get("type") == "arrow"]
+    assert arrows
+    for arrow in arrows:
+        for binding_key in ("startBinding", "endBinding"):
+            binding = arrow.get(binding_key) or {}
+            target_id = binding.get("elementId")
+            if not target_id:
+                continue
+            target = elements_by_id.get(target_id)
+            assert target is not None
+            bound = {item.get("id") for item in target.get("boundElements", [])}
+            assert arrow.get("id") in bound

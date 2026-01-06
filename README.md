@@ -30,6 +30,20 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 - `data/` – default runtime IO folders (created by `make dirs`).
 - `tests/` – pytest suite (round-trip, metadata checks).
 
+## Architecture (hexagonal)
+
+- Domain = pure conversion logic and data models.
+- Ports = `domain/ports/*` contracts for layout and repositories.
+- Adapters = filesystem IO + Excalidraw scene + layout implementation.
+- App = wiring only (CLI), no business logic.
+
+## Round-trip contract
+
+- All Excalidraw elements carry `customData.cjm` metadata.
+- Stable IDs are derived via uuid5; do not change without a migration plan.
+- Layout is deterministic; manual UI moves are preserved but not re-applied on rebuild.
+- Start/End markers have fixed sizes (180x90), labels and edge bindings.
+
 ## Development
 
 - Python `>=3.14,<3.15`, Poetry `2.2.x`.
@@ -44,6 +58,13 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 - Arrows: bound to blocks/markers/frames (startBinding/endBinding) so they follow elements; branch arrows get slight vertical offsets to reduce overlap.
 - Text fit: block/marker labels auto-shrink to stay within shapes; single start → `START`, multiple → global `START #N`.
 - Best effort: user-added blocks/text inside a frame become new blocks; arrows labeled/metadata as `branch` are ingested into `branches`.
+
+## Contributor workflow (LLM-friendly)
+
+1. Update domain logic first, keep adapters thin.
+2. Add/adjust tests for any behavioral changes.
+3. Run `pytest` (or `make test`) immediately after edits.
+4. Update `docs/FORMAT.md` if metadata shape changes.
 
 ## Limitations
 
