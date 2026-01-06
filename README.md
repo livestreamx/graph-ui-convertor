@@ -54,7 +54,7 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 ## Conversion notes
 
 - Layout: per-procedure grid with topological ordering; start markers left with extra offset, end markers right (or below if no space); blocks within a level reordered to reduce crossings; procedures placed left→right in JSON order and connected with arrows if no explicit cross-procedure edges.
-- Metadata: stored under `customData.cjm` with `schema_version`, `procedure_id`, `block_id`, `edge_type`, `role`, `finedog_unit_id`, `markup_type`. See `docs/FORMAT.md`.
+- Metadata: stored under `customData.cjm` with `schema_version`, `procedure_id`, `block_id`, `edge_type`, `role`, `markup_type`. See `docs/FORMAT.md`.
 - Arrows: bound to blocks/markers/frames (startBinding/endBinding) so they follow elements; branch arrows get slight vertical offsets to reduce overlap.
 - Text fit: block/marker labels auto-shrink to stay within shapes; single start → `START`, multiple → global `START #N`.
 - Best effort: user-added blocks/text inside a frame become new blocks; arrows labeled/metadata as `branch` are ingested into `branches`.

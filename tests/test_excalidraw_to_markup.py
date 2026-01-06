@@ -4,10 +4,9 @@ from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConve
 
 
 def _base_meta(procedure_id: str, block_id: str | None = None) -> dict[str, dict[str, object]]:
-    meta = {
+    meta: dict[str, object] = {
         "schema_version": "1.0",
         "procedure_id": procedure_id,
-        "finedog_unit_id": 1,
         "markup_type": "service",
     }
     if block_id:

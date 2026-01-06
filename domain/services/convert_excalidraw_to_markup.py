@@ -48,7 +48,7 @@ class ExcalidrawToMarkupConverter:
         markers = self._collect_markers(elements, frames)
         block_names = self._collect_block_names(elements, frames)
 
-        finedog_unit_id, markup_type, service_name = self._infer_globals(elements)
+        markup_type, service_name = self._infer_globals(elements)
         start_map: dict[str, set[str]] = defaultdict(set)
         end_map: dict[str, dict[str, str]] = defaultdict(dict)
         branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
@@ -111,7 +111,6 @@ class ExcalidrawToMarkupConverter:
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
         return MarkupDocument(
-            finedog_unit_id=finedog_unit_id,
             markup_type=markup_type,
             service_name=service_name,
             procedures=procedures,
@@ -378,15 +377,14 @@ class ExcalidrawToMarkupConverter:
         start_id = start_binding.get("elementId")
         return bool(isinstance(start_id, str) and start_id not in markers)
 
-    def _infer_globals(self, elements: Iterable[Element]) -> tuple[int, str, str | None]:
+    def _infer_globals(self, elements: Iterable[Element]) -> tuple[str, str | None]:
         for element in elements:
             meta = self._metadata(element)
-            finedog = meta.get("finedog_unit_id")
             markup_type = meta.get("markup_type")
             service_name = meta.get("service_name")
-            if finedog is not None and markup_type:
-                return int(finedog), str(markup_type), service_name
-        return 0, "service", None
+            if markup_type:
+                return str(markup_type), service_name
+        return "service", None
 
     def _merge_marker_end_types(
         self, markers: dict[str, MarkerCandidate]

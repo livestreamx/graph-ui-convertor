@@ -6,7 +6,6 @@ This project converts CJM markup JSON <-> Excalidraw scenes while preserving ide
 
 ```json
 {
-  "finedog_unit_id": 12345,
   "markup_type": "service",
   "finedog_unit_meta": {
     "service_name": "Support Flow"
@@ -52,7 +51,7 @@ This project converts CJM markup JSON <-> Excalidraw scenes while preserving ide
 Stored on every shape/arrow/text:
 
 - `schema_version`: `"1.0"`
-- `finedog_unit_id`, `markup_type`
+- `markup_type`
 - `service_name` (if present)
 - `procedure_id`
 - `block_id` (when applicable)

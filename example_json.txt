@@ -1,5 +1,4 @@
 {
-  "finedog_unit_id": 12345,  // int
   "markup_type": "service",  // service, system_service_search, system_task_processor, system_default
   "procedures": [
     {

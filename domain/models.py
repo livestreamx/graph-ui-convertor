@@ -151,7 +151,6 @@ class Procedure(BaseModel):
 class MarkupDocument(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
-    finedog_unit_id: int
     markup_type: str
     service_name: str | None = None
     procedures: list[Procedure] = Field(default_factory=list)
@@ -185,7 +184,6 @@ class MarkupDocument(BaseModel):
 
     def to_markup_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
-            "finedog_unit_id": self.finedog_unit_id,
             "markup_type": self.markup_type,
             "procedures": [proc.to_markup_dict() for proc in self.procedures],
         }

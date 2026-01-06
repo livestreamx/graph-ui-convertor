@@ -62,7 +62,6 @@ class MarkupToExcalidrawConverter:
         registry = ElementRegistry()
         base_metadata: Metadata = {
             "schema_version": METADATA_SCHEMA_VERSION,
-            "finedog_unit_id": document.finedog_unit_id,
             "markup_type": document.markup_type,
         }
         if document.service_name:

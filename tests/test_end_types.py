@@ -10,7 +10,6 @@ from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConve
 
 def test_end_type_roundtrip_and_service_name() -> None:
     payload = {
-        "finedog_unit_id": 9001,
         "markup_type": "service",
         "finedog_unit_meta": {"service_name": "Test Service"},
         "procedures": [
@@ -55,7 +54,6 @@ def test_end_type_roundtrip_and_service_name() -> None:
 
 def test_skip_empty_procedures_in_excalidraw() -> None:
     payload = {
-        "finedog_unit_id": 9002,
         "markup_type": "service",
         "procedures": [
             {"proc_id": "empty"},

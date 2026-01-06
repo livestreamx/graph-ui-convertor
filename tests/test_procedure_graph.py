@@ -8,7 +8,6 @@ from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConve
 
 def _sample_markup() -> MarkupDocument:
     payload = {
-        "finedog_unit_id": 42,
         "markup_type": "service",
         "procedures": [
             {
@@ -82,7 +81,6 @@ def test_block_name_mapping_roundtrip() -> None:
 
 def test_proc_name_used_for_frame_label_and_roundtrip() -> None:
     payload = {
-        "finedog_unit_id": 7,
         "markup_type": "service",
         "procedures": [
             {
@@ -112,7 +110,6 @@ def test_proc_name_used_for_frame_label_and_roundtrip() -> None:
 
 def test_disconnected_procedure_graphs_are_separated() -> None:
     payload = {
-        "finedog_unit_id": 8,
         "markup_type": "service",
         "procedures": [
             {
@@ -138,7 +135,6 @@ def test_disconnected_procedure_graphs_are_separated() -> None:
 
 def test_separators_drawn_between_disconnected_components() -> None:
     payload = {
-        "finedog_unit_id": 10,
         "markup_type": "service",
         "procedures": [
             {
@@ -193,7 +189,6 @@ def test_separators_drawn_between_disconnected_components() -> None:
 
 def test_no_procedure_edges_without_links() -> None:
     payload = {
-        "finedog_unit_id": 11,
         "markup_type": "service",
         "procedures": [
             {
@@ -226,7 +221,6 @@ def test_no_procedure_edges_without_links() -> None:
 
 def test_scenarios_describe_components() -> None:
     payload = {
-        "finedog_unit_id": 12,
         "markup_type": "service",
         "procedures": [
             {
@@ -338,7 +332,6 @@ def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
     procedure_graph = {f"p{idx}": [f"p{idx+1}"] for idx in range(1, 7)}
 
     payload = {
-        "finedog_unit_id": 13,
         "markup_type": "service",
         "procedures": procedures,
         "procedure_graph": procedure_graph,
@@ -359,7 +352,6 @@ def test_scenario_procedure_list_prioritizes_starts_when_trimmed() -> None:
 
 def test_scenario_combinations_fallback_to_end_blocks() -> None:
     payload = {
-        "finedog_unit_id": 14,
         "markup_type": "service",
         "procedures": [
             {
@@ -386,7 +378,6 @@ def test_scenario_combinations_fallback_to_end_blocks() -> None:
 
 def test_scenario_combinations_use_procedure_graph_when_no_branches() -> None:
     payload = {
-        "finedog_unit_id": 15,
         "markup_type": "service",
         "procedures": [
             {
@@ -427,7 +418,6 @@ def test_scenario_combinations_use_procedure_graph_when_no_branches() -> None:
 
 def test_cycle_layout_prefers_order_hint() -> None:
     payload = {
-        "finedog_unit_id": 16,
         "markup_type": "service",
         "procedures": [
             {
@@ -456,7 +446,6 @@ def test_cycle_layout_prefers_order_hint() -> None:
 
 def test_scenario_cycle_line_is_red() -> None:
     payload = {
-        "finedog_unit_id": 17,
         "markup_type": "service",
         "procedures": [
             {
@@ -497,7 +486,6 @@ def test_scenario_cycle_line_is_red() -> None:
 
 def test_multiple_dependencies_stack_vertically() -> None:
     payload = {
-        "finedog_unit_id": 9,
         "markup_type": "service",
         "procedures": [
             {

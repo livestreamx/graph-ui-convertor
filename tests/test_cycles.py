@@ -29,7 +29,6 @@ def _is_orthogonal(points: list[list[float]]) -> bool:
 
 def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
     payload = {
-        "finedog_unit_id": 1,
         "markup_type": "service",
         "procedures": [
             {
@@ -91,7 +90,6 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
 
 def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
     payload = {
-        "finedog_unit_id": 2,
         "markup_type": "service",
         "procedures": [
             {

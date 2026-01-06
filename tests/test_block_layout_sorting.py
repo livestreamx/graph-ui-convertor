@@ -14,7 +14,6 @@ def load_markup_fixture(name: str) -> MarkupDocument:
 
 def test_layout_orders_targets_by_incoming_neighbors() -> None:
     payload = {
-        "finedog_unit_id": 101,
         "markup_type": "service",
         "procedures": [
             {
@@ -41,7 +40,6 @@ def test_layout_orders_targets_by_incoming_neighbors() -> None:
 
 def test_end_markers_follow_block_order() -> None:
     payload = {
-        "finedog_unit_id": 202,
         "markup_type": "service",
         "procedures": [
             {

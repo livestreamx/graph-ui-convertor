@@ -27,7 +27,6 @@ def normalize(document: MarkupDocument) -> dict[str, Any]:
             }
         )
     return {
-        "finedog_unit_id": document.finedog_unit_id,
         "markup_type": document.markup_type,
         "procedures": normalized_procedures,
     }
@@ -62,7 +61,6 @@ def test_branch_metadata_persists() -> None:
 
 def test_branch_edges_match_markup() -> None:
     payload = {
-        "finedog_unit_id": 11,
         "markup_type": "service",
         "procedures": [
             {
@@ -109,7 +107,6 @@ def test_metadata_contains_globals() -> None:
     for element in excal.elements:
         meta = element.get("customData", {}).get("cjm", {})
         assert meta.get("schema_version") == "1.0"
-        assert meta.get("finedog_unit_id") == markup.finedog_unit_id
         assert meta.get("markup_type") == markup.markup_type
 
 
@@ -139,7 +136,6 @@ def test_roundtrip_with_links_fixture() -> None:
 
 def test_extra_block_names_not_rendered() -> None:
     payload = {
-        "finedog_unit_id": 21,
         "markup_type": "service",
         "procedures": [
             {
@@ -165,7 +161,6 @@ def test_extra_block_names_not_rendered() -> None:
 
 def test_first_frame_centered_on_origin() -> None:
     payload = {
-        "finedog_unit_id": 22,
         "markup_type": "service",
         "procedures": [
             {
@@ -193,7 +188,6 @@ def test_first_frame_centered_on_origin() -> None:
 
 def test_arrow_bindings_attach_to_elements() -> None:
     payload = {
-        "finedog_unit_id": 23,
         "markup_type": "service",
         "procedures": [
             {
