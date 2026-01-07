@@ -36,6 +36,8 @@ catalog:
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
 - `unknown_value`: Placeholder when a field is missing.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
+- `excalidraw_base_url`: Catalog generates “Open Excalidraw” links by encoding the scene JSON into
+  the URL fragment (`#json=...`). This works with the official Excalidraw UI for local/demo use.
 
 ## Dot-path resolution
 

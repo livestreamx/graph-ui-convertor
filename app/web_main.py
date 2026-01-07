@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import orjson
+from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_catalog_source import FileSystemMarkupCatalogSource
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
@@ -112,6 +113,17 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
+        excalidraw_open_url = context.settings.catalog.excalidraw_base_url
+        scene_path = context.settings.catalog.excalidraw_in_dir / item.excalidraw_rel_path
+        try:
+            scene_payload = context.scene_repo.load(scene_path)
+            if scene_payload.get("elements") is not None:
+                excalidraw_open_url = build_excalidraw_url(
+                    context.settings.catalog.excalidraw_base_url,
+                    scene_payload,
+                )
+        except FileNotFoundError:
+            pass
         return templates.TemplateResponse(
             "catalog_detail.html",
             {
@@ -119,6 +131,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "settings": context.settings,
                 "item": item,
                 "index": index_data,
+                "excalidraw_open_url": excalidraw_open_url,
             },
         )
 
