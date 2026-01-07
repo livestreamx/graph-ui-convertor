@@ -1,0 +1,132 @@
+{
+  "generated_at": "2026-01-07T13:16:02.433264+00:00",
+  "group_by": [
+    "markup_type"
+  ],
+  "title_field": "service_name",
+  "tag_fields": [],
+  "sort_by": "title",
+  "sort_order": "asc",
+  "unknown_value": "unknown",
+  "items": [
+    {
+      "scene_id": "advanced-cd43d72eea",
+      "title": "advanced",
+      "tags": [],
+      "updated_at": "2025-12-21T06:21:24.520640+00:00",
+      "markup_type": "system_task_processor",
+      "finedog_unit_id": "67890",
+      "group_values": {
+        "markup_type": "system_task_processor"
+      },
+      "fields": {
+        "service_name": "unknown",
+        "markup_type": "system_task_processor"
+      },
+      "markup_rel_path": "advanced.json",
+      "excalidraw_rel_path": "advanced.excalidraw"
+    },
+    {
+      "scene_id": "basic-e1399b8c92",
+      "title": "basic",
+      "tags": [],
+      "updated_at": "2025-12-21T06:21:19.414324+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "12345",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "unknown",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "basic.json",
+      "excalidraw_rel_path": "basic.excalidraw"
+    },
+    {
+      "scene_id": "with-links-cb821a2ab1",
+      "title": "with_links",
+      "tags": [],
+      "updated_at": "2025-12-25T07:02:39.832484+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "12345",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "unknown",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "with_links.json",
+      "excalidraw_rel_path": "with_links.excalidraw"
+    },
+    {
+      "scene_id": "yet-another-5986356a35",
+      "title": "yet_another",
+      "tags": [],
+      "updated_at": "2025-12-21T09:07:14.015180+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "12345",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "unknown",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "yet_another.json",
+      "excalidraw_rel_path": "yet_another.excalidraw"
+    },
+    {
+      "scene_id": "39468-6feb3c7e77",
+      "title": "Обслуживание по отключению пополнений по номеру телефона",
+      "tags": [],
+      "updated_at": "2026-01-03T09:09:05.194834+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "39468",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "Обслуживание по отключению пополнений по номеру телефона",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "39468.json",
+      "excalidraw_rel_path": "39468.excalidraw"
+    },
+    {
+      "scene_id": "60371-957190a3d8",
+      "title": "Обслуживание по продукту Золото",
+      "tags": [],
+      "updated_at": "2026-01-03T09:09:03.741281+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "60371",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "Обслуживание по продукту Золото",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "60371.json",
+      "excalidraw_rel_path": "60371.excalidraw"
+    },
+    {
+      "scene_id": "43285-a864e1b3e2",
+      "title": "Обслуживание по снятию обеспечительных мер юридических лиц",
+      "tags": [],
+      "updated_at": "2026-01-03T09:09:05.990052+00:00",
+      "markup_type": "service",
+      "finedog_unit_id": "43285",
+      "group_values": {
+        "markup_type": "service"
+      },
+      "fields": {
+        "service_name": "Обслуживание по снятию обеспечительных мер юридических лиц",
+        "markup_type": "service"
+      },
+      "markup_rel_path": "43285.json",
+      "excalidraw_rel_path": "43285.excalidraw"
+    }
+  ]
+}

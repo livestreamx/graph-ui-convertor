@@ -4,31 +4,31 @@ import json
 from pathlib import Path
 
 import typer
+import uvicorn
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
+from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
+from adapters.filesystem.markup_catalog_source import FileSystemMarkupCatalogSource
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
+from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from rich.console import Console
 
+from app.config import AppSettings, load_settings
+
 app = typer.Typer(no_args_is_help=True)
 convert_app = typer.Typer(no_args_is_help=True)
+catalog_app = typer.Typer(no_args_is_help=True)
+pipeline_app = typer.Typer(no_args_is_help=True)
 app.add_typer(convert_app, name="convert")
+app.add_typer(catalog_app, name="catalog")
+app.add_typer(pipeline_app, name="pipeline")
 console = Console()
 
 
-@convert_app.command("to-excalidraw")
-def convert_to_excalidraw(
-    input_dir: Path = typer.Option(
-        Path("data/markup"),
-        help="Directory with markup JSON files.",
-    ),
-    output_dir: Path = typer.Option(
-        Path("data/excalidraw_in"),
-        help="Directory to write Excalidraw scene files.",
-    ),
-) -> None:
+def _run_convert_to_excalidraw(input_dir: Path, output_dir: Path) -> None:
     markup_repo = FileSystemMarkupRepository()
     excal_repo = FileSystemExcalidrawRepository()
     layout = GridLayoutEngine()
@@ -47,17 +47,7 @@ def convert_to_excalidraw(
         console.print(f"[green]Wrote[/] {target_path}")
 
 
-@convert_app.command("from-excalidraw")
-def convert_from_excalidraw(
-    input_dir: Path = typer.Option(
-        Path("data/excalidraw_out"),
-        help="Directory with .excalidraw/.json files from UI export.",
-    ),
-    output_dir: Path = typer.Option(
-        Path("data/roundtrip"),
-        help="Directory to write reconstructed markup JSON files.",
-    ),
-) -> None:
+def _run_convert_from_excalidraw(input_dir: Path, output_dir: Path) -> None:
     excal_repo = FileSystemExcalidrawRepository()
     markup_repo = FileSystemMarkupRepository()
     converter = ExcalidrawToMarkupConverter()
@@ -73,6 +63,49 @@ def convert_from_excalidraw(
         target_path = output_dir / f"{path.stem}.json"
         markup_repo.save(markup, target_path)
         console.print(f"[green]Wrote[/] {target_path}")
+
+
+def _run_build_index_from_settings(settings: AppSettings) -> None:
+    builder = BuildCatalogIndex(
+        FileSystemMarkupCatalogSource(),
+        FileSystemCatalogIndexRepository(),
+    )
+    index = builder.build(settings.catalog.to_index_config())
+    console.print(f"[green]Catalog index ready:[/] {settings.catalog.index_path}")
+    console.print(f"[green]Scenes indexed:[/] {len(index.items)}")
+
+
+def _run_build_index(config_path: Path) -> None:
+    settings = load_settings(config_path)
+    _run_build_index_from_settings(settings)
+
+
+@convert_app.command("to-excalidraw")
+def convert_to_excalidraw(
+    input_dir: Path = typer.Option(
+        Path("data/markup"),
+        help="Directory with markup JSON files.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("data/excalidraw_in"),
+        help="Directory to write Excalidraw scene files.",
+    ),
+) -> None:
+    _run_convert_to_excalidraw(input_dir, output_dir)
+
+
+@convert_app.command("from-excalidraw")
+def convert_from_excalidraw(
+    input_dir: Path = typer.Option(
+        Path("data/excalidraw_out"),
+        help="Directory with .excalidraw/.json files from UI export.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("data/roundtrip"),
+        help="Directory to write reconstructed markup JSON files.",
+    ),
+) -> None:
+    _run_convert_from_excalidraw(input_dir, output_dir)
 
 
 @app.command("validate")
@@ -95,6 +128,46 @@ def validate(
     except Exception as exc:
         console.print(f"[red]Validation failed:[/] {exc}")
         raise typer.Exit(code=1) from exc
+
+
+@catalog_app.command("build-index")
+def catalog_build_index(
+    config: Path = typer.Option(
+        Path("config/app.yaml"),
+        help="Path to catalog config YAML.",
+    ),
+) -> None:
+    _run_build_index(config)
+
+
+@catalog_app.command("serve")
+def catalog_serve(
+    host: str = typer.Option("0.0.0.0", help="Host to bind the Catalog UI."),
+    port: int = typer.Option(8088, help="Port to bind the Catalog UI."),
+    config: Path = typer.Option(
+        Path("config/app.yaml"),
+        help="Path to catalog config YAML.",
+    ),
+) -> None:
+    settings = load_settings(config)
+    from app.web_main import create_app
+
+    uvicorn.run(create_app(settings), host=host, port=port)
+
+
+@pipeline_app.command("build-all")
+def pipeline_build_all(
+    config: Path = typer.Option(
+        Path("config/app.yaml"),
+        help="Path to catalog config YAML.",
+    ),
+) -> None:
+    settings = load_settings(config)
+    _run_convert_to_excalidraw(
+        settings.catalog.markup_dir,
+        settings.catalog.excalidraw_in_dir,
+    )
+    _run_build_index_from_settings(settings)
 
 
 if __name__ == "__main__":

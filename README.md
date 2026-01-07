@@ -11,6 +11,11 @@ cp examples/markup/*.json data/markup/
 make demo                  # convert markup -> Excalidraw + start UI (default: http://localhost:5010)
 # In browser: import from data/excalidraw_in, edit, export to data/excalidraw_out
 make convert-from-ui       # rebuild markup from exported Excalidraw
+
+# Catalog UI (local)
+cjm pipeline build-all
+cjm catalog serve --config config/app.yaml
+# Open http://localhost:8080/catalog
 ```
 
 ## Commands (Typer CLI)
@@ -18,6 +23,9 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 - `cjm convert to-excalidraw --input-dir data/markup --output-dir data/excalidraw_in`
 - `cjm convert from-excalidraw --input-dir data/excalidraw_out --output-dir data/roundtrip`
 - `cjm validate <path>` to sanity-check markup or Excalidraw JSON.
+- `cjm catalog build-index --config config/app.yaml`
+- `cjm catalog serve --host 0.0.0.0 --port 8080 --config config/app.yaml`
+- `cjm pipeline build-all` (convert + index build)
 
 ## Project layout
 
@@ -27,6 +35,8 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 - `adapters/layout/` – deterministic grid layout engine.
 - `examples/markup/` – sample markup JSON inputs.
 - `docs/FORMAT.md` – mapping + metadata schema.
+- `docs/CONFIG.md` – catalog configuration schema and examples.
+- `docs/K8S.md` – Kubernetes deployment notes and manifests.
 - `data/` – default runtime IO folders (created by `make dirs`).
 - `tests/` – pytest suite (round-trip, metadata checks).
 
@@ -70,3 +80,10 @@ make convert-from-ui       # rebuild markup from exported Excalidraw
 
 - Relies on Excalidraw JSON export/import; no network services.
 - Uses deterministic layout; manual repositioning in UI is preserved but not re-applied on rebuild.
+
+## Catalog UI workflow
+
+1. Build scenes + index: `cjm pipeline build-all`.
+2. Open the catalog: `cjm catalog serve` and visit `/catalog`.
+3. Download `.excalidraw`, edit in Excalidraw UI, export `.excalidraw`.
+4. Upload via the Catalog detail page, then click “Convert back”.

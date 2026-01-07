@@ -18,6 +18,7 @@ MARKUP_DIR ?= $(DATA_DIR)/markup
 EXCALIDRAW_IN_DIR ?= $(DATA_DIR)/excalidraw_in
 EXCALIDRAW_OUT_DIR ?= $(DATA_DIR)/excalidraw_out
 ROUNDTRIP_DIR ?= $(DATA_DIR)/roundtrip
+CATALOG_DIR ?= $(DATA_DIR)/catalog
 VENV_DIR ?= .venv
 VENV_BIN ?= $(VENV_DIR)/bin
 VENV_PYTHON ?= $(VENV_BIN)/python
@@ -83,7 +84,7 @@ bootstrap: install dirs
 
 .PHONY: dirs
 dirs:
-	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(ROUNDTRIP_DIR)
+	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(ROUNDTRIP_DIR) $(CATALOG_DIR)
 
 # -------- Quality --------
 

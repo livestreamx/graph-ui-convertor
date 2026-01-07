@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="controls">
+    <form
+      class="search-bar"
+      hx-get="/catalog"
+      hx-target="#catalog-list"
+      hx-push-url="true"
+    >
+      <input
+        type="search"
+        name="q"
+        value="{{ query }}"
+        placeholder="Search by title, tag, markup type"
+        hx-trigger="keyup changed delay:350ms, search"
+      />
+      {% for field, value in group_filters.items() %}
+        <input type="hidden" name="group" value="{{ field }}:{{ value }}" />
+      {% endfor %}
+    </form>
+    <div class="filters">
+      {% if group_filters %}
+        <div class="filter-label">Active filters</div>
+        <div class="filter-row">
+          {% for field, value in group_filters.items() %}
+            <span class="filter-pill">{{ field }}: {{ value }}</span>
+          {% endfor %}
+          <a class="ghost-button" href="/catalog{% if query %}?q={{ query|urlencode }}{% endif %}">Clear filters</a>
+        </div>
+      {% else %}
+        <div class="filter-hint">Filter by group values inside each section.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <div id="catalog-list">
+    {% include "catalog_list.html" %}
+  </div>
+{% endblock %}

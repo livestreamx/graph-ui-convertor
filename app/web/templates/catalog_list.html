@@ -1,0 +1,9 @@
+{% from "macros.html" import render_group %}
+
+<div class="list-meta">
+  <span>{{ items | length }} scenes</span>
+</div>
+
+{% for group in groups %}
+  {{ render_group(group, query) }}
+{% endfor %}
