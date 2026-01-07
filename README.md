@@ -8,13 +8,14 @@ Round-trip converter between CJM markup graphs and Excalidraw scenes with determ
 make bootstrap             # create .venv, install Poetry + deps
 open Docker Desktop or start Colima
 cp examples/markup/*.json data/markup/
-make demo                  # convert markup -> Excalidraw + start UI (default: http://localhost:5010)
-# In browser: import from data/excalidraw_in, edit, export to data/excalidraw_out
+make demo                  # convert markup -> Excalidraw + start UIs
+# In browser: open Excalidraw (http://localhost:5010) and Catalog (http://localhost:8080/catalog)
+# Import from data/excalidraw_in, edit, export to data/excalidraw_out
 make convert-from-ui       # rebuild markup from exported Excalidraw
 
 # Catalog UI (local)
 cjm pipeline build-all
-cjm catalog serve --config config/app.yaml
+cjm catalog serve --config config/catalog/app.yaml
 # Open http://localhost:8080/catalog
 ```
 
@@ -23,9 +24,9 @@ cjm catalog serve --config config/app.yaml
 - `cjm convert to-excalidraw --input-dir data/markup --output-dir data/excalidraw_in`
 - `cjm convert from-excalidraw --input-dir data/excalidraw_out --output-dir data/roundtrip`
 - `cjm validate <path>` to sanity-check markup or Excalidraw JSON.
-- `cjm catalog build-index --config config/app.yaml`
-- `cjm catalog serve --host 0.0.0.0 --port 8080 --config config/app.yaml`
-- `cjm pipeline build-all` (convert + index build)
+- `cjm catalog build-index --config config/catalog/app.yaml`
+- `cjm catalog serve --host 0.0.0.0 --port 8080 --config config/catalog/app.yaml`
+- `cjm pipeline build-all` (convert + index build; config defaults to `config/catalog/app.yaml`)
 
 ## Project layout
 
@@ -37,6 +38,9 @@ cjm catalog serve --config config/app.yaml
 - `docs/FORMAT.md` – mapping + metadata schema.
 - `docs/CONFIG.md` – catalog configuration schema and examples.
 - `docs/K8S.md` – Kubernetes deployment notes and manifests.
+- `config/catalog/` – catalog config variants (local/docker/k8s).
+- `docker/catalog/` – Catalog UI Dockerfile.
+- `docker/compose.demo.yaml` – local demo composition (catalog + excalidraw).
 - `data/` – default runtime IO folders (created by `make dirs`).
 - `tests/` – pytest suite (round-trip, metadata checks).
 

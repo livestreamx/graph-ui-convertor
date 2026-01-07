@@ -1,0 +1,16 @@
+catalog:
+  title: "CJM Catalog"
+  markup_dir: "/data/markup"
+  excalidraw_in_dir: "/data/excalidraw_in"
+  excalidraw_out_dir: "/data/excalidraw_out"
+  roundtrip_dir: "/data/roundtrip"
+  index_path: "/data/catalog/index.json"
+  group_by:
+    - "markup_type"
+  title_field: "service_name"
+  tag_fields: []
+  sort_by: "title"
+  sort_order: "asc"
+  unknown_value: "unknown"
+  excalidraw_base_url: "http://localhost:5010"
+  rebuild_token: ""

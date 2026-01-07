@@ -11,6 +11,13 @@ EXCALIDRAW_CONTAINER ?= excalidraw
 EXCALIDRAW_PORT ?= 5010
 EXCALIDRAW_URL ?= http://localhost:$(EXCALIDRAW_PORT)
 ALLOW_DOCKER_FAILURE ?= 0
+CATALOG_CONTAINER ?= cjm-catalog
+CATALOG_IMAGE ?= cjm-catalog:latest
+CATALOG_PORT ?= 8080
+CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
+CATALOG_CONFIG ?= config/catalog/app.yaml
+CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.yaml
+CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 
 # ---- Paths ----
 DATA_DIR ?= data
@@ -39,9 +46,12 @@ help:
 	@echo "  make fmt              - format code"
 	@echo "  make excalidraw-up    - start Excalidraw UI in Docker on $(EXCALIDRAW_URL)"
 	@echo "  make excalidraw-down  - stop Excalidraw UI"
+	@echo "  make catalog-up       - start Catalog UI in Docker on $(CATALOG_URL)"
+	@echo "  make catalog-down     - stop Catalog UI"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
-	@echo "  make demo             - convert-to-ui + start UI"
+	@echo "  make demo             - convert-to-ui + start UIs"
+	@echo "  make down             - stop demo services"
 	@echo "    (set ALLOW_DOCKER_FAILURE=0 to fail if Docker/Colima unavailable)"
 	@echo ""
 
@@ -134,12 +144,37 @@ excalidraw-down:
 	@docker rm -f $(EXCALIDRAW_CONTAINER) >/dev/null 2>&1 || true
 	@echo "Excalidraw stopped."
 
+# -------- Catalog UI (Docker) --------
+
+.PHONY: catalog-up
+catalog-up: dirs
+	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
+	@echo "Building Catalog image..."
+	@docker build -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
+	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
+	@docker run --rm -d --name $(CATALOG_CONTAINER) \
+		-p $(CATALOG_PORT):8080 \
+		-e CJM_CONFIG_PATH=/config/app.yaml \
+		-v $(PWD)/$(DATA_DIR):/data \
+		-v $(PWD)/$(CATALOG_DOCKER_CONFIG):/config/app.yaml:ro \
+		$(CATALOG_IMAGE)
+	@echo "Catalog started on $(CATALOG_URL)"
+
+.PHONY: catalog-down
+catalog-down:
+	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
+	@echo "Catalog stopped."
+
 .PHONY: demo
-demo: convert-to-ui excalidraw-up
+demo: convert-to-ui excalidraw-up catalog-up
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(EXCALIDRAW_URL)"
 	@echo "  2) Import .excalidraw/.json from: $(EXCALIDRAW_IN_DIR)"
 	@echo "  3) Edit, then Export as .excalidraw into: $(EXCALIDRAW_OUT_DIR)"
-	@echo "  4) Run: make convert-from-ui"
+	@echo "  4) Open catalog: $(CATALOG_URL)/catalog"
+	@echo "  5) Upload edited .excalidraw and click Convert back"
 	@echo ""
+
+.PHONY: down
+down: catalog-down excalidraw-down

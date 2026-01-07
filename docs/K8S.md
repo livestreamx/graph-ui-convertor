@@ -17,7 +17,7 @@ Example PVC: `k8s/pvc.yaml`.
 `k8s/catalog-deployment.yaml` includes a Deployment (replicas=2), Service, and Ingress. It expects:
 
 - RWX PVC named `cjm-shared-data`
-- ConfigMap named `cjm-catalog-config` containing `app.yaml`
+- ConfigMap named `cjm-catalog-config` containing `app.yaml` (see `config/catalog/app.k8s.yaml`)
 - `CJM_CONFIG_PATH=/config/app.yaml`
 
 ## Excalidraw service

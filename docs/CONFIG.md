@@ -1,7 +1,8 @@
 # Catalog configuration
 
-The Catalog UI reads settings from `config/app.yaml` (or a custom path passed with `--config`
-/ `CJM_CONFIG_PATH`). All paths are relative to the process working directory unless absolute.
+The Catalog UI reads settings from `config/catalog/app.yaml` (or a custom path passed with
+`--config` / `CJM_CONFIG_PATH`). All paths are relative to the process working directory unless
+absolute.
 
 ## Schema
 
@@ -52,5 +53,11 @@ nesting delimiter. Example:
 
 ```bash
 export CJM__CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM_CONFIG_PATH="/config/app.yaml"
+export CJM_CONFIG_PATH="config/catalog/app.yaml"
 ```
+
+## Bundled configs
+
+- `config/catalog/app.yaml` – local defaults (data/ paths).
+- `config/catalog/app.docker.yaml` – Docker demo paths (`/data`).
+- `config/catalog/app.k8s.yaml` – Kubernetes example paths.

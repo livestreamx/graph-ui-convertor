@@ -9,7 +9,8 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource, YamlConfigSettingsSource
 
-DEFAULT_CONFIG_PATH = Path("config/app.yaml")
+DEFAULT_CONFIG_PATH = Path("config/catalog/app.yaml")
+LEGACY_CONFIG_PATH = Path("config/app.yaml")
 
 
 class CatalogSettings(BaseModel):
@@ -89,6 +90,8 @@ def load_settings(config_path: Path | None = None) -> AppSettings:
         resolved_path = Path(env_path)
     elif DEFAULT_CONFIG_PATH.exists():
         resolved_path = DEFAULT_CONFIG_PATH
+    elif LEGACY_CONFIG_PATH.exists():
+        resolved_path = LEGACY_CONFIG_PATH
 
     previous = AppSettings._yaml_path
     try:

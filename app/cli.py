@@ -133,7 +133,7 @@ def validate(
 @catalog_app.command("build-index")
 def catalog_build_index(
     config: Path = typer.Option(
-        Path("config/app.yaml"),
+        Path("config/catalog/app.yaml"),
         help="Path to catalog config YAML.",
     ),
 ) -> None:
@@ -143,9 +143,9 @@ def catalog_build_index(
 @catalog_app.command("serve")
 def catalog_serve(
     host: str = typer.Option("0.0.0.0", help="Host to bind the Catalog UI."),
-    port: int = typer.Option(8088, help="Port to bind the Catalog UI."),
+    port: int = typer.Option(8080, help="Port to bind the Catalog UI."),
     config: Path = typer.Option(
-        Path("config/app.yaml"),
+        Path("config/catalog/app.yaml"),
         help="Path to catalog config YAML.",
     ),
 ) -> None:
@@ -158,7 +158,7 @@ def catalog_serve(
 @pipeline_app.command("build-all")
 def pipeline_build_all(
     config: Path = typer.Option(
-        Path("config/app.yaml"),
+        Path("config/catalog/app.yaml"),
         help="Path to catalog config YAML.",
     ),
 ) -> None:
