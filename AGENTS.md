@@ -50,6 +50,7 @@ MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3
 - Любые изменения кода требуют новых/обновленных тестов.
 - После правок обязательно запускай `make test` или `pytest`.
 - При изменениях лейаута/стрелок фиксируй кейсы в `tests/` (позиции, роли, bindings).
+- При изменениях приложения обновляй документацию в `docs/en` и `docs/ru`, а также русскую секцию `README.md`.
 - По завершению работ обязательно прогоняй линтеры/форматтеры (`make lint`, `make fmt`) и убеждайся, что код соответствует стандартам.
 
 ## Agent Notes
@@ -63,4 +64,4 @@ MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3
 
 - Конвертация в UI: `make convert-to-ui` → `data/excalidraw_in`.
 - Обратная конвертация: `make convert-from-ui` → `data/roundtrip`.
-- Для новых форматов обновляй `docs/FORMAT.md` и тесты round-trip.
+- Для новых форматов обновляй `docs/en/FORMAT.md`, `docs/ru/FORMAT.md` и тесты round-trip.

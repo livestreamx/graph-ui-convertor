@@ -69,6 +69,12 @@ catalog:
 - `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
 - `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
 
+## Large diagrams
+
+- Same-origin Excalidraw allows scene injection via localStorage, bypassing URL length limits.
+- Cross-origin Excalidraw uses `#json` only while the URL is short enough; otherwise users should download and import the `.excalidraw` file.
+- Very large scenes can exceed browser localStorage limits (often ~5MB) or be slow to render; rely on the manual import flow in that case.
+
 ## Dot-path resolution
 
 Dot paths traverse nested objects in the raw markup JSON. Examples:

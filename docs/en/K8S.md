@@ -49,6 +49,9 @@ local storage (recommended for large diagrams). In that case set:
 You can still expose Excalidraw with its own ingress (for direct access), but the Catalog should
 use the proxy path to keep same-origin behavior.
 
+Note: localStorage has browser-specific size limits. Very large scenes may still require the
+Download + Import flow in Excalidraw.
+
 ## ConfigMap example
 
 ```yaml

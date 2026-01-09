@@ -31,8 +31,8 @@ S3_DATA_DIR ?= data/s3
 S3_SEED_SOURCE ?= $(MARKUP_DIR)
 
 # ---- Docs / diagrams ----
-C4_DIR ?= docs/c4
-C4_OUT_DIR ?= $(C4_DIR)/rendered
+C4_DIRS ?= docs/en/c4 docs/ru/c4
+C4_OUT_DIRS ?= docs/en/c4/rendered docs/ru/c4/rendered
 C4_IMAGE ?= minlag/mermaid-cli
 C4_UID ?= $(shell id -u)
 C4_GID ?= $(shell id -g)
@@ -82,7 +82,7 @@ help:
 	@echo "  make pipeline-build-all  - convert + index build with $(CATALOG_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
-	@echo "  make c4-render        - render C4 diagrams to $(C4_OUT_DIR)"
+	@echo "  make c4-render        - render C4 diagrams to $(C4_OUT_DIRS)"
 	@echo "  make demo             - seed S3 + start UIs (on-demand conversion)"
 	@echo "  make demo-smoke       - verify demo services are responding"
 	@echo "  make down             - stop demo services"
@@ -248,14 +248,17 @@ catalog-down:
 .PHONY: c4-render
 c4-render:
 	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
-	@mkdir -p $(C4_OUT_DIR)
-	@docker run --rm -u $(C4_UID):$(C4_GID) \
-		-v $(PWD)/$(C4_DIR):/docs -w /docs \
-		$(C4_IMAGE) -i local.mmd -o rendered/local.svg
-	@docker run --rm -u $(C4_UID):$(C4_GID) \
-		-v $(PWD)/$(C4_DIR):/docs -w /docs \
-		$(C4_IMAGE) -i k8s.mmd -o rendered/k8s.svg
-	@echo "C4 diagrams rendered to $(C4_OUT_DIR)"
+	@for dir in $(C4_DIRS); do \
+		echo "Rendering C4 diagrams in $$dir"; \
+		mkdir -p $$dir/rendered; \
+		docker run --rm -u $(C4_UID):$(C4_GID) \
+			-v $(PWD)/$$dir:/docs -w /docs \
+			$(C4_IMAGE) -i local.mmd -o rendered/local.svg; \
+		docker run --rm -u $(C4_UID):$(C4_GID) \
+			-v $(PWD)/$$dir:/docs -w /docs \
+			$(C4_IMAGE) -i k8s.mmd -o rendered/k8s.svg; \
+	done
+	@echo "C4 diagrams rendered to $(C4_OUT_DIRS)"
 
 .PHONY: demo
 demo: c4-render s3-up s3-seed excalidraw-up catalog-up demo-smoke

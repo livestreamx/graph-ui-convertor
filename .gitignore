@@ -6,4 +6,4 @@ data/markup/*
 data/screens/*
 data/catalog/*
 data/s3/*
-docs/c4/rendered/*
+docs/*/c4/*
