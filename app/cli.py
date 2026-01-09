@@ -7,15 +7,16 @@ import typer
 import uvicorn
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
-from adapters.filesystem.markup_catalog_source import FileSystemMarkupCatalogSource
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
+from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from rich.console import Console
 
+from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings
 
 app = typer.Typer(no_args_is_help=True)
@@ -28,8 +29,12 @@ app.add_typer(pipeline_app, name="pipeline")
 console = Console()
 
 
-def _run_convert_to_excalidraw(input_dir: Path, output_dir: Path) -> None:
-    markup_repo = FileSystemMarkupRepository()
+def _run_convert_to_excalidraw(
+    input_dir: Path,
+    output_dir: Path,
+    markup_repo: MarkupRepository | None = None,
+) -> None:
+    markup_repo = markup_repo or FileSystemMarkupRepository()
     excal_repo = FileSystemExcalidrawRepository()
     layout = GridLayoutEngine()
     converter = MarkupToExcalidrawConverter(layout)
@@ -67,7 +72,7 @@ def _run_convert_from_excalidraw(input_dir: Path, output_dir: Path) -> None:
 
 def _run_build_index_from_settings(settings: AppSettings) -> None:
     builder = BuildCatalogIndex(
-        FileSystemMarkupCatalogSource(),
+        build_markup_source(settings),
         FileSystemCatalogIndexRepository(),
     )
     index = builder.build(settings.catalog.to_index_config())
@@ -163,10 +168,11 @@ def pipeline_build_all(
     ),
 ) -> None:
     settings = load_settings(config)
-    _run_convert_to_excalidraw(
-        settings.catalog.markup_dir,
-        settings.catalog.excalidraw_in_dir,
-    )
+    markup_repo = build_markup_repository(settings)
+    markup_dir = settings.catalog.markup_dir
+    if settings.catalog.markup_source == "s3":
+        markup_dir = Path(settings.catalog.s3.prefix or "")
+    _run_convert_to_excalidraw(markup_dir, settings.catalog.excalidraw_in_dir, markup_repo)
     _run_build_index_from_settings(settings)
 
 

@@ -13,9 +13,22 @@ DEFAULT_CONFIG_PATH = Path("config/catalog/app.yaml")
 LEGACY_CONFIG_PATH = Path("config/app.yaml")
 
 
+class S3Settings(BaseModel):
+    bucket: str = ""
+    prefix: str = ""
+    region: str | None = None
+    endpoint_url: str | None = None
+    access_key_id: str | None = None
+    secret_access_key: str | None = None
+    session_token: str | None = None
+    use_path_style: bool = False
+
+
 class CatalogSettings(BaseModel):
     title: str = "CJM Catalog"
     markup_dir: Path = Path("data/markup")
+    markup_source: str = "filesystem"
+    s3: S3Settings = S3Settings()
     excalidraw_in_dir: Path = Path("data/excalidraw_in")
     excalidraw_out_dir: Path = Path("data/excalidraw_out")
     roundtrip_dir: Path = Path("data/roundtrip")
@@ -37,6 +50,15 @@ class CatalogSettings(BaseModel):
     def normalize_sort_order(cls, value: object) -> str:
         return str(value).lower() if value else "asc"
 
+    @field_validator("markup_source", mode="before")
+    @classmethod
+    def normalize_markup_source(cls, value: object) -> str:
+        normalized = str(value).lower() if value else "filesystem"
+        if normalized not in {"filesystem", "s3"}:
+            msg = "catalog.markup_source must be 'filesystem' or 's3'"
+            raise ValueError(msg)
+        return normalized
+
     @field_validator("group_by", "tag_fields", mode="before")
     @classmethod
     def normalize_lists(cls, value: object) -> list[str]:
@@ -47,8 +69,11 @@ class CatalogSettings(BaseModel):
         return [str(value)]
 
     def to_index_config(self) -> CatalogIndexConfig:
+        markup_dir = self.markup_dir
+        if self.markup_source == "s3":
+            markup_dir = Path(self.s3.prefix or "")
         return CatalogIndexConfig(
-            markup_dir=self.markup_dir,
+            markup_dir=markup_dir,
             excalidraw_in_dir=self.excalidraw_in_dir,
             index_path=self.index_path,
             group_by=list(self.group_by),

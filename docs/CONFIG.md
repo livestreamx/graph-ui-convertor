@@ -10,6 +10,16 @@ absolute.
 catalog:
   title: "CJM Catalog"
   markup_dir: "data/markup"
+  markup_source: "filesystem"
+  s3:
+    bucket: "cjm-markup"
+    prefix: "markup/"
+    region: "us-east-1"
+    endpoint_url: ""
+    access_key_id: ""
+    secret_access_key: ""
+    session_token: ""
+    use_path_style: false
   excalidraw_in_dir: "data/excalidraw_in"
   excalidraw_out_dir: "data/excalidraw_out"
   roundtrip_dir: "data/roundtrip"
@@ -33,6 +43,12 @@ catalog:
 
 ## Field notes
 
+- `markup_source`: `filesystem` (default) or `s3`. When `s3`, the catalog reads markup JSON
+  from the configured bucket/prefix; `markup_dir` is only used for relative path display and
+  can be left as-is.
+- `s3.*`: S3 connection settings. `bucket` is required when `markup_source` is `s3`. Use a
+  trailing slash in `prefix` (for example `markup/`) to avoid matching unrelated keys. Use
+  `endpoint_url` + `use_path_style: true` for MinIO or custom S3 endpoints.
 - `group_by`: List of dot-paths used to build nested groupings in the catalog list.
 - `title_field`: Dot-path used for the card title. Falls back to `service_name` or file stem.
 - `tag_fields`: Dot-paths used to populate tag pills.
@@ -64,6 +80,9 @@ nesting delimiter. Example:
 
 ```bash
 export CJM__CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
+export CJM__CATALOG__MARKUP_SOURCE="s3"
+export CJM__CATALOG__S3__BUCKET="cjm-markup"
+export CJM__CATALOG__S3__PREFIX="markup/"
 export CJM_CONFIG_PATH="config/catalog/app.yaml"
 ```
 

@@ -92,3 +92,6 @@ cjm catalog serve --config config/catalog/app.yaml
 2. Open the catalog: `cjm catalog serve` and visit `/catalog`.
 3. Download `.excalidraw`, edit in Excalidraw UI, export `.excalidraw`.
 4. Upload via the Catalog detail page, then click “Convert back”.
+
+Optional: set `catalog.markup_source: "s3"` in `config/catalog/app.yaml` to read markup JSON
+directly from S3 (see `docs/CONFIG.md` for the full schema).

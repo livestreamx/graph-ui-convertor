@@ -10,7 +10,6 @@ import httpx
 import orjson
 from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
-from adapters.filesystem.markup_catalog_source import FileSystemMarkupCatalogSource
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.filesystem.scene_repository import FileSystemSceneRepository
 from domain.catalog import CatalogIndex, CatalogItem
@@ -21,6 +20,7 @@ from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Re
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from app.catalog_wiring import build_markup_source
 from app.config import AppSettings, load_settings
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
@@ -58,7 +58,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         scene_repo=FileSystemSceneRepository(),
         markup_repo=FileSystemMarkupRepository(),
         index_builder=BuildCatalogIndex(
-            FileSystemMarkupCatalogSource(),
+            build_markup_source(settings),
             index_repo,
         ),
         converter=ExcalidrawToMarkupConverter(),

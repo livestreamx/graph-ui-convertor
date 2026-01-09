@@ -1,6 +1,16 @@
 catalog:
   title: "CJM Catalog"
   markup_dir: "/data/markup"
+  markup_source: "filesystem"
+  s3:
+    bucket: ""
+    prefix: ""
+    region: ""
+    endpoint_url: ""
+    access_key_id: ""
+    secret_access_key: ""
+    session_token: ""
+    use_path_style: false
   excalidraw_in_dir: "/data/excalidraw_in"
   excalidraw_out_dir: "/data/excalidraw_out"
   roundtrip_dir: "/data/roundtrip"

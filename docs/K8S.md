@@ -12,6 +12,13 @@ ReadWriteMany (RWX) PVC and mount it at `/data` across all catalog replicas.
 
 Example PVC: `k8s/pvc.yaml`.
 
+## S3-backed markup (optional)
+
+If your markup JSON files live in S3, set `catalog.markup_source: "s3"` and configure the
+`catalog.s3` settings in the ConfigMap. The catalog will read markup from S3, while
+`excalidraw_in_dir`, `excalidraw_out_dir`, and `roundtrip_dir` can still use the RWX PVC.
+When using S3, `markup_dir` is only used for relative paths in the index.
+
 ## Catalog service
 
 `k8s/catalog-deployment.yaml` includes a Deployment (replicas=2), Service, and Ingress. It expects:
@@ -53,7 +60,12 @@ metadata:
 data:
   app.yaml: |
     catalog:
-      excalidraw_base_url: "https://excalidraw.example.com"
+      excalidraw_base_url: "/excalidraw"
+      markup_source: "s3"
+      s3:
+        bucket: "cjm-markup"
+        prefix: "markup/"
+        region: "us-east-1"
       markup_dir: "/data/markup"
       excalidraw_in_dir: "/data/excalidraw_in"
       excalidraw_out_dir: "/data/excalidraw_out"
