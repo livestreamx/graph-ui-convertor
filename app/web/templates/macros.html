@@ -26,7 +26,7 @@
               <div class="card-title">{{ item.title }}</div>
               <div class="card-meta">
                 <span>{{ item.markup_type }}</span>
-                <span>{{ item.updated_at }}</span>
+                <span>{{ item.updated_at | msk_datetime }}</span>
               </div>
               {% if item.tags %}
                 <div class="tag-row">

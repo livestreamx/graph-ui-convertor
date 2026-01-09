@@ -4,9 +4,9 @@ import argparse
 import mimetypes
 import time
 from pathlib import Path
+from typing import Any
 
 from adapters.s3.s3_client import create_s3_client
-
 
 ALLOWED_SUFFIXES = (".json", ".excalidraw.json", ".txt")
 
@@ -26,7 +26,7 @@ def build_key(prefix: str, relative: Path) -> str:
     return f"{key_prefix}{relative.as_posix()}"
 
 
-def wait_for_s3(client, timeout: int = 30) -> None:
+def wait_for_s3(client: Any, timeout: int = 30) -> None:
     deadline = time.time() + timeout
     while True:
         try:
@@ -38,13 +38,13 @@ def wait_for_s3(client, timeout: int = 30) -> None:
             time.sleep(1)
 
 
-def ensure_bucket(client, bucket: str, region: str | None) -> None:
+def ensure_bucket(client: Any, bucket: str, region: str | None) -> None:
     try:
         client.head_bucket(Bucket=bucket)
         return
     except Exception:
         pass
-    params = {"Bucket": bucket}
+    params: dict[str, object] = {"Bucket": bucket}
     if region and region != "us-east-1":
         params["CreateBucketConfiguration"] = {"LocationConstraint": region}
     client.create_bucket(**params)

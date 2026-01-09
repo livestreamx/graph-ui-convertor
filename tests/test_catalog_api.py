@@ -3,7 +3,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.layout.grid import GridLayoutEngine
@@ -15,6 +14,7 @@ from domain.models import MarkupDocument
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from fastapi.testclient import TestClient
+
 from tests.s3_utils import stub_s3_catalog
 
 

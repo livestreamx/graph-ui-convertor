@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import io
 import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-from botocore.client import BaseClient
-from botocore.exceptions import ClientError
-from botocore.response import StreamingBody
-
-from adapters.filesystem.markup_utils import strip_markup_comments
-from adapters.s3.s3_client import create_s3_client
+from botocore.client import BaseClient  # type: ignore[import-untyped]
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+from botocore.response import StreamingBody  # type: ignore[import-untyped]
 from domain.catalog import MarkupSourceItem
 from domain.models import MarkupDocument
 from domain.ports.catalog import MarkupCatalogSource
+
+from adapters.filesystem.markup_utils import strip_markup_comments
+from adapters.s3.s3_client import create_s3_client
 
 
 class S3MarkupCatalogSource(MarkupCatalogSource):
@@ -106,12 +105,12 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
         return content if isinstance(content, dict) else {}
 
     def _read_body(self, body: Any) -> bytes:
-        if isinstance(body, (bytes, bytearray)):
+        if isinstance(body, bytes | bytearray):
             return bytes(body)
         if isinstance(body, StreamingBody):
-            return body.read()
+            return cast(bytes, body.read())
         if hasattr(body, "read"):
-            return body.read()
+            return cast(bytes, body.read())
         return b""
 
     def _is_markup_key(self, key: str) -> bool:

@@ -8,20 +8,20 @@ import subprocess
 import time
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
-from fastapi.testclient import TestClient
-from botocore.response import StreamingBody
-from botocore.stub import Stubber
-
+from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from adapters.s3.s3_client import create_s3_client
 from app.config import AppSettings, CatalogSettings, S3Settings
 from app.web_main import create_app
+from botocore.response import StreamingBody  # type: ignore[import-untyped]
+from botocore.stub import Stubber  # type: ignore[import-untyped]
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
-from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
+from fastapi.testclient import TestClient
 
 
 def _free_port() -> int:
@@ -40,7 +40,7 @@ def _docker_available() -> bool:
     return True
 
 
-def _wait_for_minio(client, timeout: int = 20) -> None:
+def _wait_for_minio(client: Any, timeout: int = 20) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -134,7 +134,11 @@ def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyP
             {"Bucket": "cjm-markup", "Prefix": "markup/"},
         )
         payload_bytes = json.dumps({"markup_type": "service", "procedures": []}).encode("utf-8")
-        for key in ("markup/team/alpha.json", "markup/team/beta/service.json", "markup/team/alpha.json"):
+        for key in (
+            "markup/team/alpha.json",
+            "markup/team/beta/service.json",
+            "markup/team/alpha.json",
+        ):
             stubber.add_response(
                 "get_object",
                 {"Body": StreamingBody(io.BytesIO(payload_bytes), len(payload_bytes))},
@@ -143,7 +147,9 @@ def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyP
         stubber.activate()
         endpoint_url = "http://stubbed-s3.local"
         monkeypatch.setattr("adapters.s3.s3_client.create_s3_client", lambda **_: client)
-        monkeypatch.setattr("adapters.s3.markup_catalog_source.create_s3_client", lambda **_: client)
+        monkeypatch.setattr(
+            "adapters.s3.markup_catalog_source.create_s3_client", lambda **_: client
+        )
         monkeypatch.setattr("adapters.s3.markup_repository.create_s3_client", lambda **_: client)
 
     try:
@@ -205,7 +211,7 @@ def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyP
         assert response.status_code == 200
         payload = response.json()
         assert payload.get("elements") is not None
-        cached = (tmp_path / "excalidraw_in" / index.items[0].excalidraw_rel_path)
+        cached = tmp_path / "excalidraw_in" / index.items[0].excalidraw_rel_path
         assert cached.exists()
     finally:
         if stubber is not None:

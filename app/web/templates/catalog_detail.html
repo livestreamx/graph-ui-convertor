@@ -6,7 +6,7 @@
     <div class="detail-title">{{ item.title }}</div>
     <div class="detail-meta">
       <span>{{ item.markup_type }}</span>
-      <span>Updated {{ item.updated_at }}</span>
+      <span>Updated {{ item.updated_at | msk_datetime }}</span>
       <span>Scene ID {{ item.scene_id }}</span>
     </div>
     {% if item.tags %}
@@ -20,11 +20,9 @@
 
   <section class="detail-grid">
     <div class="detail-card">
-      <h3>Open & edit</h3>
+      <h3>Open the diagram</h3>
       <p>
-        1. Download the .excalidraw file.<br />
-        2. Import into Excalidraw, edit, export as .excalidraw.<br />
-        3. Upload the edited file and convert back to markup.
+        Open the scene in Excalidraw or download the file for manual import and editing.
       </p>
       <div class="button-row">
         <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">Open Excalidraw</a>
@@ -43,30 +41,6 @@
       {% else %}
         <p class="note">If the scene does not load, import the downloaded file manually.</p>
       {% endif %}
-    </div>
-
-    <div class="detail-card">
-      <h3>Upload edited file</h3>
-      <form
-        class="upload-form"
-        hx-post="/api/scenes/{{ item.scene_id }}/upload"
-        hx-target="#action-result"
-        hx-encoding="multipart/form-data"
-      >
-        <input type="file" name="file" accept=".json,.excalidraw" required />
-        <button class="primary-button" type="submit">Upload</button>
-      </form>
-    </div>
-
-    <div class="detail-card">
-      <h3>Convert back to markup</h3>
-      <form
-        hx-post="/api/scenes/{{ item.scene_id }}/convert-back"
-        hx-target="#action-result"
-      >
-        <button class="ghost-button" type="submit">Run conversion</button>
-      </form>
-      <p class="note">Output is stored in the roundtrip directory on shared storage.</p>
     </div>
   </section>
 
@@ -87,6 +61,4 @@
       </div>
     </div>
   </section>
-
-  <div id="action-result" class="action-result"></div>
 {% endblock %}

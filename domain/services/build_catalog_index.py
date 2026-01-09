@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import UTC
 from pathlib import Path
 from typing import Any
@@ -208,7 +208,7 @@ class BuildCatalogIndex:
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         return digest
 
-    def _generated_at(self, entries: list[MarkupSourceItem]) -> str:
+    def _generated_at(self, entries: Sequence[MarkupSourceItem]) -> str:
         if not entries:
             return ""
         latest = max(entry.updated_at for entry in entries)

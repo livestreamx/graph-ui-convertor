@@ -5,11 +5,11 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-import boto3
+import boto3  # type: ignore[import-untyped]
 import pytest
-from botocore.client import BaseClient
-from botocore.response import StreamingBody
-from botocore.stub import Stubber
+from botocore.client import BaseClient  # type: ignore[import-untyped]
+from botocore.response import StreamingBody  # type: ignore[import-untyped]
+from botocore.stub import Stubber  # type: ignore[import-untyped]
 
 
 def create_stubbed_client() -> BaseClient:
@@ -69,7 +69,5 @@ def stub_s3_catalog(
         monkeypatch.setattr(
             "adapters.s3.markup_catalog_source.create_s3_client", lambda **_: client
         )
-        monkeypatch.setattr(
-            "adapters.s3.markup_repository.create_s3_client", lambda **_: client
-        )
+        monkeypatch.setattr("adapters.s3.markup_repository.create_s3_client", lambda **_: client)
     return client, stubber

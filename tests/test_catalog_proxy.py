@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
-
-from app import web_main
 from app.config import AppSettings, CatalogSettings, S3Settings
 from app.web_main import create_app
 from fastapi.testclient import TestClient
@@ -14,7 +13,7 @@ from fastapi.testclient import TestClient
 def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/":
-            body = b"<html><script src=\"/assets/app.js\"></script></html>"
+            body = b'<html><script src="/assets/app.js"></script></html>'
             return httpx.Response(200, content=body, headers={"Content-Type": "text/html"})
         if request.url.path == "/assets/app.js":
             body = b"console.log('ok')"
@@ -31,11 +30,11 @@ def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.Monk
     transport = httpx.MockTransport(handler)
     original_async_client = httpx.AsyncClient
 
-    def client_factory(*args, **kwargs) -> httpx.AsyncClient:
+    def client_factory(*args: Any, **kwargs: Any) -> httpx.AsyncClient:
         kwargs["transport"] = transport
         return original_async_client(*args, **kwargs)
 
-    monkeypatch.setattr(web_main.httpx, "AsyncClient", client_factory)
+    monkeypatch.setattr(httpx, "AsyncClient", client_factory)
 
     settings = AppSettings(
         catalog=CatalogSettings(

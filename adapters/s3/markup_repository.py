@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from botocore.client import BaseClient
+from botocore.client import BaseClient  # type: ignore[import-untyped]
+from domain.models import MarkupDocument
+from domain.ports.repositories import MarkupRepository
 
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from adapters.s3.s3_client import create_s3_client
-from domain.models import MarkupDocument
-from domain.ports.repositories import MarkupRepository
 
 
 class S3MarkupRepository(MarkupRepository):

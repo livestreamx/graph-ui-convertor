@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConve
 from fastapi.testclient import TestClient
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
+
 from tests.s3_utils import stub_s3_catalog
 
 
@@ -114,7 +116,7 @@ def test_catalog_open_e2e(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
         excalidraw_html = (
             "<html><body>"
             "<div id='status'>loading</div>"
-            "<script src=\"/assets/app.js\"></script>"
+            '<script src="/assets/app.js"></script>'
             "</body></html>"
         )
         excalidraw_js = (
@@ -139,7 +141,7 @@ def test_catalog_open_e2e(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
                 ),
             )
             page.route(
-                "**/excalidraw/**",
+                "**/excalidraw**",
                 lambda route: route.fulfill(
                     status=200,
                     body=excalidraw_html,
@@ -163,8 +165,16 @@ def test_catalog_open_e2e(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
                 ),
             )
 
-            page.set_content(open_html, base_url="http://catalog.local/")
-            page.wait_for_url("**/excalidraw/**", timeout=10000)
+            page.route(
+                "**/catalog/**/open",
+                lambda route: route.fulfill(
+                    status=200,
+                    body=open_html,
+                    headers={"Content-Type": "text/html"},
+                ),
+            )
+            page.goto(f"http://catalog.local/catalog/{scene_id}/open")
+            page.wait_for_url(re.compile(r".*/excalidraw/?$"), timeout=10000)
             page.wait_for_selector("#status", timeout=10000)
             text = page.text_content("#status")
             browser.close()

@@ -21,7 +21,7 @@ def wait_for(url: str, timeout: int) -> bytes:
             status, body = fetch(url)
             if status == 200:
                 return body
-        except Exception as exc:  # noqa: BLE001 - retry until timeout
+        except Exception as exc:
             last_error = exc
         time.sleep(1)
     raise RuntimeError(f"Timed out waiting for {url}: {last_error}")

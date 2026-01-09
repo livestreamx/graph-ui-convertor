@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import httpx
 import orjson
@@ -15,10 +17,10 @@ from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.filesystem.scene_repository import FileSystemSceneRepository
 from adapters.layout.grid import GridLayoutEngine
 from domain.catalog import CatalogIndex, CatalogItem
+from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from domain.ports.repositories import MarkupRepository
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -55,6 +57,8 @@ class CatalogContext:
 
 
 def create_app(settings: AppSettings) -> FastAPI:
+    templates.env.filters["msk_datetime"] = format_msk_datetime
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
         if settings.catalog.auto_build_index:
@@ -243,6 +247,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         file: UploadFile = File(...),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
+        """пока не реализованы на этапе mvp."""
         index_data = load_index(context)
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
@@ -268,6 +273,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         scene_id: str,
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
+        """пока не реализованы на этапе mvp."""
         index_data = load_index(context)
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
@@ -506,6 +512,28 @@ def is_same_origin(request: Request, base_url: str) -> bool:
 
 def default_port(scheme: str) -> int:
     return 443 if scheme == "https" else 80
+
+
+def format_msk_datetime(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "n/a (MSK)"
+    normalized = text
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return f"{text} (MSK)"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=UTC)
+    msk_tz: tzinfo
+    try:
+        msk_tz = ZoneInfo("Europe/Moscow")
+    except Exception:
+        msk_tz = timezone(timedelta(hours=3))
+    dt = dt.astimezone(msk_tz)
+    return dt.strftime("%d.%m.%Y %H:%M MSK")
 
 
 def proxy_headers(request: Request) -> dict[str, str]:
