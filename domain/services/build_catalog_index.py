@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 from collections.abc import Mapping
-from datetime import UTC, datetime
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ class BuildCatalogIndex:
         items = [self._build_item(entry, config) for entry in entries]
         items = self._sort_items(items, config)
         index = CatalogIndex(
-            generated_at=self._now_iso(),
+            generated_at=self._generated_at(entries),
             group_by=list(config.group_by),
             title_field=config.title_field,
             tag_fields=list(config.tag_fields),
@@ -208,5 +208,10 @@ class BuildCatalogIndex:
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         return digest
 
-    def _now_iso(self) -> str:
-        return datetime.now(tz=UTC).isoformat()
+    def _generated_at(self, entries: list[MarkupSourceItem]) -> str:
+        if not entries:
+            return ""
+        latest = max(entry.updated_at for entry in entries)
+        if latest.tzinfo is None:
+            latest = latest.replace(tzinfo=UTC)
+        return latest.isoformat()

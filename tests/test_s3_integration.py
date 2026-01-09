@@ -169,8 +169,6 @@ def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyP
         settings = AppSettings(
             catalog=CatalogSettings(
                 title="Test Catalog",
-                markup_dir=Path("markup"),
-                markup_source="s3",
                 s3=S3Settings(
                     bucket="cjm-markup",
                     prefix="markup/",

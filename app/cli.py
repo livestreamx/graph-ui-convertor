@@ -169,9 +169,7 @@ def pipeline_build_all(
 ) -> None:
     settings = load_settings(config)
     markup_repo = build_markup_repository(settings)
-    markup_dir = settings.catalog.markup_dir
-    if settings.catalog.markup_source == "s3":
-        markup_dir = Path(settings.catalog.s3.prefix or "")
+    markup_dir = Path(settings.catalog.s3.prefix or "")
     _run_convert_to_excalidraw(markup_dir, settings.catalog.excalidraw_in_dir, markup_repo)
     _run_build_index_from_settings(settings)
 

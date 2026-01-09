@@ -10,12 +10,10 @@ open Docker Desktop or start Colima
 make demo                  # seed S3 stub, start UIs (on-demand conversion)
 # In browser: open Catalog (http://localhost:8080/catalog)
 # Click “Open Excalidraw”, edit, export to data/excalidraw_out
-make demo-smoke            # verify demo services respond
 make convert-from-ui       # rebuild markup from exported Excalidraw
 
 # Catalog UI (local)
 # Uses S3 stub config; ensure MinIO is running (make s3-up + make s3-seed)
-cjm pipeline build-all --config config/catalog/app.s3.yaml
 cjm catalog serve --config config/catalog/app.s3.yaml
 # Open http://localhost:8080/catalog
 ```
@@ -25,9 +23,9 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `cjm convert to-excalidraw --input-dir data/markup --output-dir data/excalidraw_in`
 - `cjm convert from-excalidraw --input-dir data/excalidraw_out --output-dir data/roundtrip`
 - `cjm validate <path>` to sanity-check markup or Excalidraw JSON.
-- `cjm catalog build-index --config config/catalog/app.yaml`
-- `cjm catalog serve --host 0.0.0.0 --port 8080 --config config/catalog/app.yaml`
-- `cjm pipeline build-all` (convert + index build; config defaults to `config/catalog/app.yaml`)
+- `cjm catalog build-index --config config/catalog/app.s3.yaml`
+- `cjm catalog serve --host 0.0.0.0 --port 8080 --config config/catalog/app.s3.yaml`
+- `cjm pipeline build-all` (convert + index build; config defaults to `config/catalog/app.s3.yaml`)
 
 ## Project layout
 
@@ -38,6 +36,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `examples/markup/` – sample markup JSON inputs.
 - `docs/FORMAT.md` – mapping + metadata schema.
 - `docs/CONFIG.md` – catalog configuration schema and examples.
+- `docs/c4/` – C4 diagrams (local + k8s) and rendered SVGs.
 - `docs/K8S.md` – Kubernetes deployment notes and manifests.
 - `config/catalog/` – catalog config variants (local/docker/k8s).
 - `docker/catalog/` – Catalog UI Dockerfile.
@@ -67,6 +66,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - Pre-commit: `pre-commit install` (config in `.pre-commit-config.yaml`).
 - E2E (Playwright): `poetry run playwright install` to fetch browsers; tests skip if browsers are missing.
 - Local S3 stub (MinIO) is started by `make demo` and configured via `config/catalog/app.s3.yaml`.
+- Render C4 diagrams: `make c4-render`.
 
 ## Conversion notes
 
@@ -90,10 +90,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 ## Catalog UI workflow
 
-1. Build scenes + index: `cjm pipeline build-all`.
+1. Seed markup into S3 (local: `make s3-seed`).
 2. Open the catalog: `cjm catalog serve` and visit `/catalog`.
 3. Download `.excalidraw`, edit in Excalidraw UI, export `.excalidraw`.
 4. Upload via the Catalog detail page, then click “Convert back”.
-
-Optional: set `catalog.markup_source: "s3"` in `config/catalog/app.yaml` to read markup JSON
-directly from S3 (see `docs/CONFIG.md` for the full schema).

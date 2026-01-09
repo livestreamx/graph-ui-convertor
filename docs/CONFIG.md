@@ -9,8 +9,6 @@ absolute.
 ```yaml
 catalog:
   title: "CJM Catalog"
-  markup_dir: "data/markup"
-  markup_source: "filesystem"
   s3:
     bucket: "cjm-markup"
     prefix: "markup/"
@@ -38,8 +36,8 @@ catalog:
   sort_by: "title"
   sort_order: "asc"
   unknown_value: "unknown"
-  excalidraw_base_url: "http://localhost:5010"
-  excalidraw_proxy_upstream: ""
+  excalidraw_base_url: "/excalidraw"
+  excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
   rebuild_token: ""
@@ -47,12 +45,10 @@ catalog:
 
 ## Field notes
 
-- `markup_source`: `filesystem` (default) or `s3`. When `s3`, the catalog reads markup JSON
-  from the configured bucket/prefix; `markup_dir` is only used for relative path display and
-  can be left as-is.
-- `s3.*`: S3 connection settings. `bucket` is required when `markup_source` is `s3`. Use a
-  trailing slash in `prefix` (for example `markup/`) to avoid matching unrelated keys. Use
+- `s3.*`: S3 connection settings. `bucket` is required. Use a trailing slash in `prefix`
+  (for example `markup/`) to avoid matching unrelated keys. Use
   `endpoint_url` + `use_path_style: true` for MinIO or custom S3 endpoints.
+  The prefix is also used to compute relative paths in the index.
 - `auto_build_index`: Build the catalog index on startup if it is missing.
 - `rebuild_index_on_start`: Force rebuilding the catalog index on startup (useful for S3).
 - `generate_excalidraw_on_demand`: Generate Excalidraw scenes from markup when a scene file is
@@ -89,10 +85,9 @@ nesting delimiter. Example:
 
 ```bash
 export CJM__CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM__CATALOG__MARKUP_SOURCE="s3"
 export CJM__CATALOG__S3__BUCKET="cjm-markup"
 export CJM__CATALOG__S3__PREFIX="markup/"
-export CJM_CONFIG_PATH="config/catalog/app.yaml"
+export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 
 ## Bundled configs
@@ -100,5 +95,3 @@ export CJM_CONFIG_PATH="config/catalog/app.yaml"
 - `config/catalog/app.s3.yaml` – local S3 demo (MinIO on `localhost:9000`).
 - `config/catalog/app.docker.s3.yaml` – Docker demo config using S3 stub in the `cjm-demo` network.
 - `config/catalog/app.k8s.yaml` – Kubernetes example paths.
-- `config/catalog/app.yaml` – filesystem defaults (data/ paths).
-- `config/catalog/app.docker.yaml` – Docker filesystem paths (`/data`).

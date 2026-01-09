@@ -6,7 +6,7 @@ import httpx
 import pytest
 
 from app import web_main
-from app.config import AppSettings, CatalogSettings
+from app.config import AppSettings, CatalogSettings, S3Settings
 from app.web_main import create_app
 from fastapi.testclient import TestClient
 
@@ -40,7 +40,15 @@ def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.Monk
     settings = AppSettings(
         catalog=CatalogSettings(
             title="Test Catalog",
-            markup_dir=tmp_path / "markup",
+            s3=S3Settings(
+                bucket="cjm-bucket",
+                prefix="markup/",
+                region="us-east-1",
+                endpoint_url="http://stubbed-s3.local",
+                access_key_id="test",
+                secret_access_key="test",
+                use_path_style=True,
+            ),
             excalidraw_in_dir=tmp_path / "excalidraw_in",
             excalidraw_out_dir=tmp_path / "excalidraw_out",
             roundtrip_dir=tmp_path / "roundtrip",
@@ -56,6 +64,7 @@ def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.Monk
             excalidraw_proxy_prefix="/excalidraw",
             excalidraw_max_url_length=8000,
             rebuild_token=None,
+            auto_build_index=False,
         )
     )
 

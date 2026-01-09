@@ -1,7 +1,5 @@
 catalog:
   title: "CJM Catalog"
-  markup_dir: "markup"
-  markup_source: "s3"
   s3:
     bucket: "cjm-markup"
     prefix: "markup/"

@@ -17,8 +17,6 @@ CATALOG_PORT ?= 8080
 CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
 CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
-CATALOG_S3_CONFIG ?= config/catalog/app.s3.yaml
-CATALOG_DOCKER_S3_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 DEMO_NETWORK ?= cjm-demo
 S3_CONTAINER ?= cjm-s3
@@ -31,6 +29,13 @@ S3_BUCKET ?= cjm-markup
 S3_PREFIX ?= markup/
 S3_DATA_DIR ?= data/s3
 S3_SEED_SOURCE ?= $(MARKUP_DIR)
+
+# ---- Docs / diagrams ----
+C4_DIR ?= docs/c4
+C4_OUT_DIR ?= $(C4_DIR)/rendered
+C4_IMAGE ?= minlag/mermaid-cli
+C4_UID ?= $(shell id -u)
+C4_GID ?= $(shell id -g)
 
 # ---- Paths ----
 DATA_DIR ?= data
@@ -55,9 +60,6 @@ catalog-build-index:
 pipeline-build-all:
 	@$(CLI) pipeline build-all --config "$(CATALOG_CONFIG)"
 
-.PHONY: pipeline-build-all-s3
-pipeline-build-all-s3: CATALOG_CONFIG=$(CATALOG_S3_CONFIG)
-pipeline-build-all-s3: pipeline-build-all
 
 .PHONY: help
 help:
@@ -76,12 +78,11 @@ help:
 	@echo "  make s3-seed          - upload markup files into local S3 stub"
 	@echo "  make catalog-up       - start Catalog UI in Docker on $(CATALOG_URL)"
 	@echo "  make catalog-down     - stop Catalog UI"
-	@echo "  make catalog-up-s3    - start Catalog UI using S3-backed config"
 	@echo "  make catalog-build-index - build catalog index with $(CATALOG_CONFIG)"
 	@echo "  make pipeline-build-all  - convert + index build with $(CATALOG_CONFIG)"
-	@echo "  make pipeline-build-all-s3 - convert + index build with $(CATALOG_S3_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
+	@echo "  make c4-render        - render C4 diagrams to $(C4_OUT_DIR)"
 	@echo "  make demo             - seed S3 + start UIs (on-demand conversion)"
 	@echo "  make demo-smoke       - verify demo services are responding"
 	@echo "  make down             - stop demo services"
@@ -242,12 +243,22 @@ catalog-down:
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
 	@echo "Catalog stopped."
 
-.PHONY: catalog-up-s3
-catalog-up-s3: CATALOG_DOCKER_CONFIG=$(CATALOG_DOCKER_S3_CONFIG)
-catalog-up-s3: catalog-up
+# -------- C4 diagrams --------
+
+.PHONY: c4-render
+c4-render:
+	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
+	@mkdir -p $(C4_OUT_DIR)
+	@docker run --rm -u $(C4_UID):$(C4_GID) \
+		-v $(PWD)/$(C4_DIR):/docs -w /docs \
+		$(C4_IMAGE) -i local.mmd -o rendered/local.svg
+	@docker run --rm -u $(C4_UID):$(C4_GID) \
+		-v $(PWD)/$(C4_DIR):/docs -w /docs \
+		$(C4_IMAGE) -i k8s.mmd -o rendered/k8s.svg
+	@echo "C4 diagrams rendered to $(C4_OUT_DIR)"
 
 .PHONY: demo
-demo: s3-up s3-seed excalidraw-up catalog-up
+demo: c4-render s3-up s3-seed excalidraw-up catalog-up demo-smoke
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(CATALOG_URL)/catalog"

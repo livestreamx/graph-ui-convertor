@@ -395,7 +395,8 @@ def find_item(index_data: CatalogIndex | None, scene_id: str) -> CatalogItem | N
 
 
 def build_excalidraw_payload(context: CatalogContext, item: CatalogItem) -> dict[str, Any]:
-    markup_path = context.settings.catalog.markup_dir / item.markup_rel_path
+    markup_root = Path(context.settings.catalog.s3.prefix or "")
+    markup_path = markup_root / item.markup_rel_path
     try:
         markup = context.markup_reader.load_by_path(markup_path)
     except FileNotFoundError as exc:
