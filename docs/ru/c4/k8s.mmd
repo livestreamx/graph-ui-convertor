@@ -1,0 +1,19 @@
+%%{init: {'theme': 'neutral'}}%%
+C4Container
+title Деплой в Kubernetes (Catalog + Excalidraw)
+
+Person(user, "Пользователь", "Редактирует и экспортирует диаграммы")
+System_Ext(s3, "S3", "Хранилище markup JSON")
+
+System_Boundary(k8s, "Кластер Kubernetes") {
+  Container(ingress, "Ingress", "NGINX/ALB", "Маршрутизация трафика")
+  Container(catalog, "Catalog UI", "FastAPI", "Список каталога, API, прокси Excalidraw")
+  Container(excalidraw, "Excalidraw UI", "excalidraw/excalidraw", "Редактор диаграмм")
+  ContainerDb(pv, "RWX PVC", "Shared storage", "excalidraw_in/out, roundtrip, index")
+}
+
+Rel(user, ingress, "Просмотр каталога", "HTTPS")
+Rel(ingress, catalog, "Маршрутизация /", "HTTP")
+Rel(catalog, excalidraw, "Прокси UI под /excalidraw", "HTTP")
+Rel(catalog, s3, "Чтение markup", "S3 API")
+Rel(catalog, pv, "Чтение/запись сцен + roundtrip", "RWX volume")

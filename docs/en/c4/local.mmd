@@ -1,0 +1,17 @@
+%%{init: {'theme': 'neutral'}}%%
+C4Container
+title Local demo (Docker + MinIO)
+
+Person(user, "User", "Edits and exports diagrams")
+
+System_Boundary(local, "Local Docker network") {
+  Container(catalog, "Catalog UI", "FastAPI", "Catalog list, API, Excalidraw proxy")
+  Container(excalidraw, "Excalidraw UI", "excalidraw/excalidraw", "Diagram editor")
+  Container(s3, "S3 Stub", "MinIO", "Markup JSON storage")
+  ContainerDb(data, "Shared data", "Bind mount", "excalidraw_in/out, roundtrip, index")
+}
+
+Rel(user, catalog, "Browse catalog / open scenes", "HTTP")
+Rel(catalog, excalidraw, "Proxy UI under /excalidraw", "HTTP")
+Rel(catalog, s3, "Read markup", "S3 API")
+Rel(catalog, data, "Read/write scenes + roundtrip", "Filesystem")
