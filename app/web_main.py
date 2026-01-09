@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlparse
@@ -12,15 +13,18 @@ from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.filesystem.scene_repository import FileSystemSceneRepository
+from adapters.layout.grid import GridLayoutEngine
 from domain.catalog import CatalogIndex, CatalogItem
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
+from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from domain.ports.repositories import MarkupRepository
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app.catalog_wiring import build_markup_source
+from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
@@ -43,25 +47,41 @@ class CatalogContext:
     settings: AppSettings
     index_repo: FileSystemCatalogIndexRepository
     scene_repo: FileSystemSceneRepository
-    markup_repo: FileSystemMarkupRepository
+    markup_reader: MarkupRepository
+    roundtrip_repo: FileSystemMarkupRepository
     index_builder: BuildCatalogIndex
-    converter: ExcalidrawToMarkupConverter
+    to_markup: ExcalidrawToMarkupConverter
+    to_excalidraw: MarkupToExcalidrawConverter
 
 
 def create_app(settings: AppSettings) -> FastAPI:
-    app = FastAPI(title=settings.catalog.title)
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> Any:
+        if settings.catalog.auto_build_index:
+            if settings.catalog.rebuild_index_on_start:
+                context.index_builder.build(settings.catalog.to_index_config())
+            else:
+                try:
+                    index_repo.load(settings.catalog.index_path)
+                except FileNotFoundError:
+                    context.index_builder.build(settings.catalog.to_index_config())
+        yield
+
+    app = FastAPI(title=settings.catalog.title, lifespan=lifespan)
 
     index_repo = FileSystemCatalogIndexRepository()
     context = CatalogContext(
         settings=settings,
         index_repo=index_repo,
         scene_repo=FileSystemSceneRepository(),
-        markup_repo=FileSystemMarkupRepository(),
+        markup_reader=build_markup_repository(settings),
+        roundtrip_repo=FileSystemMarkupRepository(),
         index_builder=BuildCatalogIndex(
             build_markup_source(settings),
             index_repo,
         ),
-        converter=ExcalidrawToMarkupConverter(),
+        to_markup=ExcalidrawToMarkupConverter(),
+        to_excalidraw=MarkupToExcalidrawConverter(GridLayoutEngine()),
     )
     app.state.context = context
 
@@ -121,6 +141,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         excalidraw_open_url = base_url
         scene_available = False
         open_mode = "direct"
+        on_demand = context.settings.catalog.generate_excalidraw_on_demand
         scene_path = context.settings.catalog.excalidraw_in_dir / item.excalidraw_rel_path
         try:
             scene_payload = context.scene_repo.load(scene_path)
@@ -138,7 +159,14 @@ def create_app(settings: AppSettings) -> FastAPI:
                         open_mode = "manual"
                 scene_available = True
         except FileNotFoundError:
-            pass
+            if on_demand:
+                scene_available = True
+                if is_same_origin(request, base_url):
+                    excalidraw_open_url = f"/catalog/{scene_id}/open"
+                    open_mode = "local_storage"
+                else:
+                    excalidraw_open_url = base_url
+                    open_mode = "manual"
         return templates.TemplateResponse(
             request,
             "catalog_detail.html",
@@ -150,6 +178,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "excalidraw_open_url": excalidraw_open_url,
                 "scene_available": scene_available,
                 "open_mode": open_mode,
+                "on_demand_enabled": on_demand,
             },
         )
 
@@ -198,7 +227,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         try:
             payload = context.scene_repo.load(path)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Scene file missing") from exc
+            if not context.settings.catalog.generate_excalidraw_on_demand:
+                raise HTTPException(status_code=404, detail="Scene file missing") from exc
+            payload = build_excalidraw_payload(context, item)
+            if context.settings.catalog.cache_excalidraw_on_demand:
+                context.scene_repo.save(payload, path)
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{item.excalidraw_rel_path}"'
@@ -244,10 +277,10 @@ def create_app(settings: AppSettings) -> FastAPI:
             payload = context.scene_repo.load(source_path)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Uploaded scene not found") from exc
-        markup = context.converter.convert(payload)
+        markup = context.to_markup.convert(payload)
         output_name = Path(item.markup_rel_path).stem
         output_path = context.settings.catalog.roundtrip_dir / f"{output_name}.json"
-        context.markup_repo.save(markup, output_path)
+        context.roundtrip_repo.save(markup, output_path)
         return ORJSONResponse({"status": "ok", "path": str(output_path)})
 
     @app.post("/api/rebuild-index")
@@ -359,6 +392,16 @@ def find_item(index_data: CatalogIndex | None, scene_id: str) -> CatalogItem | N
         if item.scene_id == scene_id:
             return item
     return None
+
+
+def build_excalidraw_payload(context: CatalogContext, item: CatalogItem) -> dict[str, Any]:
+    markup_path = context.settings.catalog.markup_dir / item.markup_rel_path
+    try:
+        markup = context.markup_reader.load_by_path(markup_path)
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail="Markup file missing") from exc
+    excal_doc = context.to_excalidraw.convert(markup)
+    return excal_doc.to_dict()
 
 
 def filter_items(

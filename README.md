@@ -7,15 +7,16 @@ Round-trip converter between CJM markup graphs and Excalidraw scenes with determ
 ```bash
 make bootstrap             # create .venv, install Poetry + deps
 open Docker Desktop or start Colima
-cp examples/markup/*.json data/markup/
-make demo                  # seed S3 stub, convert markup -> Excalidraw, start UIs
-# In browser: open Catalog (http://localhost:8080/catalog) and Excalidraw proxy (http://localhost:8080/excalidraw)
-# Import from data/excalidraw_in, edit, export to data/excalidraw_out
+make demo                  # seed S3 stub, start UIs (on-demand conversion)
+# In browser: open Catalog (http://localhost:8080/catalog)
+# Click “Open Excalidraw”, edit, export to data/excalidraw_out
+make demo-smoke            # verify demo services respond
 make convert-from-ui       # rebuild markup from exported Excalidraw
 
 # Catalog UI (local)
-cjm pipeline build-all
-cjm catalog serve --config config/catalog/app.yaml
+# Uses S3 stub config; ensure MinIO is running (make s3-up + make s3-seed)
+cjm pipeline build-all --config config/catalog/app.s3.yaml
+cjm catalog serve --config config/catalog/app.s3.yaml
 # Open http://localhost:8080/catalog
 ```
 

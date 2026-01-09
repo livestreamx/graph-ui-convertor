@@ -42,5 +42,8 @@ class S3MarkupRepository(MarkupRepository):
     def load_all_with_paths(self, directory: Path) -> list[tuple[Path, MarkupDocument]]:
         return [(item.path, item.document) for item in self._source.load_all(directory)]
 
+    def load_by_path(self, path: Path) -> MarkupDocument:
+        return self._source.load_document(path)
+
     def save(self, document: MarkupDocument, path: Path) -> None:
         raise NotImplementedError("S3MarkupRepository is read-only.")

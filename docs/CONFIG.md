@@ -1,6 +1,6 @@
 # Catalog configuration
 
-The Catalog UI reads settings from `config/catalog/app.yaml` (or a custom path passed with
+The Catalog UI reads settings from `config/catalog/app.s3.yaml` by default (or a custom path passed with
 `--config` / `CJM_CONFIG_PATH`). All paths are relative to the process working directory unless
 absolute.
 
@@ -24,6 +24,10 @@ catalog:
   excalidraw_out_dir: "data/excalidraw_out"
   roundtrip_dir: "data/roundtrip"
   index_path: "data/catalog/index.json"
+  auto_build_index: true
+  rebuild_index_on_start: false
+  generate_excalidraw_on_demand: true
+  cache_excalidraw_on_demand: true
   group_by:
     - "markup_type"
     - "custom.domain"
@@ -49,6 +53,11 @@ catalog:
 - `s3.*`: S3 connection settings. `bucket` is required when `markup_source` is `s3`. Use a
   trailing slash in `prefix` (for example `markup/`) to avoid matching unrelated keys. Use
   `endpoint_url` + `use_path_style: true` for MinIO or custom S3 endpoints.
+- `auto_build_index`: Build the catalog index on startup if it is missing.
+- `rebuild_index_on_start`: Force rebuilding the catalog index on startup (useful for S3).
+- `generate_excalidraw_on_demand`: Generate Excalidraw scenes from markup when a scene file is
+  missing.
+- `cache_excalidraw_on_demand`: Persist generated scenes into `excalidraw_in_dir` for reuse.
 - `group_by`: List of dot-paths used to build nested groupings in the catalog list.
 - `title_field`: Dot-path used for the card title. Falls back to `service_name` or file stem.
 - `tag_fields`: Dot-paths used to populate tag pills.
@@ -88,8 +97,8 @@ export CJM_CONFIG_PATH="config/catalog/app.yaml"
 
 ## Bundled configs
 
-- `config/catalog/app.yaml` – local defaults (data/ paths).
-- `config/catalog/app.docker.yaml` – Docker demo paths (`/data`).
-- `config/catalog/app.k8s.yaml` – Kubernetes example paths.
 - `config/catalog/app.s3.yaml` – local S3 demo (MinIO on `localhost:9000`).
 - `config/catalog/app.docker.s3.yaml` – Docker demo config using S3 stub in the `cjm-demo` network.
+- `config/catalog/app.k8s.yaml` – Kubernetes example paths.
+- `config/catalog/app.yaml` – filesystem defaults (data/ paths).
+- `config/catalog/app.docker.yaml` – Docker filesystem paths (`/data`).

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource, YamlConfigSettingsSource
 
-DEFAULT_CONFIG_PATH = Path("config/catalog/app.yaml")
+DEFAULT_CONFIG_PATH = Path("config/catalog/app.s3.yaml")
 LEGACY_CONFIG_PATH = Path("config/app.yaml")
 
 
@@ -33,6 +33,10 @@ class CatalogSettings(BaseModel):
     excalidraw_out_dir: Path = Path("data/excalidraw_out")
     roundtrip_dir: Path = Path("data/roundtrip")
     index_path: Path = Path("data/catalog/index.json")
+    auto_build_index: bool = True
+    rebuild_index_on_start: bool = False
+    generate_excalidraw_on_demand: bool = True
+    cache_excalidraw_on_demand: bool = True
     group_by: list[str] = Field(default_factory=lambda: ["markup_type"])
     title_field: str = "service_name"
     tag_fields: list[str] = Field(default_factory=list)

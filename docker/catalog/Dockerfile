@@ -2,6 +2,8 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
+ARG POETRY_VERSION=2.2.1
+
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV VIRTUAL_ENV=/opt/venv
@@ -12,13 +14,19 @@ RUN addgroup --system app && adduser --system --ingroup app app
 RUN mkdir -p /data /config && chown -R app:app /data /config /app /opt/venv
 
 COPY pyproject.toml poetry.lock README.md ./
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir "poetry==${POETRY_VERSION}" "poetry-plugin-export" \
+    && poetry export -f requirements.txt --output /tmp/requirements.txt --without-hashes --only main \
+    && pip install --no-cache-dir -r /tmp/requirements.txt \
+    && pip uninstall -y poetry \
+    && rm -rf /root/.cache/pip /root/.cache/pypoetry /tmp/requirements.txt
+
 COPY app ./app
 COPY adapters ./adapters
 COPY domain ./domain
 COPY config ./config
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir .
+RUN pip install --no-cache-dir --no-deps .
 
 USER app
 

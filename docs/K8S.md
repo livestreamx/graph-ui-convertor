@@ -18,6 +18,8 @@ If your markup JSON files live in S3, set `catalog.markup_source: "s3"` and conf
 `catalog.s3` settings in the ConfigMap. The catalog will read markup from S3, while
 `excalidraw_in_dir`, `excalidraw_out_dir`, and `roundtrip_dir` can still use the RWX PVC.
 When using S3, `markup_dir` is only used for relative paths in the index.
+With `generate_excalidraw_on_demand: true`, the catalog will build Excalidraw scenes directly
+from S3 markup when a scene is requested (no pre-generation step required).
 
 ## Catalog service
 

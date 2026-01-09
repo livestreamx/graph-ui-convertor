@@ -1,11 +1,11 @@
 catalog:
   title: "CJM Catalog"
   markup_dir: "/data/markup"
-  markup_source: "filesystem"
+  markup_source: "s3"
   s3:
-    bucket: ""
-    prefix: ""
-    region: ""
+    bucket: "cjm-markup"
+    prefix: "markup/"
+    region: "us-east-1"
     endpoint_url: ""
     access_key_id: ""
     secret_access_key: ""
@@ -15,6 +15,10 @@ catalog:
   excalidraw_out_dir: "/data/excalidraw_out"
   roundtrip_dir: "/data/roundtrip"
   index_path: "/data/catalog/index.json"
+  auto_build_index: true
+  rebuild_index_on_start: false
+  generate_excalidraw_on_demand: true
+  cache_excalidraw_on_demand: true
   group_by:
     - "markup_type"
   title_field: "service_name"

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from botocore.client import BaseClient
+from botocore.exceptions import ClientError
 from botocore.response import StreamingBody
 
 from adapters.filesystem.markup_utils import strip_markup_comments
@@ -27,7 +28,7 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
     ) -> None:
         self._client = client
         self._bucket = bucket
-        self._prefix = prefix.lstrip("/")
+        self._prefix = self._normalize_prefix(prefix)
         self._allowed_suffixes = allowed_suffixes
 
     @classmethod
@@ -43,9 +44,7 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
         return cls(client, settings.bucket, settings.prefix)
 
     def load_all(self, directory: Path) -> list[MarkupSourceItem]:
-        prefix = self._prefix or directory.as_posix().lstrip("/")
-        if prefix in {".", "./"}:
-            prefix = ""
+        prefix = self._prefix or self._normalize_prefix(directory.as_posix())
         items: list[MarkupSourceItem] = []
         for key, updated_at in self._iter_objects(prefix):
             raw = self._load_raw(key)
@@ -62,6 +61,25 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
                 )
             )
         return items
+
+    def load_document(self, path: Path) -> MarkupDocument:
+        key = self.build_key(path)
+        try:
+            raw = self._load_raw(key)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in {"NoSuchKey", "404", "NotFound"}:
+                raise FileNotFoundError(key) from exc
+            raise
+        return MarkupDocument.model_validate(raw)
+
+    def build_key(self, path: Path) -> str:
+        key = path.as_posix().lstrip("/")
+        if not self._prefix:
+            return key
+        if key.startswith(self._prefix):
+            return key
+        return f"{self._prefix}{key}"
 
     def _iter_objects(self, prefix: str) -> Iterable[tuple[str, datetime | None]]:
         token: str | None = None
@@ -99,3 +117,11 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
     def _is_markup_key(self, key: str) -> bool:
         lowered = key.lower()
         return any(lowered.endswith(suffix) for suffix in self._allowed_suffixes)
+
+    def _normalize_prefix(self, prefix: str) -> str:
+        normalized = prefix.lstrip("/")
+        if normalized in {".", "./"}:
+            return ""
+        if normalized and not normalized.endswith("/"):
+            normalized = f"{normalized}/"
+        return normalized

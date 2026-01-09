@@ -21,6 +21,11 @@ class FileSystemMarkupRepository(MarkupRepository):
             documents.append((path, MarkupDocument.model_validate(content)))
         return documents
 
+    def load_by_path(self, path: Path) -> MarkupDocument:
+        text = path.read_text(encoding="utf-8")
+        content = json.loads(strip_markup_comments(text))
+        return MarkupDocument.model_validate(content)
+
     def save(self, document: MarkupDocument, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         payload = document.to_markup_dict()

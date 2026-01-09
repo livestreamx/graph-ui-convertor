@@ -31,7 +31,11 @@
         <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?download=true">Download .excalidraw</a>
       </div>
       {% if not scene_available %}
-        <p class="note">Scene file not found in excalidraw_in. Run build-all before opening.</p>
+        {% if on_demand_enabled %}
+          <p class="note">Scene will be generated on demand from markup.</p>
+        {% else %}
+          <p class="note">Scene file not found in excalidraw_in. Run build-all before opening.</p>
+        {% endif %}
       {% elif open_mode == "manual" %}
         <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
       {% elif open_mode == "local_storage" %}

@@ -15,8 +15,8 @@ CATALOG_CONTAINER ?= cjm-catalog
 CATALOG_IMAGE ?= cjm-catalog:latest
 CATALOG_PORT ?= 8080
 CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
-CATALOG_CONFIG ?= config/catalog/app.yaml
-CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.yaml
+CATALOG_CONFIG ?= config/catalog/app.s3.yaml
+CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_S3_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_S3_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
@@ -82,7 +82,8 @@ help:
 	@echo "  make pipeline-build-all-s3 - convert + index build with $(CATALOG_S3_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
-	@echo "  make demo             - seed S3 + convert + start UIs"
+	@echo "  make demo             - seed S3 + start UIs (on-demand conversion)"
+	@echo "  make demo-smoke       - verify demo services are responding"
 	@echo "  make down             - stop demo services"
 	@echo "    (set ALLOW_DOCKER_FAILURE=0 to fail if Docker/Colima unavailable)"
 	@echo ""
@@ -246,7 +247,7 @@ catalog-up-s3: CATALOG_DOCKER_CONFIG=$(CATALOG_DOCKER_S3_CONFIG)
 catalog-up-s3: catalog-up
 
 .PHONY: demo
-demo: s3-up s3-seed pipeline-build-all-s3 excalidraw-up catalog-up-s3
+demo: s3-up s3-seed excalidraw-up catalog-up
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(CATALOG_URL)/catalog"
@@ -254,6 +255,10 @@ demo: s3-up s3-seed pipeline-build-all-s3 excalidraw-up catalog-up-s3
 	@echo "  3) Export .excalidraw into: $(EXCALIDRAW_OUT_DIR)"
 	@echo "  4) Upload edited .excalidraw and click Convert back"
 	@echo ""
+
+.PHONY: demo-smoke
+demo-smoke:
+	@$(VENV_PYTHON) scripts/smoke_demo.py --catalog "$(CATALOG_URL)" --timeout 60
 
 .PHONY: down
 down: catalog-down excalidraw-down s3-down
