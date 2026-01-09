@@ -1,0 +1,29 @@
+catalog:
+  title: "CJM Catalog"
+  markup_dir: "markup"
+  markup_source: "s3"
+  s3:
+    bucket: "cjm-markup"
+    prefix: "markup/"
+    region: "us-east-1"
+    endpoint_url: "http://localhost:9000"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    session_token: ""
+    use_path_style: true
+  excalidraw_in_dir: "data/excalidraw_in"
+  excalidraw_out_dir: "data/excalidraw_out"
+  roundtrip_dir: "data/roundtrip"
+  index_path: "data/catalog/index.json"
+  group_by:
+    - "markup_type"
+  title_field: "service_name"
+  tag_fields: []
+  sort_by: "title"
+  sort_order: "asc"
+  unknown_value: "unknown"
+  excalidraw_base_url: "http://localhost:5010"
+  excalidraw_proxy_upstream: ""
+  excalidraw_proxy_prefix: "/excalidraw"
+  excalidraw_max_url_length: 8000
+  rebuild_token: ""

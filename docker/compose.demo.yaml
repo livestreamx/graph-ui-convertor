@@ -1,4 +1,18 @@
 services:
+  s3:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minioadmin}
+    ports:
+      - "${S3_PORT:-9000}:9000"
+      - "${S3_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - ./data/s3:/data
+    networks:
+      - demo
+
   excalidraw:
     image: excalidraw/excalidraw:latest
     ports:
@@ -16,7 +30,10 @@ services:
       CJM_CONFIG_PATH: /config/app.yaml
     volumes:
       - ./data:/data
-      - ./config/catalog/app.docker.yaml:/config/app.yaml:ro
+      - ./config/catalog/app.docker.s3.yaml:/config/app.yaml:ro
+    depends_on:
+      - s3
+      - excalidraw
     networks:
       - demo
 

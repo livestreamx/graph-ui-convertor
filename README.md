@@ -8,7 +8,7 @@ Round-trip converter between CJM markup graphs and Excalidraw scenes with determ
 make bootstrap             # create .venv, install Poetry + deps
 open Docker Desktop or start Colima
 cp examples/markup/*.json data/markup/
-make demo                  # convert markup -> Excalidraw + start UIs
+make demo                  # seed S3 stub, convert markup -> Excalidraw, start UIs
 # In browser: open Catalog (http://localhost:8080/catalog) and Excalidraw proxy (http://localhost:8080/excalidraw)
 # Import from data/excalidraw_in, edit, export to data/excalidraw_out
 make convert-from-ui       # rebuild markup from exported Excalidraw
@@ -40,7 +40,7 @@ cjm catalog serve --config config/catalog/app.yaml
 - `docs/K8S.md` – Kubernetes deployment notes and manifests.
 - `config/catalog/` – catalog config variants (local/docker/k8s).
 - `docker/catalog/` – Catalog UI Dockerfile.
-- `docker/compose.demo.yaml` – local demo composition (catalog + excalidraw).
+- `docker/compose.demo.yaml` – local demo composition (catalog + excalidraw + s3 stub).
 - `data/` – default runtime IO folders (created by `make dirs`).
 - `tests/` – pytest suite (round-trip, metadata checks).
 
@@ -65,6 +65,7 @@ cjm catalog serve --config config/catalog/app.yaml
 - Tests: `make test`.
 - Pre-commit: `pre-commit install` (config in `.pre-commit-config.yaml`).
 - E2E (Playwright): `poetry run playwright install` to fetch browsers; tests skip if browsers are missing.
+- Local S3 stub (MinIO) is started by `make demo` and configured via `config/catalog/app.s3.yaml`.
 
 ## Conversion notes
 

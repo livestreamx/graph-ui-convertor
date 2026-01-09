@@ -91,3 +91,5 @@ export CJM_CONFIG_PATH="config/catalog/app.yaml"
 - `config/catalog/app.yaml` – local defaults (data/ paths).
 - `config/catalog/app.docker.yaml` – Docker demo paths (`/data`).
 - `config/catalog/app.k8s.yaml` – Kubernetes example paths.
+- `config/catalog/app.s3.yaml` – local S3 demo (MinIO on `localhost:9000`).
+- `config/catalog/app.docker.s3.yaml` – Docker demo config using S3 stub in the `cjm-demo` network.

@@ -17,8 +17,20 @@ CATALOG_PORT ?= 8080
 CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
 CATALOG_CONFIG ?= config/catalog/app.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.yaml
+CATALOG_S3_CONFIG ?= config/catalog/app.s3.yaml
+CATALOG_DOCKER_S3_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 DEMO_NETWORK ?= cjm-demo
+S3_CONTAINER ?= cjm-s3
+S3_PORT ?= 9000
+S3_CONSOLE_PORT ?= 9001
+S3_URL ?= http://localhost:$(S3_PORT)
+S3_ACCESS_KEY ?= minioadmin
+S3_SECRET_KEY ?= minioadmin
+S3_BUCKET ?= cjm-markup
+S3_PREFIX ?= markup/
+S3_DATA_DIR ?= data/s3
+S3_SEED_SOURCE ?= $(MARKUP_DIR)
 
 # ---- Paths ----
 DATA_DIR ?= data
@@ -43,6 +55,10 @@ catalog-build-index:
 pipeline-build-all:
 	@$(CLI) pipeline build-all --config "$(CATALOG_CONFIG)"
 
+.PHONY: pipeline-build-all-s3
+pipeline-build-all-s3: CATALOG_CONFIG=$(CATALOG_S3_CONFIG)
+pipeline-build-all-s3: pipeline-build-all
+
 .PHONY: help
 help:
 	@echo ""
@@ -55,13 +71,18 @@ help:
 	@echo "  make fmt              - format code"
 	@echo "  make excalidraw-up    - start Excalidraw UI in Docker on $(EXCALIDRAW_URL)"
 	@echo "  make excalidraw-down  - stop Excalidraw UI"
+	@echo "  make s3-up            - start local S3 stub on $(S3_URL)"
+	@echo "  make s3-down          - stop local S3 stub"
+	@echo "  make s3-seed          - upload markup files into local S3 stub"
 	@echo "  make catalog-up       - start Catalog UI in Docker on $(CATALOG_URL)"
 	@echo "  make catalog-down     - stop Catalog UI"
+	@echo "  make catalog-up-s3    - start Catalog UI using S3-backed config"
 	@echo "  make catalog-build-index - build catalog index with $(CATALOG_CONFIG)"
 	@echo "  make pipeline-build-all  - convert + index build with $(CATALOG_CONFIG)"
+	@echo "  make pipeline-build-all-s3 - convert + index build with $(CATALOG_S3_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
-	@echo "  make demo             - convert-to-ui + start UIs"
+	@echo "  make demo             - seed S3 + convert + start UIs"
 	@echo "  make down             - stop demo services"
 	@echo "    (set ALLOW_DOCKER_FAILURE=0 to fail if Docker/Colima unavailable)"
 	@echo ""
@@ -105,7 +126,7 @@ bootstrap: install dirs
 
 .PHONY: dirs
 dirs:
-	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(ROUNDTRIP_DIR) $(CATALOG_DIR)
+	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(ROUNDTRIP_DIR) $(CATALOG_DIR) $(S3_DATA_DIR)
 
 # -------- Quality --------
 
@@ -158,6 +179,46 @@ excalidraw-down:
 	@docker rm -f $(EXCALIDRAW_CONTAINER) >/dev/null 2>&1 || true
 	@echo "Excalidraw stopped."
 
+# -------- S3 stub (MinIO) --------
+
+.PHONY: s3-up
+s3-up: dirs
+	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
+	@echo "Starting S3 stub on $(S3_URL) ..."
+	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
+	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
+	@docker rm -f $(S3_CONTAINER) >/dev/null 2>&1 || true
+	@docker run --rm -d --name $(S3_CONTAINER) \
+		--network $(DEMO_NETWORK) --network-alias s3 \
+		-p $(S3_PORT):9000 -p $(S3_CONSOLE_PORT):9001 \
+		-e MINIO_ROOT_USER=$(S3_ACCESS_KEY) \
+		-e MINIO_ROOT_PASSWORD=$(S3_SECRET_KEY) \
+		-v $(PWD)/$(S3_DATA_DIR):/data \
+		minio/minio:latest server /data --console-address ":9001"
+	@echo "S3 stub ready: $(S3_URL)"
+
+.PHONY: s3-down
+s3-down:
+	@docker rm -f $(S3_CONTAINER) >/dev/null 2>&1 || true
+	@echo "S3 stub stopped."
+
+.PHONY: s3-seed
+s3-seed:
+	@echo "Seeding S3 bucket $(S3_BUCKET) from $(S3_SEED_SOURCE) ..."
+	@if [ -d "$(S3_SEED_SOURCE)" ] && [ "$$(find "$(S3_SEED_SOURCE)" -type f | wc -l)" -gt 0 ]; then \
+		SOURCE="$(S3_SEED_SOURCE)"; \
+	else \
+		SOURCE="examples/markup"; \
+	fi; \
+	$(VENV_PYTHON) scripts/seed_s3.py \
+		--endpoint "$(S3_URL)" \
+		--access-key "$(S3_ACCESS_KEY)" \
+		--secret-key "$(S3_SECRET_KEY)" \
+		--bucket "$(S3_BUCKET)" \
+		--prefix "$(S3_PREFIX)" \
+		--source "$$SOURCE" \
+		--path-style
+
 # -------- Catalog UI (Docker) --------
 
 .PHONY: catalog-up
@@ -180,16 +241,19 @@ catalog-down:
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
 	@echo "Catalog stopped."
 
+.PHONY: catalog-up-s3
+catalog-up-s3: CATALOG_DOCKER_CONFIG=$(CATALOG_DOCKER_S3_CONFIG)
+catalog-up-s3: catalog-up
+
 .PHONY: demo
-demo: pipeline-build-all excalidraw-up catalog-up
+demo: s3-up s3-seed pipeline-build-all-s3 excalidraw-up catalog-up-s3
 	@echo ""
 	@echo "Next steps (manual in UI):"
-	@echo "  1) Open $(EXCALIDRAW_URL)"
-	@echo "  2) Import .excalidraw/.json from: $(EXCALIDRAW_IN_DIR)"
-	@echo "  3) Edit, then Export as .excalidraw into: $(EXCALIDRAW_OUT_DIR)"
-	@echo "  4) Open catalog: $(CATALOG_URL)/catalog"
-	@echo "  5) Upload edited .excalidraw and click Convert back"
+	@echo "  1) Open $(CATALOG_URL)/catalog"
+	@echo "  2) Open a scene in Excalidraw and edit"
+	@echo "  3) Export .excalidraw into: $(EXCALIDRAW_OUT_DIR)"
+	@echo "  4) Upload edited .excalidraw and click Convert back"
 	@echo ""
 
 .PHONY: down
-down: catalog-down excalidraw-down
+down: catalog-down excalidraw-down s3-down
