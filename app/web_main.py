@@ -4,7 +4,9 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
+from urllib.parse import urlparse
 
+import httpx
 import orjson
 from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
@@ -15,7 +17,7 @@ from domain.catalog import CatalogIndex, CatalogItem
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -80,6 +82,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         index_data = load_index(context)
         if index_data is None:
             return templates.TemplateResponse(
+                request,
                 "catalog_empty.html",
                 {
                     "request": request,
@@ -91,6 +94,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         groups = build_group_tree(filtered_items, index_data.group_by)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
         return templates.TemplateResponse(
+            request,
             template_name,
             {
                 "request": request,
@@ -113,18 +117,30 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
-        excalidraw_open_url = context.settings.catalog.excalidraw_base_url
+        base_url = context.settings.catalog.excalidraw_base_url
+        excalidraw_open_url = base_url
+        scene_available = False
+        open_mode = "direct"
         scene_path = context.settings.catalog.excalidraw_in_dir / item.excalidraw_rel_path
         try:
             scene_payload = context.scene_repo.load(scene_path)
             if scene_payload.get("elements") is not None:
-                excalidraw_open_url = build_excalidraw_url(
-                    context.settings.catalog.excalidraw_base_url,
-                    scene_payload,
-                )
+                if is_same_origin(request, base_url):
+                    excalidraw_open_url = f"/catalog/{scene_id}/open"
+                    open_mode = "local_storage"
+                else:
+                    excalidraw_open_url = build_excalidraw_url(base_url, scene_payload)
+                    if (
+                        len(excalidraw_open_url)
+                        > context.settings.catalog.excalidraw_max_url_length
+                    ):
+                        excalidraw_open_url = base_url
+                        open_mode = "manual"
+                scene_available = True
         except FileNotFoundError:
             pass
         return templates.TemplateResponse(
+            request,
             "catalog_detail.html",
             {
                 "request": request,
@@ -132,6 +148,32 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "item": item,
                 "index": index_data,
                 "excalidraw_open_url": excalidraw_open_url,
+                "scene_available": scene_available,
+                "open_mode": open_mode,
+            },
+        )
+
+    @app.get("/catalog/{scene_id}/open", response_class=HTMLResponse)
+    def catalog_open_scene(
+        request: Request,
+        scene_id: str,
+        context: CatalogContext = Depends(get_context),
+    ) -> Response:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        if not is_same_origin(request, context.settings.catalog.excalidraw_base_url):
+            return RedirectResponse(url=context.settings.catalog.excalidraw_base_url)
+        return templates.TemplateResponse(
+            request,
+            "catalog_open.html",
+            {
+                "request": request,
+                "settings": context.settings,
+                "scene_id": scene_id,
+                "scene_api_url": f"/api/scenes/{scene_id}",
+                "excalidraw_url": context.settings.catalog.excalidraw_base_url,
             },
         )
 
@@ -219,6 +261,73 @@ def create_app(settings: AppSettings) -> FastAPI:
             raise HTTPException(status_code=403, detail="Invalid token")
         index_data = context.index_builder.build(context.settings.catalog.to_index_config())
         return ORJSONResponse({"status": "ok", "items": len(index_data.items)})
+
+    if settings.catalog.excalidraw_proxy_upstream:
+        prefix = settings.catalog.excalidraw_proxy_prefix.rstrip("/")
+
+        async def forward_upstream(
+            request: Request,
+            upstream: str,
+            path: str,
+        ) -> Response:
+            target = upstream.rstrip("/")
+            if path:
+                target = f"{target}/{path.lstrip('/')}"
+            async with httpx.AsyncClient(follow_redirects=True) as client:
+                resp = await client.request(
+                    request.method,
+                    target,
+                    params=request.query_params,
+                    headers=proxy_headers(request),
+                )
+            return Response(
+                content=resp.content,
+                status_code=resp.status_code,
+                headers=filter_response_headers(resp.headers),
+            )
+
+        @app.api_route(f"{prefix}/{{path:path}}", methods=["GET", "HEAD"])
+        async def proxy_excalidraw(
+            path: str,
+            request: Request,
+            context: CatalogContext = Depends(get_context),
+        ) -> Response:
+            upstream = context.settings.catalog.excalidraw_proxy_upstream
+            if not upstream:
+                raise HTTPException(status_code=404, detail="Proxy disabled")
+            return await forward_upstream(request, upstream, path)
+
+        @app.api_route("/assets/{path:path}", methods=["GET", "HEAD"])
+        async def proxy_excalidraw_assets(
+            path: str,
+            request: Request,
+            context: CatalogContext = Depends(get_context),
+        ) -> Response:
+            upstream = context.settings.catalog.excalidraw_proxy_upstream
+            if not upstream:
+                raise HTTPException(status_code=404, detail="Proxy disabled")
+            return await forward_upstream(request, upstream, f"assets/{path}")
+
+        for static_path in (
+            "/manifest.webmanifest",
+            "/favicon.ico",
+            "/favicon-32x32.png",
+            "/favicon-16x16.png",
+            "/apple-touch-icon.png",
+            "/apple-touch-icon-precomposed.png",
+            "/sitemap.xml",
+            "/robots.txt",
+        ):
+
+            @app.api_route(static_path, methods=["GET", "HEAD"])
+            async def proxy_excalidraw_static(
+                request: Request,
+                context: CatalogContext = Depends(get_context),
+            ) -> Response:
+                upstream = context.settings.catalog.excalidraw_proxy_upstream
+                if not upstream:
+                    raise HTTPException(status_code=404, detail="Proxy disabled")
+                return await forward_upstream(request, upstream, request.url.path.lstrip("/"))
 
     return app
 
@@ -337,6 +446,33 @@ def build_group_tree(items: list[CatalogItem], fields: list[str]) -> list[Catalo
 
 def is_htmx(request: Request) -> bool:
     return request.headers.get("HX-Request") == "true"
+
+
+def is_same_origin(request: Request, base_url: str) -> bool:
+    if base_url.startswith("/"):
+        return True
+    base = urlparse(base_url)
+    req = urlparse(str(request.base_url))
+    if not base.scheme or not base.hostname:
+        return False
+    base_port = base.port or default_port(base.scheme)
+    req_port = req.port or default_port(req.scheme)
+    return base.scheme == req.scheme and base.hostname == req.hostname and base_port == req_port
+
+
+def default_port(scheme: str) -> int:
+    return 443 if scheme == "https" else 80
+
+
+def proxy_headers(request: Request) -> dict[str, str]:
+    headers = dict(request.headers)
+    headers.pop("host", None)
+    return headers
+
+
+def filter_response_headers(headers: httpx.Headers) -> dict[str, str]:
+    excluded = {"content-encoding", "transfer-encoding", "connection"}
+    return {key: value for key, value in headers.items() if key.lower() not in excluded}
 
 
 app = create_app(load_settings())

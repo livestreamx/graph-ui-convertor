@@ -25,6 +25,9 @@ catalog:
   sort_order: "asc"
   unknown_value: "unknown"
   excalidraw_base_url: "http://localhost:5010"
+  excalidraw_proxy_upstream: ""
+  excalidraw_proxy_prefix: "/excalidraw"
+  excalidraw_max_url_length: 8000
   rebuild_token: ""
 ```
 
@@ -36,8 +39,14 @@ catalog:
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
 - `unknown_value`: Placeholder when a field is missing.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
-- `excalidraw_base_url`: Catalog generates “Open Excalidraw” links by encoding the scene JSON into
-  the URL fragment (`#json=...`). This works with the official Excalidraw UI for local/demo use.
+- `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
+  Catalog, the app can inject scenes via local storage (recommended for large diagrams). Otherwise
+  it falls back to URL fragments when short enough.
+- `excalidraw_proxy_upstream`: Optional upstream for proxying Excalidraw through the Catalog
+  service. Enables same-origin flow in local demo (`/excalidraw` path). When set, the catalog
+  also proxies Excalidraw static assets (for example `/assets/*`, `/manifest.webmanifest`).
+- `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
+- `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
 
 ## Dot-path resolution
 

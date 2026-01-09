@@ -7,7 +7,7 @@ from lzstring import LZString  # type: ignore[import-untyped]
 
 
 def encode_scene_payload(scene: dict[str, Any]) -> str:
-    payload = json.dumps(scene, ensure_ascii=False, separators=(",", ":"))
+    payload = json.dumps(scene, ensure_ascii=True, separators=(",", ":"))
     encoded = LZString().compressToEncodedURIComponent(payload)
     return cast(str, encoded)
 

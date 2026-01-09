@@ -30,7 +30,15 @@
         <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">Open Excalidraw</a>
         <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?download=true">Download .excalidraw</a>
       </div>
-      <p class="note">If the scene does not load, import the downloaded file manually.</p>
+      {% if not scene_available %}
+        <p class="note">Scene file not found in excalidraw_in. Run build-all before opening.</p>
+      {% elif open_mode == "manual" %}
+        <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
+      {% elif open_mode == "local_storage" %}
+        <p class="note">Scene is injected via local storage for same-origin Excalidraw.</p>
+      {% else %}
+        <p class="note">If the scene does not load, import the downloaded file manually.</p>
+      {% endif %}
     </div>
 
     <div class="detail-card">

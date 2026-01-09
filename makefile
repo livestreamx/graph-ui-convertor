@@ -18,6 +18,7 @@ CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
 CATALOG_CONFIG ?= config/catalog/app.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
+DEMO_NETWORK ?= cjm-demo
 
 # ---- Paths ----
 DATA_DIR ?= data
@@ -34,6 +35,14 @@ POETRY_BIN ?= $(VENV_BIN)/poetry
 # CLI entrypoints
 CLI ?= $(VENV_BIN)/cjm
 
+.PHONY: catalog-build-index
+catalog-build-index:
+	@$(CLI) catalog build-index --config "$(CATALOG_CONFIG)"
+
+.PHONY: pipeline-build-all
+pipeline-build-all:
+	@$(CLI) pipeline build-all --config "$(CATALOG_CONFIG)"
+
 .PHONY: help
 help:
 	@echo ""
@@ -48,6 +57,8 @@ help:
 	@echo "  make excalidraw-down  - stop Excalidraw UI"
 	@echo "  make catalog-up       - start Catalog UI in Docker on $(CATALOG_URL)"
 	@echo "  make catalog-down     - stop Catalog UI"
+	@echo "  make catalog-build-index - build catalog index with $(CATALOG_CONFIG)"
+	@echo "  make pipeline-build-all  - convert + index build with $(CATALOG_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
 	@echo "  make demo             - convert-to-ui + start UIs"
@@ -100,7 +111,7 @@ dirs:
 
 .PHONY: test
 test:
-	@$(VENV_BIN)/pytest -q
+	@$(VENV_BIN)/pytest
 
 .PHONY: lint
 lint:
@@ -135,8 +146,11 @@ excalidraw-up:
 	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
 	@echo "Starting Excalidraw at $(EXCALIDRAW_URL) ..."
 	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
+	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
 	@docker rm -f $(EXCALIDRAW_CONTAINER) >/dev/null 2>&1 || true
-	@docker run --rm -d --name $(EXCALIDRAW_CONTAINER) -p $(EXCALIDRAW_PORT):80 excalidraw/excalidraw:latest
+	@docker run --rm -d --name $(EXCALIDRAW_CONTAINER) \
+		--network $(DEMO_NETWORK) --network-alias excalidraw \
+		-p $(EXCALIDRAW_PORT):80 excalidraw/excalidraw:latest
 	@echo "Open: $(EXCALIDRAW_URL)"
 
 .PHONY: excalidraw-down
@@ -153,6 +167,7 @@ catalog-up: dirs
 	@docker build -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
 	@docker run --rm -d --name $(CATALOG_CONTAINER) \
+		--network $(DEMO_NETWORK) \
 		-p $(CATALOG_PORT):8080 \
 		-e CJM_CONFIG_PATH=/config/app.yaml \
 		-v $(PWD)/$(DATA_DIR):/data \
@@ -166,7 +181,7 @@ catalog-down:
 	@echo "Catalog stopped."
 
 .PHONY: demo
-demo: convert-to-ui excalidraw-up catalog-up
+demo: pipeline-build-all excalidraw-up catalog-up
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(EXCALIDRAW_URL)"

@@ -9,7 +9,7 @@ make bootstrap             # create .venv, install Poetry + deps
 open Docker Desktop or start Colima
 cp examples/markup/*.json data/markup/
 make demo                  # convert markup -> Excalidraw + start UIs
-# In browser: open Excalidraw (http://localhost:5010) and Catalog (http://localhost:8080/catalog)
+# In browser: open Catalog (http://localhost:8080/catalog) and Excalidraw proxy (http://localhost:8080/excalidraw)
 # Import from data/excalidraw_in, edit, export to data/excalidraw_out
 make convert-from-ui       # rebuild markup from exported Excalidraw
 
@@ -64,6 +64,7 @@ cjm catalog serve --config config/catalog/app.yaml
 - Lint/format/typecheck: `make fmt` / `make lint`.
 - Tests: `make test`.
 - Pre-commit: `pre-commit install` (config in `.pre-commit-config.yaml`).
+- E2E (Playwright): `poetry run playwright install` to fetch browsers; tests skip if browsers are missing.
 
 ## Conversion notes
 

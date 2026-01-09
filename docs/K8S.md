@@ -30,9 +30,18 @@ plus a Service and Ingress.
 Choose one of the following approaches:
 
 1) Different hosts: `catalog.example.com` and `excalidraw.example.com`
-2) Same host with paths (if supported by your ingress controller):
-   - `/catalog` -> catalog service
-   - `/excalidraw` -> excalidraw service
+2) Same host (recommended for “Open Excalidraw”): route all paths to the catalog service, and let
+   the catalog proxy Excalidraw under `/excalidraw`. The catalog also proxies `/assets/*` and other
+   Excalidraw static files so the UI loads correctly.
+
+Using the same host enables the Catalog “Open Excalidraw” button to inject the selected scene via
+local storage (recommended for large diagrams). In that case set:
+
+- `catalog.excalidraw_base_url: "/excalidraw"`
+- `catalog.excalidraw_proxy_upstream: "http://excalidraw:80"`
+
+You can still expose Excalidraw with its own ingress (for direct access), but the Catalog should
+use the proxy path to keep same-origin behavior.
 
 ## ConfigMap example
 
@@ -50,4 +59,7 @@ data:
       excalidraw_out_dir: "/data/excalidraw_out"
       roundtrip_dir: "/data/roundtrip"
       index_path: "/data/catalog/index.json"
+      excalidraw_proxy_upstream: ""
+      excalidraw_proxy_prefix: "/excalidraw"
+      excalidraw_max_url_length: 8000
 ```

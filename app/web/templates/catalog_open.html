@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="detail-card">
+    <h3>Opening Excalidraw…</h3>
+    <p class="note">Preparing the scene in local storage and redirecting.</p>
+  </section>
+  <script>
+    (async () => {
+      const response = await fetch("{{ scene_api_url }}", { credentials: "same-origin" });
+      if (!response.ok) {
+        window.location.href = "{{ excalidraw_url }}";
+        return;
+      }
+      const scene = await response.json();
+      const payload = {
+        elements: scene.elements || [],
+        appState: scene.appState || {},
+      };
+      try {
+        localStorage.setItem("excalidraw", JSON.stringify(payload.elements));
+        localStorage.setItem("excalidraw-state", JSON.stringify(payload.appState));
+        localStorage.setItem("version-dataState", JSON.stringify(Date.now()));
+      } catch (err) {
+        console.error(err);
+      }
+      window.location.href = "{{ excalidraw_url }}";
+    })();
+  </script>
+{% endblock %}

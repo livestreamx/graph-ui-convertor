@@ -16,16 +16,14 @@ from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConve
 from fastapi.testclient import TestClient
 
 
-def test_catalog_api_smoke(tmp_path: Path) -> None:
+def test_catalog_detail_uses_open_route_same_origin(tmp_path: Path) -> None:
     markup_dir = tmp_path / "markup"
     excalidraw_in_dir = tmp_path / "excalidraw_in"
-    excalidraw_out_dir = tmp_path / "excalidraw_out"
     roundtrip_dir = tmp_path / "roundtrip"
     index_path = tmp_path / "catalog" / "index.json"
 
     markup_dir.mkdir(parents=True)
     excalidraw_in_dir.mkdir(parents=True)
-    excalidraw_out_dir.mkdir(parents=True)
     roundtrip_dir.mkdir(parents=True)
 
     payload = {
@@ -69,7 +67,7 @@ def test_catalog_api_smoke(tmp_path: Path) -> None:
             title="Test Catalog",
             markup_dir=markup_dir,
             excalidraw_in_dir=excalidraw_in_dir,
-            excalidraw_out_dir=excalidraw_out_dir,
+            excalidraw_out_dir=tmp_path / "excalidraw_out",
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             group_by=["markup_type"],
@@ -78,7 +76,7 @@ def test_catalog_api_smoke(tmp_path: Path) -> None:
             sort_by="title",
             sort_order="asc",
             unknown_value="unknown",
-            excalidraw_base_url="http://example.com",
+            excalidraw_base_url="http://testserver/excalidraw",
             excalidraw_proxy_upstream=None,
             excalidraw_proxy_prefix="/excalidraw",
             excalidraw_max_url_length=8000,
@@ -89,21 +87,13 @@ def test_catalog_api_smoke(tmp_path: Path) -> None:
     client = TestClient(create_app(settings))
 
     index_response = client.get("/api/index")
-    assert index_response.status_code == 200
-    items = index_response.json()["items"]
-    assert len(items) == 1
-    scene_id = items[0]["scene_id"]
+    scene_id = index_response.json()["items"][0]["scene_id"]
 
-    scene_response = client.get(f"/api/scenes/{scene_id}")
-    assert scene_response.status_code == 200
+    detail_response = client.get(f"/catalog/{scene_id}")
+    assert detail_response.status_code == 200
+    assert f"/catalog/{scene_id}/open" in detail_response.text
 
-    with excal_path.open("rb") as handle:
-        upload_response = client.post(
-            f"/api/scenes/{scene_id}/upload",
-            files={"file": ("billing.excalidraw", handle, "application/json")},
-        )
-    assert upload_response.status_code == 200
-
-    convert_response = client.post(f"/api/scenes/{scene_id}/convert-back")
-    assert convert_response.status_code == 200
-    assert (roundtrip_dir / "billing.json").exists()
+    open_response = client.get(f"/catalog/{scene_id}/open")
+    assert open_response.status_code == 200
+    assert "version-dataState" in open_response.text
+    assert "excalidraw-state" in open_response.text

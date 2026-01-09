@@ -27,6 +27,9 @@ class CatalogSettings(BaseModel):
     sort_order: str = "asc"
     unknown_value: str = "unknown"
     excalidraw_base_url: str = "http://localhost:5010"
+    excalidraw_proxy_upstream: str | None = None
+    excalidraw_proxy_prefix: str = "/excalidraw"
+    excalidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
 
     @field_validator("sort_order", mode="before")

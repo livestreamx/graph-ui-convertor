@@ -3,6 +3,8 @@ services:
     image: excalidraw/excalidraw:latest
     ports:
       - "${EXCALIDRAW_PORT:-5010}:80"
+    networks:
+      - demo
 
   catalog:
     build:
@@ -15,3 +17,9 @@ services:
     volumes:
       - ./data:/data
       - ./config/catalog/app.docker.yaml:/config/app.yaml:ro
+    networks:
+      - demo
+
+networks:
+  demo:
+    name: cjm-demo
