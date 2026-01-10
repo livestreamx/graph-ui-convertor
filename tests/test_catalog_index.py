@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -83,6 +84,9 @@ def test_build_catalog_index_extracts_fields(
         assert item.markup_meta["responsible_logins"] == "alpha, beta"
         assert item.excalidraw_rel_path == "billing.excalidraw"
         assert item.markup_rel_path == "billing.json"
+        expected_timestamp = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
+        assert item.created_at == expected_timestamp
+        assert item.updated_at == expected_timestamp
 
         index_again = builder.build(config)
         assert index_again.items[0].scene_id == item.scene_id

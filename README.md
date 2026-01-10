@@ -177,6 +177,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - Pre-commit: `pre-commit install` (config в `.pre-commit-config.yaml`).
 - E2E (Playwright): `poetry run playwright install` для загрузки браузеров; тесты пропускаются без браузеров.
 - Локальный S3 stub (MinIO) запускается `make demo`, конфиг — `config/catalog/app.s3.yaml`.
+- Переопределение текстов Catalog UI: `CJM_CATALOG__UI_TEXT_OVERRIDES` (JSON-словарь).
 - Рендер C4 диаграмм: `make c4-render` (вывод в `docs/en/c4/rendered` и `docs/ru/c4/rendered`).
 
 ## Примечания по конвертации

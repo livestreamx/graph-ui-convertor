@@ -13,6 +13,7 @@ class MarkupSourceItem:
     path: Path
     document: MarkupDocument
     raw: dict[str, Any]
+    created_at: datetime
     updated_at: datetime
 
 
@@ -21,6 +22,7 @@ class CatalogItem:
     scene_id: str
     title: str
     tags: list[str]
+    created_at: str
     updated_at: str
     markup_type: str
     finedog_unit_id: str
@@ -38,6 +40,7 @@ class CatalogItem:
             "scene_id": self.scene_id,
             "title": self.title,
             "tags": list(self.tags),
+            "created_at": self.created_at,
             "updated_at": self.updated_at,
             "markup_type": self.markup_type,
             "finedog_unit_id": self.finedog_unit_id,
@@ -57,6 +60,7 @@ class CatalogItem:
             scene_id=str(payload.get("scene_id", "")),
             title=str(payload.get("title", "")),
             tags=list(payload.get("tags", []) or []),
+            created_at=str(payload.get("created_at", payload.get("updated_at", ""))),
             updated_at=str(payload.get("updated_at", "")),
             markup_type=str(payload.get("markup_type", "")),
             finedog_unit_id=str(payload.get("finedog_unit_id", "")),

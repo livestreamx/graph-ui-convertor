@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import ClassVar
@@ -45,6 +46,7 @@ class CatalogSettings(BaseModel):
     excalidraw_proxy_prefix: str = "/excalidraw"
     excalidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
+    ui_text_overrides: dict[str, str] = Field(default_factory=dict)
 
     @field_validator("sort_order", mode="before")
     @classmethod
@@ -59,6 +61,26 @@ class CatalogSettings(BaseModel):
         if isinstance(value, list):
             return [str(item) for item in value]
         return [str(value)]
+
+    @field_validator("ui_text_overrides", mode="before")
+    @classmethod
+    def normalize_ui_text_overrides(cls, value: object) -> dict[str, str]:
+        if value is None or value == "":
+            return {}
+        if isinstance(value, dict):
+            return {str(key): str(item) for key, item in value.items()}
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError as exc:
+                msg = "catalog.ui_text_overrides must be a JSON object"
+                raise ValueError(msg) from exc
+            if not isinstance(parsed, dict):
+                msg = "catalog.ui_text_overrides must be a JSON object"
+                raise ValueError(msg)
+            return {str(key): str(item) for key, item in parsed.items()}
+        msg = "catalog.ui_text_overrides must be a JSON object"
+        raise ValueError(msg)
 
     def to_index_config(self) -> CatalogIndexConfig:
         return CatalogIndexConfig(

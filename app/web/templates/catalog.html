@@ -17,9 +17,9 @@
       />
       <div class="filter-controls">
         <label class="filter-control">
-          <span>{{ "criticality_level" | humanize_text }}</span>
+          <span>{{ "Criticality level" | humanize_text }}</span>
           <select name="criticality_level">
-            <option value="">Все уровни</option>
+            <option value="">All levels</option>
             {% for level in criticality_levels %}
               <option value="{{ level }}" {% if criticality_level == level %}selected{% endif %}>
                 {{ level | humanize_text }}
@@ -28,9 +28,9 @@
           </select>
         </label>
         <label class="filter-control">
-          <span>{{ "team_id" | humanize_text }}</span>
+          <span>{{ "Team" | humanize_text }}</span>
           <select name="team_id">
-            <option value="">Все команды</option>
+            <option value="">All teams</option>
             {% for team_key, team_label in team_options %}
               <option value="{{ team_key }}" {% if team_id == team_key %}selected{% endif %}>
                 {{ team_label }}

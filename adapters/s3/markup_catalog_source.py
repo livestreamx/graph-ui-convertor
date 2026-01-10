@@ -51,11 +51,13 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
             updated = updated_at or datetime.now(tz=UTC)
             if updated.tzinfo is None:
                 updated = updated.replace(tzinfo=UTC)
+            created = updated
             items.append(
                 MarkupSourceItem(
                     path=Path(key),
                     document=document,
                     raw=raw,
+                    created_at=created,
                     updated_at=updated,
                 )
             )

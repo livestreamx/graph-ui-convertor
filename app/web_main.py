@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
@@ -28,7 +29,6 @@ from fastapi.templating import Jinja2Templates
 
 from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings
-from app.web.ui_text import UI_TEXT_OVERRIDES
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -60,7 +60,7 @@ class CatalogContext:
 
 def create_app(settings: AppSettings) -> FastAPI:
     templates.env.filters["msk_datetime"] = format_msk_datetime
-    templates.env.filters["humanize_text"] = humanize_text
+    templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
@@ -571,6 +571,16 @@ def format_msk_datetime(value: str) -> str:
     return dt.strftime("%d.%m.%Y %H:%M MSK")
 
 
+def build_humanize_text(overrides: Mapping[str, str]) -> Callable[[str], str]:
+    mapped = dict(overrides)
+
+    def humanize_text(value: str) -> str:
+        text = str(value)
+        return mapped.get(text, text)
+
+    return humanize_text
+
+
 def build_filter_options(
     items: list[CatalogItem],
     unknown_value: str,
@@ -644,11 +654,6 @@ def group_display_value(field: str, value: str, items: list[CatalogItem]) -> str
             if item.team_name and item.team_name != value:
                 return item.team_name
     return value
-
-
-def humanize_text(value: str) -> str:
-    text = str(value)
-    return UI_TEXT_OVERRIDES.get(text, text)
 
 
 def proxy_headers(request: Request) -> dict[str, str]:

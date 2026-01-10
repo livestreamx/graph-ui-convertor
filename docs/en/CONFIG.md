@@ -36,6 +36,9 @@ catalog:
   sort_by: "title"
   sort_order: "asc"
   unknown_value: "unknown"
+  ui_text_overrides:
+    markup_type: "Type"
+    service: "Service"
   excalidraw_base_url: "/excalidraw"
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
@@ -61,6 +64,8 @@ catalog:
   `finedog_unit_meta` keys are shown in the catalog metadata panel.
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
 - `unknown_value`: Placeholder when a field is missing.
+- `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
+  When set via environment variables, pass a JSON object.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
 - `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
   Catalog, the app can inject scenes via local storage (recommended for large diagrams). Otherwise
@@ -92,9 +97,10 @@ Every setting can be overridden with environment variables using the prefix `CJM
 nesting delimiter. Example:
 
 ```bash
-export CJM__CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM__CATALOG__S3__BUCKET="cjm-markup"
-export CJM__CATALOG__S3__PREFIX="markup/"
+export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
+export CJM_CATALOG__S3__BUCKET="cjm-markup"
+export CJM_CATALOG__S3__PREFIX="markup/"
+export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 

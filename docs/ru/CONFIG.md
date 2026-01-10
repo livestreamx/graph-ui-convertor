@@ -36,6 +36,9 @@ catalog:
   sort_by: "title"
   sort_order: "asc"
   unknown_value: "unknown"
+  ui_text_overrides:
+    markup_type: "Тип разметки"
+    service: "Услуга"
   excalidraw_base_url: "/excalidraw"
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
@@ -59,6 +62,8 @@ catalog:
   остальные ключи `finedog_unit_meta` показываются в метаданных карточки.
 - `sort_by`: `title`, `updated_at`, `markup_type`, `finedog_unit_id` или любое настроенное поле.
 - `unknown_value`: заглушка для отсутствующих полей.
+- `ui_text_overrides`: опциональный словарь для подмены значений/ключей в Catalog UI.
+  При установке через переменные окружения используйте JSON-объект.
 - `rebuild_token`: пустое значение отключает `/api/rebuild-index`. Задайте секрет для включения.
 - `excalidraw_base_url`: URL или путь Excalidraw UI (например `/excalidraw`). При same-origin с Catalog
   сцена может быть внедрена через localStorage (рекомендуется для больших диаграмм). В противном случае
@@ -90,9 +95,10 @@ Dot-path проходят по вложенным объектам raw markup JS
 вложенности. Пример:
 
 ```bash
-export CJM__CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM__CATALOG__S3__BUCKET="cjm-markup"
-export CJM__CATALOG__S3__PREFIX="markup/"
+export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
+export CJM_CATALOG__S3__BUCKET="cjm-markup"
+export CJM_CATALOG__S3__PREFIX="markup/"
+export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 
