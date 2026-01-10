@@ -153,23 +153,29 @@ class MarkupDocument(BaseModel):
 
     markup_type: str
     service_name: str | None = None
+    criticality_level: str | None = None
+    team_id: int | str | None = None
+    team_name: str | None = None
     procedures: list[Procedure] = Field(default_factory=list)
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
-    def extract_service_name(cls, data: object) -> object:
+    def extract_finedog_unit_meta(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
-        service_name = data.get("service_name")
-        if service_name:
-            return data
         meta = data.get("finedog_unit_meta")
-        if isinstance(meta, dict) and meta.get("service_name"):
-            updated = dict(data)
-            updated["service_name"] = meta.get("service_name")
-            return updated
-        return data
+        if not isinstance(meta, dict):
+            return data
+        updated: dict[str, Any] | None = None
+        for field_name in ("service_name", "criticality_level", "team_id", "team_name"):
+            if data.get(field_name) is not None:
+                continue
+            if field_name in meta and meta.get(field_name) is not None:
+                if updated is None:
+                    updated = dict(data)
+                updated[field_name] = meta.get(field_name)
+        return updated or data
 
     @field_validator("procedures", mode="after")
     @classmethod
@@ -187,8 +193,17 @@ class MarkupDocument(BaseModel):
             "markup_type": self.markup_type,
             "procedures": [proc.to_markup_dict() for proc in self.procedures],
         }
+        meta: dict[str, object] = {}
         if self.service_name:
-            payload["finedog_unit_meta"] = {"service_name": self.service_name}
+            meta["service_name"] = self.service_name
+        if self.criticality_level:
+            meta["criticality_level"] = self.criticality_level
+        if self.team_id is not None:
+            meta["team_id"] = self.team_id
+        if self.team_name:
+            meta["team_name"] = self.team_name
+        if meta:
+            payload["finedog_unit_meta"] = meta
         if self.procedure_graph:
             payload["procedure_graph"] = dict(self.procedure_graph)
         return payload

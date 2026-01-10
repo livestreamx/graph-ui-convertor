@@ -23,6 +23,10 @@ def test_build_catalog_index_extracts_fields(
         "finedog_unit_meta": {
             "service_name": "Billing",
             "unit_id": "fd-01",
+            "criticality_level": "BC",
+            "team_id": 42,
+            "team_name": "Core Payments",
+            "responsible_logins": ["alpha", "beta"],
         },
         "custom": {"domain": "payments"},
         "tags": ["alpha", "beta"],
@@ -73,6 +77,10 @@ def test_build_catalog_index_extracts_fields(
         assert item.group_values["markup_type"] == "service"
         assert item.markup_type == "service"
         assert item.finedog_unit_id == "fd-01"
+        assert item.criticality_level == "BC"
+        assert item.team_id == "42"
+        assert item.team_name == "Core Payments"
+        assert item.markup_meta["responsible_logins"] == "alpha, beta"
         assert item.excalidraw_rel_path == "billing.excalidraw"
         assert item.markup_rel_path == "billing.json"
 

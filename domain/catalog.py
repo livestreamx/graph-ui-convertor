@@ -24,8 +24,12 @@ class CatalogItem:
     updated_at: str
     markup_type: str
     finedog_unit_id: str
+    criticality_level: str
+    team_id: str
+    team_name: str
     group_values: dict[str, str]
     fields: dict[str, str]
+    markup_meta: dict[str, str]
     markup_rel_path: str
     excalidraw_rel_path: str
 
@@ -37,8 +41,12 @@ class CatalogItem:
             "updated_at": self.updated_at,
             "markup_type": self.markup_type,
             "finedog_unit_id": self.finedog_unit_id,
+            "criticality_level": self.criticality_level,
+            "team_id": self.team_id,
+            "team_name": self.team_name,
             "group_values": dict(self.group_values),
             "fields": dict(self.fields),
+            "markup_meta": dict(self.markup_meta),
             "markup_rel_path": self.markup_rel_path,
             "excalidraw_rel_path": self.excalidraw_rel_path,
         }
@@ -52,8 +60,12 @@ class CatalogItem:
             updated_at=str(payload.get("updated_at", "")),
             markup_type=str(payload.get("markup_type", "")),
             finedog_unit_id=str(payload.get("finedog_unit_id", "")),
+            criticality_level=str(payload.get("criticality_level", "")),
+            team_id=str(payload.get("team_id", "")),
+            team_name=str(payload.get("team_name", "")),
             group_values=dict(payload.get("group_values", {}) or {}),
             fields=dict(payload.get("fields", {}) or {}),
+            markup_meta=dict(payload.get("markup_meta", {}) or {}),
             markup_rel_path=str(payload.get("markup_rel_path", "")),
             excalidraw_rel_path=str(payload.get("excalidraw_rel_path", "")),
         )

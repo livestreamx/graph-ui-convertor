@@ -7,24 +7,50 @@
       hx-get="/catalog"
       hx-target="#catalog-list"
       hx-push-url="true"
+      hx-trigger="keyup changed delay:350ms, search, change"
     >
       <input
         type="search"
         name="q"
         value="{{ query }}"
         placeholder="Search by title, tag, markup type"
-        hx-trigger="keyup changed delay:350ms, search"
       />
+      <div class="filter-controls">
+        <label class="filter-control">
+          <span>{{ "criticality_level" | humanize_text }}</span>
+          <select name="criticality_level">
+            <option value="">Все уровни</option>
+            {% for level in criticality_levels %}
+              <option value="{{ level }}" {% if criticality_level == level %}selected{% endif %}>
+                {{ level | humanize_text }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>{{ "team_id" | humanize_text }}</span>
+          <select name="team_id">
+            <option value="">Все команды</option>
+            {% for team_key, team_label in team_options %}
+              <option value="{{ team_key }}" {% if team_id == team_key %}selected{% endif %}>
+                {{ team_label }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
       {% for field, value in group_filters.items() %}
         <input type="hidden" name="group" value="{{ field }}:{{ value }}" />
       {% endfor %}
     </form>
     <div class="filters">
-      {% if group_filters %}
+      {% if active_filters %}
         <div class="filter-label">Active filters</div>
         <div class="filter-row">
-          {% for field, value in group_filters.items() %}
-            <span class="filter-pill">{{ field }}: {{ value }}</span>
+          {% for filter in active_filters %}
+            <span class="filter-pill">
+              {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
+            </span>
           {% endfor %}
           <a class="ghost-button" href="/catalog{% if query %}?q={{ query|urlencode }}{% endif %}">Clear filters</a>
         </div>

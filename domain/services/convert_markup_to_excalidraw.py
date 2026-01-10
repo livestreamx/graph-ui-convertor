@@ -66,6 +66,12 @@ class MarkupToExcalidrawConverter:
         }
         if document.service_name:
             base_metadata["service_name"] = document.service_name
+        if document.criticality_level:
+            base_metadata["criticality_level"] = document.criticality_level
+        if document.team_id is not None:
+            base_metadata["team_id"] = document.team_id
+        if document.team_name:
+            base_metadata["team_name"] = document.team_name
 
         proc_name_lookup = {
             proc.procedure_id: proc.procedure_name

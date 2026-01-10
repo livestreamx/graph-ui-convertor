@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, cast
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -28,6 +28,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings
+from app.web.ui_text import UI_TEXT_OVERRIDES
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -39,6 +40,7 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 class CatalogGroup:
     field: str
     value: str
+    display_value: str
     count: int
     items: list[CatalogItem]
     children: list[CatalogGroup]
@@ -58,6 +60,7 @@ class CatalogContext:
 
 def create_app(settings: AppSettings) -> FastAPI:
     templates.env.filters["msk_datetime"] = format_msk_datetime
+    templates.env.filters["humanize_text"] = humanize_text
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
@@ -101,6 +104,8 @@ def create_app(settings: AppSettings) -> FastAPI:
         request: Request,
         q: str | None = Query(default=None),
         group: list[str] = Query(default_factory=list),
+        criticality_level: str | None = Query(default=None),
+        team_id: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data = load_index(context)
@@ -114,8 +119,18 @@ def create_app(settings: AppSettings) -> FastAPI:
                 },
             )
         filters = parse_group_filters(group)
+        if criticality_level:
+            filters["criticality_level"] = criticality_level
+        if team_id:
+            filters["team_id"] = team_id
         filtered_items = filter_items(index_data.items, q, filters)
         groups = build_group_tree(filtered_items, index_data.group_by)
+        criticality_levels, team_options = build_filter_options(
+            index_data.items, index_data.unknown_value
+        )
+        team_lookup = dict(team_options)
+        active_filters = build_active_filters(filters, team_lookup)
+        group_query_base = build_group_query_base(q, criticality_level, team_id)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
         return templates.TemplateResponse(
             request,
@@ -127,7 +142,13 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "groups": groups,
                 "items": filtered_items,
                 "query": q or "",
-                "group_filters": filters,
+                "group_filters": parse_group_filters(group),
+                "active_filters": active_filters,
+                "criticality_level": criticality_level or "",
+                "team_id": team_id or "",
+                "criticality_levels": criticality_levels,
+                "team_options": team_options,
+                "group_query_base": group_query_base,
             },
         )
 
@@ -437,12 +458,23 @@ def matches_query(item: CatalogItem, query: str) -> bool:
         return True
     if query in item.markup_type.lower():
         return True
+    if query in item.team_name.lower():
+        return True
+    if query in item.criticality_level.lower():
+        return True
     return False
 
 
 def matches_filters(item: CatalogItem, filters: dict[str, str]) -> bool:
     for field, value in filters.items():
-        candidate = item.group_values.get(field) or item.fields.get(field)
+        if field == "criticality_level":
+            candidate = item.criticality_level
+        elif field == "team_id":
+            candidate = item.team_id
+        elif field == "team_name":
+            candidate = item.team_name
+        else:
+            candidate = item.group_values.get(field) or item.fields.get(field) or ""
         if candidate != value:
             return False
     return True
@@ -468,6 +500,7 @@ def build_group_tree(items: list[CatalogItem], fields: list[str]) -> list[Catalo
             CatalogGroup(
                 field="all",
                 value="All",
+                display_value="All",
                 count=len(items),
                 items=items,
                 children=[],
@@ -476,16 +509,18 @@ def build_group_tree(items: list[CatalogItem], fields: list[str]) -> list[Catalo
     field = fields[0]
     buckets: dict[str, list[CatalogItem]] = {}
     for item in items:
-        key = item.group_values.get(field, "unknown")
+        key = group_value_for_field(item, field)
         buckets.setdefault(key, []).append(item)
     groups: list[CatalogGroup] = []
     for value in sorted(buckets.keys()):
         bucket_items = buckets[value]
         children = build_group_tree(bucket_items, fields[1:]) if len(fields) > 1 else []
+        display_value = group_display_value(field, value, bucket_items)
         groups.append(
             CatalogGroup(
                 field=field,
                 value=value,
+                display_value=display_value,
                 count=len(bucket_items),
                 items=bucket_items,
                 children=children,
@@ -534,6 +569,86 @@ def format_msk_datetime(value: str) -> str:
         msk_tz = timezone(timedelta(hours=3))
     dt = dt.astimezone(msk_tz)
     return dt.strftime("%d.%m.%Y %H:%M MSK")
+
+
+def build_filter_options(
+    items: list[CatalogItem],
+    unknown_value: str,
+) -> tuple[list[str], list[tuple[str, str]]]:
+    criticality_levels = sorted(
+        {
+            item.criticality_level
+            for item in items
+            if item.criticality_level and item.criticality_level != unknown_value
+        }
+    )
+    teams: dict[str, str] = {}
+    for item in items:
+        if not item.team_id or item.team_id == unknown_value:
+            continue
+        display_name = item.team_name
+        if not display_name or display_name == unknown_value:
+            display_name = item.team_id
+        teams[item.team_id] = display_name
+    team_options = sorted(teams.items(), key=lambda entry: entry[1].lower())
+    return criticality_levels, team_options
+
+
+def build_active_filters(
+    filters: dict[str, str],
+    team_lookup: dict[str, str],
+) -> list[dict[str, str]]:
+    active: list[dict[str, str]] = []
+    for field, value in filters.items():
+        display_value = value
+        if field == "team_id":
+            display_value = team_lookup.get(value, value)
+        active.append(
+            {
+                "field": field,
+                "value": value,
+                "display_value": display_value,
+            }
+        )
+    return active
+
+
+def build_group_query_base(
+    query: str | None,
+    criticality_level: str | None,
+    team_id: str | None,
+) -> str:
+    params: dict[str, str] = {}
+    if query:
+        params["q"] = query
+    if criticality_level:
+        params["criticality_level"] = criticality_level
+    if team_id:
+        params["team_id"] = team_id
+    return urlencode(params)
+
+
+def group_value_for_field(item: CatalogItem, field: str) -> str:
+    if field == "criticality_level":
+        return item.criticality_level
+    if field == "team_id":
+        return item.team_id
+    if field == "team_name":
+        return item.team_name
+    return item.group_values.get(field, "unknown")
+
+
+def group_display_value(field: str, value: str, items: list[CatalogItem]) -> str:
+    if field == "team_id":
+        for item in items:
+            if item.team_name and item.team_name != value:
+                return item.team_name
+    return value
+
+
+def humanize_text(value: str) -> str:
+    text = str(value)
+    return UI_TEXT_OVERRIDES.get(text, text)
 
 
 def proxy_headers(request: Request) -> dict[str, str]:

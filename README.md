@@ -209,5 +209,6 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 1. Загрузите markup в S3 (локально: `make s3-seed`).
 2. Откройте каталог: `cjm catalog serve` и перейдите на `/catalog`.
-3. Откройте диаграмму в Excalidraw или скачайте `.excalidraw` для ручного импорта.
-4. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+3. Используйте фильтры по критичности и команде (отображается `team_name`).
+4. Откройте диаграмму в Excalidraw или скачайте `.excalidraw` для ручного импорта.
+5. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.

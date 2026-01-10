@@ -53,6 +53,9 @@
 - `schema_version`: `"1.0"`
 - `markup_type`
 - `service_name` (если есть)
+- `criticality_level` (если есть)
+- `team_id` (если есть)
+- `team_name` (если есть)
 - `procedure_id`
 - `block_id` (когда применимо)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`

@@ -71,6 +71,29 @@ class BuildCatalogIndex:
             ["finedog_unit_id", "finedog_unit_meta.unit_id"],
             default=config.unknown_value,
         )
+        criticality_level = self._resolve_first(
+            raw,
+            document,
+            ["criticality_level", "finedog_unit_meta.criticality_level"],
+            default=config.unknown_value,
+        )
+        team_id = self._resolve_first(
+            raw,
+            document,
+            ["team_id", "finedog_unit_meta.team_id"],
+            default=config.unknown_value,
+        )
+        team_name = self._resolve_first(
+            raw,
+            document,
+            ["team_name", "finedog_unit_meta.team_name"],
+            default="",
+        )
+        if not team_name and team_id and team_id != config.unknown_value:
+            team_name = team_id
+        if not team_name:
+            team_name = config.unknown_value
+        markup_meta = self._extract_markup_meta(raw)
 
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
@@ -86,8 +109,17 @@ class BuildCatalogIndex:
             updated_at=updated_at.isoformat(),
             markup_type=markup_type,
             finedog_unit_id=finedog_unit_id,
+            criticality_level=criticality_level,
+            team_id=team_id,
+            team_name=team_name,
             group_values=group_values,
-            fields=fields,
+            fields=self._inject_extra_fields(
+                fields,
+                criticality_level=criticality_level,
+                team_id=team_id,
+                team_name=team_name,
+            ),
+            markup_meta=markup_meta,
             markup_rel_path=markup_rel_path,
             excalidraw_rel_path=excalidraw_rel_path,
         )
@@ -133,6 +165,48 @@ class BuildCatalogIndex:
             value = self._resolve_field(raw, document, field)
             tags.extend(self._normalize_tags(value))
         return self._unique(tags)
+
+    def _extract_markup_meta(self, raw: Mapping[str, Any]) -> dict[str, str]:
+        meta = raw.get("finedog_unit_meta")
+        if not isinstance(meta, Mapping):
+            return {}
+        filtered: dict[str, str] = {}
+        skip_fields = {
+            "service_name",
+            "criticality_level",
+            "team_id",
+            "team_name",
+            "unit_id",
+        }
+        for key, value in meta.items():
+            if key in skip_fields:
+                continue
+            text = self._stringify_meta(value)
+            if text:
+                filtered[str(key)] = text
+        return dict(sorted(filtered.items()))
+
+    def _stringify_meta(self, value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, Mapping):
+            return json.dumps(value, sort_keys=True, ensure_ascii=True)
+        if isinstance(value, list):
+            joined = ", ".join(str(item).strip() for item in value if str(item).strip())
+            return joined
+        return str(value).strip()
+
+    def _inject_extra_fields(
+        self,
+        fields: dict[str, str],
+        criticality_level: str,
+        team_id: str,
+        team_name: str,
+    ) -> dict[str, str]:
+        fields.setdefault("criticality_level", criticality_level)
+        fields.setdefault("team_id", team_id)
+        fields.setdefault("team_name", team_name)
+        return fields
 
     def _normalize_tags(self, value: Any) -> list[str]:
         if value is None:

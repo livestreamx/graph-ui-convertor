@@ -1,13 +1,15 @@
-{% macro render_group(group, query) %}
+{% macro render_group(group, group_query_base) %}
   <section class="group">
     <div class="group-header">
       <div>
-        <div class="group-title">{{ group.field }}: {{ group.value }}</div>
+        <div class="group-title">
+          {{ group.field | humanize_text }}: {{ group.display_value | humanize_text }}
+        </div>
         <div class="group-count">{{ group.count }} scenes</div>
       </div>
       <a
         class="group-filter"
-        href="/catalog{% if query %}?q={{ query|urlencode }}&group={{ group.field }}:{{ group.value }}{% else %}?group={{ group.field }}:{{ group.value }}{% endif %}"
+        href="/catalog{% if group_query_base %}?{{ group_query_base }}&group={{ group.field | urlencode }}:{{ group.value | urlencode }}{% else %}?group={{ group.field | urlencode }}:{{ group.value | urlencode }}{% endif %}"
       >
         Filter
       </a>
@@ -15,7 +17,7 @@
     {% if group.children %}
       <div class="group-children">
         {% for child in group.children %}
-          {{ render_group(child, query) }}
+          {{ render_group(child, group_query_base) }}
         {% endfor %}
       </div>
     {% else %}
@@ -25,7 +27,9 @@
             <div class="card-body">
               <div class="card-title">{{ item.title }}</div>
               <div class="card-meta">
-                <span>{{ item.markup_type }}</span>
+                <span>
+                  {{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}
+                </span>
                 <span>{{ item.updated_at | msk_datetime }}</span>
               </div>
               {% if item.tags %}

@@ -113,6 +113,11 @@ main {
   animation: fadeUp 0.4s ease both;
 }
 
+.search-bar {
+  display: grid;
+  gap: 12px;
+}
+
 .search-bar input {
   width: 100%;
   padding: 14px 16px;
@@ -121,6 +126,29 @@ main {
   background: #0b1430;
   color: var(--text);
   font-size: 15px;
+}
+
+.filter-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.filter-control {
+  display: grid;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.filter-control select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: #0b1430;
+  color: var(--text);
+  font-size: 14px;
 }
 
 .filters {
@@ -326,6 +354,10 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
+}
+
+.meta-extra {
+  margin-top: 16px;
 }
 
 .meta-label {

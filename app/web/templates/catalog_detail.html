@@ -5,7 +5,7 @@
     <a class="ghost-button" href="/catalog">Back to catalog</a>
     <div class="detail-title">{{ item.title }}</div>
     <div class="detail-meta">
-      <span>{{ item.markup_type }}</span>
+      <span>{{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}</span>
       <span>Updated {{ item.updated_at | msk_datetime }}</span>
       <span>Scene ID {{ item.scene_id }}</span>
     </div>
@@ -59,6 +59,24 @@
         <div class="meta-label">FineDog unit</div>
         <div class="meta-value">{{ item.finedog_unit_id }}</div>
       </div>
+      <div>
+        <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
+        <div class="meta-value">{{ item.criticality_level | humanize_text }}</div>
+      </div>
+      <div>
+        <div class="meta-label">{{ "team_id" | humanize_text }}</div>
+        <div class="meta-value">{{ item.team_name }}</div>
+      </div>
     </div>
+    {% if item.markup_meta %}
+      <div class="meta-grid meta-extra">
+        {% for key, value in item.markup_meta.items() %}
+          <div>
+            <div class="meta-label">{{ key | humanize_text }}</div>
+            <div class="meta-value">{{ value }}</div>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
   </section>
 {% endblock %}

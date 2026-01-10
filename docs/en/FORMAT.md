@@ -53,6 +53,9 @@ Stored on every shape/arrow/text:
 - `schema_version`: `"1.0"`
 - `markup_type`
 - `service_name` (if present)
+- `criticality_level` (if present)
+- `team_id` (if present)
+- `team_name` (if present)
 - `procedure_id`
 - `block_id` (when applicable)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`

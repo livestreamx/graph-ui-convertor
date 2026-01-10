@@ -57,6 +57,8 @@ catalog:
 - `group_by`: List of dot-paths used to build nested groupings in the catalog list.
 - `title_field`: Dot-path used for the card title. Falls back to `service_name` or file stem.
 - `tag_fields`: Dot-paths used to populate tag pills.
+- `criticality_level` / `team_id` / `team_name`: Read from `finedog_unit_meta` for catalog filters; other
+  `finedog_unit_meta` keys are shown in the catalog metadata panel.
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
 - `unknown_value`: Placeholder when a field is missing.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.

@@ -48,7 +48,7 @@ class ExcalidrawToMarkupConverter:
         markers = self._collect_markers(elements, frames)
         block_names = self._collect_block_names(elements, frames)
 
-        markup_type, service_name = self._infer_globals(elements)
+        globals_meta = self._infer_globals(elements)
         start_map: dict[str, set[str]] = defaultdict(set)
         end_map: dict[str, dict[str, str]] = defaultdict(dict)
         branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
@@ -111,8 +111,11 @@ class ExcalidrawToMarkupConverter:
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
         return MarkupDocument(
-            markup_type=markup_type,
-            service_name=service_name,
+            markup_type=globals_meta["markup_type"],
+            service_name=globals_meta.get("service_name"),
+            criticality_level=globals_meta.get("criticality_level"),
+            team_id=globals_meta.get("team_id"),
+            team_name=globals_meta.get("team_name"),
             procedures=procedures,
             procedure_graph=procedure_graph,
         )
@@ -377,14 +380,42 @@ class ExcalidrawToMarkupConverter:
         start_id = start_binding.get("elementId")
         return bool(isinstance(start_id, str) and start_id not in markers)
 
-    def _infer_globals(self, elements: Iterable[Element]) -> tuple[str, str | None]:
+    def _infer_globals(self, elements: Iterable[Element]) -> dict[str, Any]:
         for element in elements:
             meta = self._metadata(element)
             markup_type = meta.get("markup_type")
-            service_name = meta.get("service_name")
             if markup_type:
-                return str(markup_type), service_name
-        return "service", None
+                return {
+                    "markup_type": str(markup_type),
+                    "service_name": self._normalize_meta_str(meta.get("service_name")),
+                    "criticality_level": self._normalize_meta_str(meta.get("criticality_level")),
+                    "team_id": self._normalize_team_id(meta.get("team_id")),
+                    "team_name": self._normalize_meta_str(meta.get("team_name")),
+                }
+        return {
+            "markup_type": "service",
+            "service_name": None,
+            "criticality_level": None,
+            "team_id": None,
+            "team_name": None,
+        }
+
+    def _normalize_meta_str(self, value: Any) -> str | None:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text if text else None
+
+    def _normalize_team_id(self, value: Any) -> int | str | None:
+        if value is None:
+            return None
+        if isinstance(value, str):
+            text = value.strip()
+            return text if text else None
+        if isinstance(value, int):
+            return value
+        text = str(value).strip()
+        return text if text else None
 
     def _merge_marker_end_types(
         self, markers: dict[str, MarkerCandidate]

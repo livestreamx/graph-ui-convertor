@@ -11,7 +11,12 @@ from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConve
 def test_end_type_roundtrip_and_service_name() -> None:
     payload = {
         "markup_type": "service",
-        "finedog_unit_meta": {"service_name": "Test Service"},
+        "finedog_unit_meta": {
+            "service_name": "Test Service",
+            "criticality_level": "BC",
+            "team_id": 101,
+            "team_name": "Support Core",
+        },
         "procedures": [
             {
                 "proc_id": "p1",
@@ -33,6 +38,9 @@ def test_end_type_roundtrip_and_service_name() -> None:
     reconstructed_proc = reconstructed.procedures[0]
 
     assert reconstructed.service_name == "Test Service"
+    assert reconstructed.criticality_level == "BC"
+    assert reconstructed.team_id == 101
+    assert reconstructed.team_name == "Support Core"
     assert reconstructed_proc.end_block_types["b"] == "exit"
     assert reconstructed_proc.end_block_types["c"] == "intermediate"
 
@@ -50,6 +58,10 @@ def test_end_type_roundtrip_and_service_name() -> None:
     serialized = markup.to_markup_dict()
     procedures = cast(list[dict[str, Any]], serialized["procedures"])
     assert procedures[0]["end_block_ids"] == ["b::exit", "c::intermediate"]
+    meta = cast(dict[str, Any], serialized.get("finedog_unit_meta"))
+    assert meta["criticality_level"] == "BC"
+    assert meta["team_id"] == 101
+    assert meta["team_name"] == "Support Core"
 
 
 def test_skip_empty_procedures_in_excalidraw() -> None:

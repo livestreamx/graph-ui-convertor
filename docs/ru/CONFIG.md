@@ -55,6 +55,8 @@ catalog:
 - `group_by`: список dot-path для группировки в списке каталога.
 - `title_field`: dot-path для заголовка карточки. Иначе используется `service_name` или имя файла.
 - `tag_fields`: dot-path, используемые для тегов.
+- `criticality_level` / `team_id` / `team_name`: читаются из `finedog_unit_meta` для фильтров каталога;
+  остальные ключи `finedog_unit_meta` показываются в метаданных карточки.
 - `sort_by`: `title`, `updated_at`, `markup_type`, `finedog_unit_id` или любое настроенное поле.
 - `unknown_value`: заглушка для отсутствующих полей.
 - `rebuild_token`: пустое значение отключает `/api/rebuild-index`. Задайте секрет для включения.
