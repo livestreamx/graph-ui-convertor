@@ -45,5 +45,4 @@ def test_s3_markup_catalog_source_loads_items() -> None:
     assert len(items) == 1
     assert items[0].path == Path("markup/billing.json")
     assert items[0].document.markup_type == "service"
-    assert items[0].created_at == last_modified
     assert items[0].updated_at == last_modified

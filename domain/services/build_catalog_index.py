@@ -98,10 +98,6 @@ class BuildCatalogIndex:
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
 
-        created_at = entry.created_at
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=UTC)
-
         updated_at = entry.updated_at
         if updated_at.tzinfo is None:
             updated_at = updated_at.replace(tzinfo=UTC)
@@ -110,7 +106,6 @@ class BuildCatalogIndex:
             scene_id=scene_id,
             title=title,
             tags=tags,
-            created_at=created_at.isoformat(),
             updated_at=updated_at.isoformat(),
             markup_type=markup_type,
             finedog_unit_id=finedog_unit_id,

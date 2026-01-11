@@ -63,6 +63,7 @@ catalog:
 - `criticality_level` / `team_id` / `team_name`: Read from `finedog_unit_meta` for catalog filters; other
   `finedog_unit_meta` keys are shown in the catalog metadata panel.
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
+- Catalog index items include `updated_at`.
 - `unknown_value`: Placeholder when a field is missing.
 - `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
   When set via environment variables, pass a JSON object.

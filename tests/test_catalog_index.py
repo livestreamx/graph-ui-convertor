@@ -85,7 +85,6 @@ def test_build_catalog_index_extracts_fields(
         assert item.excalidraw_rel_path == "billing.excalidraw"
         assert item.markup_rel_path == "billing.json"
         expected_timestamp = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
-        assert item.created_at == expected_timestamp
         assert item.updated_at == expected_timestamp
 
         index_again = builder.build(config)

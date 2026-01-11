@@ -107,7 +107,7 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         assert index_response.status_code == 200
         items = index_response.json()["items"]
         assert len(items) == 1
-        assert items[0]["created_at"]
+        assert items[0]["updated_at"]
         scene_id = items[0]["scene_id"]
 
         scene_response = client_api.get(f"/api/scenes/{scene_id}")

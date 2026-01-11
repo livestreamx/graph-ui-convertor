@@ -61,6 +61,7 @@ catalog:
 - `criticality_level` / `team_id` / `team_name`: читаются из `finedog_unit_meta` для фильтров каталога;
   остальные ключи `finedog_unit_meta` показываются в метаданных карточки.
 - `sort_by`: `title`, `updated_at`, `markup_type`, `finedog_unit_id` или любое настроенное поле.
+- В элементах индекса хранится только `updated_at`.
 - `unknown_value`: заглушка для отсутствующих полей.
 - `ui_text_overrides`: опциональный словарь для подмены значений/ключей в Catalog UI.
   При установке через переменные окружения используйте JSON-объект.

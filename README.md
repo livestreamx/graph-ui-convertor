@@ -213,3 +213,5 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 3. Используйте фильтры по критичности и команде (отображается `team_name`).
 4. Откройте диаграмму в Excalidraw или скачайте `.excalidraw` для ручного импорта.
 5. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+
+В карточках и деталях каталога отображается `updated_at`;.
