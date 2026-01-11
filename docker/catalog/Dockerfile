@@ -13,7 +13,7 @@ RUN python -m venv "$VIRTUAL_ENV"
 RUN addgroup --system app && adduser --system --ingroup app app
 RUN mkdir -p /data /config && chown -R app:app /data /config /app /opt/venv
 
-COPY pyproject.toml poetry.lock README.md ./
+COPY pyproject.toml poetry.lock ./
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir "poetry==${POETRY_VERSION}" "poetry-plugin-export" \
     && poetry export -f requirements.txt --output /tmp/requirements.txt --without-hashes --only main \
@@ -26,7 +26,7 @@ COPY adapters ./adapters
 COPY domain ./domain
 COPY config ./config
 
-RUN pip install --no-cache-dir --no-deps .
+ENV PYTHONPATH=/app
 
 USER app
 
