@@ -73,6 +73,7 @@ class MarkupToExcalidrawConverter:
         if document.team_name:
             base_metadata["team_name"] = document.team_name
 
+        self._build_service_title(plan, registry, base_metadata, document.service_name)
         proc_name_lookup = {
             proc.procedure_id: proc.procedure_name
             for proc in document.procedures
@@ -213,6 +214,76 @@ class MarkupToExcalidrawConverter:
                     stroke_width=2,
                 )
             )
+
+    def _build_service_title(
+        self,
+        plan: LayoutPlan,
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+        service_name: str | None,
+    ) -> None:
+        if not service_name:
+            return
+        title = service_name.strip()
+        if not title:
+            return
+        bounds = self._plan_bounds(plan)
+        if not bounds:
+            return
+        min_x, min_y, max_x, _ = bounds
+        content_width = max_x - min_x
+        title_width = max(content_width + 120.0, 360.0)
+        title_height = 72.0
+        gap_y = 90.0
+        origin_x = (min_x + max_x) / 2 - title_width / 2
+        origin_y = min_y - gap_y - title_height
+        group_id = self._stable_id("diagram-title-group", title)
+        panel_id = self._stable_id("diagram-title-panel", title)
+        rule_id = self._stable_id("diagram-title-rule", title)
+        text_id = self._stable_id("diagram-title-text", title)
+        panel_meta = self._with_base_metadata({"role": "diagram_title_panel"}, base_metadata)
+        rule_meta = self._with_base_metadata({"role": "diagram_title_rule"}, base_metadata)
+        text_meta = self._with_base_metadata({"role": "diagram_title"}, base_metadata)
+        title_origin = Point(x=origin_x, y=origin_y)
+        registry.add(
+            self._title_panel_element(
+                element_id=panel_id,
+                origin=title_origin,
+                size=Size(title_width, title_height),
+                metadata=panel_meta,
+                group_ids=[group_id],
+            )
+        )
+        line_y = origin_y + title_height - 12.0
+        registry.add(
+            self._line_element(
+                element_id=rule_id,
+                start=Point(origin_x + 26.0, line_y),
+                end=Point(origin_x + title_width - 26.0, line_y),
+                metadata=rule_meta,
+                stroke_color="#7b8fb0",
+                stroke_width=3,
+                group_ids=[group_id],
+            )
+        )
+        title_center = Point(
+            x=origin_x + title_width / 2,
+            y=origin_y + title_height / 2,
+        )
+        registry.add(
+            self._text_element(
+                element_id=text_id,
+                text=title,
+                center=title_center,
+                container_id=None,
+                frame_id=None,
+                metadata=text_meta,
+                group_ids=[group_id],
+                max_width=title_width - 72.0,
+                max_height=title_height - 32.0,
+                font_size=30.0,
+            )
+        )
 
     def _build_scenarios(
         self,
@@ -883,6 +954,35 @@ class MarkupToExcalidrawConverter:
             metadata=metadata,
         )
 
+    def _title_panel_element(
+        self,
+        element_id: str,
+        origin: Point,
+        size: Size,
+        metadata: Metadata,
+        group_ids: list[str],
+    ) -> Element:
+        return self._base_shape(
+            element_id=element_id,
+            type_name="rectangle",
+            position=origin,
+            width=size.width,
+            height=size.height,
+            group_ids=group_ids,
+            extra={
+                "strokeColor": "#34445b",
+                "backgroundColor": "#eef3ff",
+                "fillStyle": "solid",
+                "roughness": 0,
+                "seed": self._rand_seed(),
+                "version": 1,
+                "versionNonce": self._rand_seed(),
+                "roundness": {"type": 3},
+                "strokeWidth": 2,
+            },
+            metadata=metadata,
+        )
+
     def _ellipse_element(
         self,
         element_id: str,
@@ -1043,6 +1143,7 @@ class MarkupToExcalidrawConverter:
         stroke_color: str | None = None,
         stroke_style: str | None = None,
         stroke_width: float = 1.0,
+        group_ids: list[str] | None = None,
     ) -> Element:
         dx = end.x - start.x
         dy = end.y - start.y
@@ -1069,7 +1170,7 @@ class MarkupToExcalidrawConverter:
             "strokeStyle": stroke_style or "solid",
             "roughness": 0,
             "opacity": 100,
-            "groupIds": [],
+            "groupIds": group_ids or [],
             "roundness": None,
             "seed": self._rand_seed(),
             "version": 1,
@@ -1246,6 +1347,30 @@ class MarkupToExcalidrawConverter:
                 if component_sizes.get(src_id, 0) > 1 or source == target:
                     cycle_edges.add((source, target))
         return cycle_edges
+
+    def _plan_bounds(self, plan: LayoutPlan) -> tuple[float, float, float, float] | None:
+        min_x = float("inf")
+        min_y = float("inf")
+        max_x = float("-inf")
+        max_y = float("-inf")
+        for frame in plan.frames:
+            min_x = min(min_x, frame.origin.x)
+            min_y = min(min_y, frame.origin.y)
+            max_x = max(max_x, frame.origin.x + frame.size.width)
+            max_y = max(max_y, frame.origin.y + frame.size.height)
+        for scenario in plan.scenarios:
+            min_x = min(min_x, scenario.origin.x)
+            min_y = min(min_y, scenario.origin.y)
+            max_x = max(max_x, scenario.origin.x + scenario.size.width)
+            max_y = max(max_y, scenario.origin.y + scenario.size.height)
+        for separator in plan.separators:
+            min_x = min(min_x, separator.start.x, separator.end.x)
+            max_x = max(max_x, separator.start.x, separator.end.x)
+            min_y = min(min_y, separator.start.y, separator.end.y)
+            max_y = max(max_y, separator.start.y, separator.end.y)
+        if min_x == float("inf"):
+            return None
+        return min_x, min_y, max_x, max_y
 
     def _base_shape(
         self,

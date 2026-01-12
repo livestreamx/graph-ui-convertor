@@ -27,6 +27,7 @@
       <div class="button-row">
         <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">Open Excalidraw</a>
         <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?download=true">Download .excalidraw</a>
+        <a class="ghost-button" href="/api/markup/{{ item.scene_id }}?download=true">Download markup.json</a>
       </div>
       {% if not scene_available %}
         {% if on_demand_enabled %}

@@ -15,7 +15,7 @@ from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from fastapi.testclient import TestClient
 
-from tests.s3_utils import stub_s3_catalog
+from tests.s3_utils import add_get_object, stub_s3_catalog
 
 
 def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -48,6 +48,7 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         prefix="markup/",
         list_repeats=1,
     )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/billing.json", payload=payload)
 
     markup_doc = MarkupDocument.model_validate(payload)
     excal_doc = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup_doc)
@@ -112,6 +113,11 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
         scene_response = client_api.get(f"/api/scenes/{scene_id}")
         assert scene_response.status_code == 200
+
+        markup_response = client_api.get(f"/api/markup/{scene_id}?download=true")
+        assert markup_response.status_code == 200
+        assert "attachment" in markup_response.headers.get("content-disposition", "").lower()
+        assert markup_response.json() == payload
 
         with excal_path.open("rb") as handle:
             upload_response = client_api.post(

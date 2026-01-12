@@ -72,6 +72,18 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
             raise
         return MarkupDocument.model_validate(raw)
 
+    def load_raw_bytes(self, path: Path) -> bytes:
+        key = self.build_key(path)
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=key)
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code", "")
+            if code in {"NoSuchKey", "404", "NotFound"}:
+                raise FileNotFoundError(key) from exc
+            raise
+        body = response.get("Body")
+        return self._read_body(body)
+
     def build_key(self, path: Path) -> str:
         key = path.as_posix().lstrip("/")
         if not self._prefix:

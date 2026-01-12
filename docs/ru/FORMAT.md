@@ -44,6 +44,7 @@
   - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate`)
   - `all`/`intermediate` в markup рисуют один END с подписью `END & EXIT`.
   - ветки блок -> блок (label `branch`, `edge_type=branch`)
+- `service_name` выводится как композитный заголовок над графом.
 - Детерминированный лейаут: grid по процедурам, слева направо, сверху вниз.
 
 ## Метаданные (`customData.cjm`)
@@ -59,6 +60,7 @@
 - `procedure_id`
 - `block_id` (когда применимо)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
+- `role` (заголовок): `diagram_title_panel|diagram_title|diagram_title_rule`
 - `edge_type`: `start|end|branch` (только для ребер)
 - `end_type`: `end|exit|all|intermediate` (end-маркеры и end-стрелки)
 - `end_block_type`: `end|exit|all|intermediate` (исходный тип блока в markup)

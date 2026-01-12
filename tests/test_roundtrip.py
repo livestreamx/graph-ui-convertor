@@ -110,6 +110,68 @@ def test_metadata_contains_globals() -> None:
         assert meta.get("markup_type") == markup.markup_type
 
 
+def test_service_name_title_rendered_above_frames() -> None:
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Billing Flow"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    title_panels = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title_panel"
+    ]
+    title_texts = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title"
+    ]
+    assert len(title_panels) == 1
+    assert title_texts
+    assert "Billing Flow" in title_texts[0].get("text", "")
+
+    frame_min_y = min(
+        element.get("y", 0.0) for element in excal.elements if element.get("type") == "frame"
+    )
+    panel = title_panels[0]
+    panel_bottom = panel.get("y", 0.0) + panel.get("height", 0.0)
+    assert panel_bottom < frame_min_y
+
+
+def test_service_name_title_skipped_without_name() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    title_elements = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role")
+        in {"diagram_title", "diagram_title_panel", "diagram_title_rule"}
+    ]
+    assert not title_elements
+
+
 def test_roundtrip_from_example_json_fixture() -> None:
     markup = load_markup_fixture("yet_another.json")
     layout = GridLayoutEngine()

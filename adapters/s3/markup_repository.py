@@ -45,5 +45,8 @@ class S3MarkupRepository(MarkupRepository):
     def load_by_path(self, path: Path) -> MarkupDocument:
         return self._source.load_document(path)
 
+    def load_raw(self, path: Path) -> bytes:
+        return self._source.load_raw_bytes(path)
+
     def save(self, document: MarkupDocument, path: Path) -> None:
         raise NotImplementedError("S3MarkupRepository is read-only.")

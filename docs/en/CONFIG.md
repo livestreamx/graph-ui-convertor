@@ -83,6 +83,10 @@ catalog:
 - Cross-origin Excalidraw uses `#json` only while the URL is short enough; otherwise users should download and import the `.excalidraw` file.
 - Very large scenes can exceed browser localStorage limits (often ~5MB) or be slow to render; rely on the manual import flow in that case.
 
+## Catalog UI
+
+- Detail view includes downloads for `.excalidraw` and the original `markup.json`.
+
 ## Dot-path resolution
 
 Dot paths traverse nested objects in the raw markup JSON. Examples:

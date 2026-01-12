@@ -44,6 +44,7 @@ This project converts CJM markup JSON <-> Excalidraw scenes while preserving ide
   - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate`)
   - `all`/`intermediate` in markup render a single END marker labeled `END & EXIT`.
   - branch arrows block -> block (label `branch`, `edge_type=branch`)
+- Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 
 ## Metadata (`customData.cjm`)
@@ -59,6 +60,7 @@ Stored on every shape/arrow/text:
 - `procedure_id`
 - `block_id` (when applicable)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
+- `role` (title header): `diagram_title_panel|diagram_title|diagram_title_rule`
 - `edge_type`: `start|end|branch` (edges only)
 - `end_type`: `end|exit|all|intermediate` (end markers and end edges)
 - `end_block_type`: `end|exit|all|intermediate` (original markup type for the block)

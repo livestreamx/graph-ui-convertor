@@ -262,6 +262,28 @@ def create_app(settings: AppSettings) -> FastAPI:
             headers["Content-Disposition"] = f'attachment; filename="{item.excalidraw_rel_path}"'
         return ORJSONResponse(payload, headers=headers)
 
+    @app.get("/api/markup/{scene_id}")
+    def api_markup(
+        scene_id: str,
+        download: bool = Query(default=False),
+        context: CatalogContext = Depends(get_context),
+    ) -> Response:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        markup_root = Path(context.settings.catalog.s3.prefix or "")
+        markup_path = markup_root / item.markup_rel_path
+        try:
+            raw_bytes = context.markup_reader.load_raw(markup_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Markup file missing") from exc
+        headers = {}
+        if download:
+            filename = Path(item.markup_rel_path).name or "markup.json"
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return Response(content=raw_bytes, media_type="application/json", headers=headers)
+
     @app.post("/api/scenes/{scene_id}/upload")
     async def api_upload_scene(
         scene_id: str,
