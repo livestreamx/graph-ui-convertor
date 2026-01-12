@@ -24,6 +24,7 @@ from domain.models import (
     Size,
 )
 from domain.ports.layout import LayoutEngine
+from domain.services.excalidraw_title import apply_title_focus
 
 Metadata = dict[str, Any]
 Element = dict[str, Any]
@@ -142,6 +143,7 @@ class MarkupToExcalidrawConverter:
             "currentItemFontSize": 20,
             "currentItemStrokeColor": "#1e1e1e",
         }
+        apply_title_focus(app_state, registry.elements)
         return ExcalidrawDocument(elements=registry.elements, app_state=app_state, files={})
 
     def _center_on_first_frame(self, plan: LayoutPlan, elements: list[Element]) -> None:
@@ -232,9 +234,9 @@ class MarkupToExcalidrawConverter:
             return
         min_x, min_y, max_x, _ = bounds
         content_width = max_x - min_x
-        title_width = max(content_width + 120.0, 360.0)
-        title_height = 72.0
-        gap_y = 90.0
+        title_width = max(content_width + 160.0, 420.0)
+        title_height = 96.0
+        gap_y = 120.0
         origin_x = (min_x + max_x) / 2 - title_width / 2
         origin_y = min_y - gap_y - title_height
         group_id = self._stable_id("diagram-title-group", title)
@@ -254,7 +256,7 @@ class MarkupToExcalidrawConverter:
                 group_ids=[group_id],
             )
         )
-        line_y = origin_y + title_height - 12.0
+        line_y = origin_y + title_height - 14.0
         registry.add(
             self._line_element(
                 element_id=rule_id,
@@ -279,9 +281,9 @@ class MarkupToExcalidrawConverter:
                 frame_id=None,
                 metadata=text_meta,
                 group_ids=[group_id],
-                max_width=title_width - 72.0,
-                max_height=title_height - 32.0,
-                font_size=30.0,
+                max_width=title_width - 96.0,
+                max_height=title_height - 40.0,
+                font_size=36.0,
             )
         )
 

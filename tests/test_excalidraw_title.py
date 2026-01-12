@@ -5,7 +5,11 @@ from typing import Any
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from domain.services.excalidraw_title import TITLE_ROLES, ensure_service_title
+from domain.services.excalidraw_title import (
+    TITLE_ROLES,
+    apply_title_focus,
+    ensure_service_title,
+)
 
 
 def _strip_title_elements(elements: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -40,6 +44,10 @@ def test_injects_title_when_missing() -> None:
     roles = [element.get("customData", {}).get("cjm", {}).get("role") for element in elements]
     assert "diagram_title" in roles
     assert "diagram_title_panel" in roles
+    app_state: dict[str, Any] = {}
+    apply_title_focus(app_state, elements)
+    assert "scrollX" in app_state
+    assert "scrollY" in app_state
 
 
 def test_skips_title_without_service_name() -> None:

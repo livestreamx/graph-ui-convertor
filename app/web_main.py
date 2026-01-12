@@ -22,7 +22,7 @@ from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from domain.services.excalidraw_title import ensure_service_title
+from domain.services.excalidraw_title import apply_title_focus, ensure_service_title
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -172,6 +172,14 @@ def create_app(settings: AppSettings) -> FastAPI:
         try:
             scene_payload = context.scene_repo.load(scene_path)
             if scene_payload.get("elements") is not None:
+                elements = scene_payload.get("elements")
+                if isinstance(elements, list):
+                    ensure_service_title(elements)
+                    app_state = scene_payload.get("appState")
+                    if not isinstance(app_state, dict):
+                        app_state = {}
+                        scene_payload["appState"] = app_state
+                    apply_title_focus(app_state, elements)
                 if is_same_origin(request, base_url):
                     excalidraw_open_url = f"/catalog/{scene_id}/open"
                     open_mode = "local_storage"
@@ -261,6 +269,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         elements = payload.get("elements")
         if isinstance(elements, list):
             ensure_service_title(elements)
+            app_state = payload.get("appState")
+            if not isinstance(app_state, dict):
+                app_state = {}
+                payload["appState"] = app_state
+            apply_title_focus(app_state, elements)
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{item.excalidraw_rel_path}"'
@@ -459,6 +472,11 @@ def build_excalidraw_payload(context: CatalogContext, item: CatalogItem) -> dict
     elements = payload.get("elements")
     if isinstance(elements, list):
         ensure_service_title(elements)
+        app_state = payload.get("appState")
+        if not isinstance(app_state, dict):
+            app_state = {}
+            payload["appState"] = app_state
+        apply_title_focus(app_state, elements)
     return payload
 
 

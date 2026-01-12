@@ -14,6 +14,15 @@ TITLE_ROLES = {
     "diagram_title_panel",
     "diagram_title_rule",
 }
+TITLE_FONT_SIZE = 36.0
+TITLE_HEIGHT = 96.0
+TITLE_GAP_Y = 120.0
+TITLE_MIN_WIDTH = 420.0
+TITLE_WIDTH_PADDING = 160.0
+TITLE_TEXT_WIDTH_PADDING = 96.0
+TITLE_TEXT_HEIGHT_PADDING = 40.0
+TITLE_RULE_OFFSET = 14.0
+FOCUS_PADDING = 140.0
 _BASE_META_KEYS = {
     "schema_version",
     "markup_type",
@@ -134,9 +143,9 @@ class ExcalidrawTitleInjector:
     ) -> list[Element]:
         min_x, min_y, max_x, _ = bounds
         content_width = max_x - min_x
-        title_width = max(content_width + 120.0, 360.0)
-        title_height = 72.0
-        gap_y = 90.0
+        title_width = max(content_width + TITLE_WIDTH_PADDING, TITLE_MIN_WIDTH)
+        title_height = TITLE_HEIGHT
+        gap_y = TITLE_GAP_Y
         origin_x = (min_x + max_x) / 2 - title_width / 2
         origin_y = min_y - gap_y - title_height
 
@@ -166,7 +175,7 @@ class ExcalidrawTitleInjector:
             },
             metadata=panel_meta,
         )
-        line_y = origin_y + title_height - 12.0
+        line_y = origin_y + title_height - TITLE_RULE_OFFSET
         rule = self._line_element(
             element_id=rule_id,
             start=(origin_x + 26.0, line_y),
@@ -183,9 +192,9 @@ class ExcalidrawTitleInjector:
             center=title_center,
             metadata=text_meta,
             group_ids=[group_id],
-            max_width=title_width - 72.0,
-            max_height=title_height - 32.0,
-            font_size=30.0,
+            max_width=title_width - TITLE_TEXT_WIDTH_PADDING,
+            max_height=title_height - TITLE_TEXT_HEIGHT_PADDING,
+            font_size=TITLE_FONT_SIZE,
         )
         return [panel, rule, text]
 
@@ -417,3 +426,66 @@ class ExcalidrawTitleInjector:
 
 def ensure_service_title(elements: list[Element]) -> None:
     ExcalidrawTitleInjector().ensure_title(elements)
+
+
+def apply_title_focus(app_state: dict[str, Any], elements: list[Element]) -> None:
+    title_panel = _find_first_by_role(elements, "diagram_title_panel")
+    if not title_panel:
+        return
+    first_frame = _find_first_frame(elements)
+    if not first_frame:
+        return
+    bounds = _merge_bounds([title_panel, first_frame])
+    if not bounds:
+        return
+    min_x, min_y, _, _ = bounds
+    app_state["scrollX"] = -min_x + FOCUS_PADDING
+    app_state["scrollY"] = -min_y + FOCUS_PADDING
+    zoom = app_state.get("zoom")
+    if not isinstance(zoom, Mapping) or "value" not in zoom:
+        app_state["zoom"] = {"value": 1}
+
+
+def _find_first_frame(elements: list[Element]) -> Element | None:
+    frames = [element for element in elements if element.get("type") == "frame"]
+    if not frames:
+        return None
+    return min(frames, key=lambda item: (float(item.get("x", 0.0)), float(item.get("y", 0.0))))
+
+
+def _find_first_by_role(elements: list[Element], role: str) -> Element | None:
+    for element in elements:
+        meta = element.get("customData", {}).get(CUSTOM_DATA_KEY)
+        if isinstance(meta, Mapping) and meta.get("role") == role:
+            return element
+    return None
+
+
+def _merge_bounds(elements: list[Element]) -> tuple[float, float, float, float] | None:
+    min_x = float("inf")
+    min_y = float("inf")
+    max_x = float("-inf")
+    max_y = float("-inf")
+    for element in elements:
+        bounds = _element_bounds(element)
+        if not bounds:
+            continue
+        x1, y1, x2, y2 = bounds
+        min_x = min(min_x, x1)
+        min_y = min(min_y, y1)
+        max_x = max(max_x, x2)
+        max_y = max(max_y, y2)
+    if min_x == float("inf"):
+        return None
+    return min_x, min_y, max_x, max_y
+
+
+def _element_bounds(element: Element) -> tuple[float, float, float, float] | None:
+    try:
+        x = float(element.get("x", 0.0))
+        y = float(element.get("y", 0.0))
+        width = float(element.get("width", 0.0))
+        height = float(element.get("height", 0.0))
+    except (TypeError, ValueError):
+        return None
+    return x, y, x + width, y + height
