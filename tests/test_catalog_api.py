@@ -133,6 +133,115 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         stubber.deactivate()
 
 
+def test_catalog_scene_links_applied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Billing"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    objects = {"markup/billing.json": payload}
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+
+    markup_doc = MarkupDocument.model_validate(payload)
+    excal_doc = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup_doc)
+    excal_path = excalidraw_in_dir / "billing.excalidraw"
+    FileSystemExcalidrawRepository().save(excal_doc, excal_path)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = AppSettings(
+            catalog=CatalogSettings(
+                title="Test Catalog",
+                s3=S3Settings(
+                    bucket="cjm-bucket",
+                    prefix="markup/",
+                    region="us-east-1",
+                    endpoint_url="http://stubbed-s3.local",
+                    access_key_id="test",
+                    secret_access_key="test",
+                    use_path_style=True,
+                ),
+                excalidraw_in_dir=excalidraw_in_dir,
+                excalidraw_out_dir=excalidraw_out_dir,
+                roundtrip_dir=roundtrip_dir,
+                index_path=index_path,
+                group_by=["markup_type"],
+                title_field="finedog_unit_meta.service_name",
+                tag_fields=[],
+                sort_by="title",
+                sort_order="asc",
+                unknown_value="unknown",
+                excalidraw_base_url="http://example.com",
+                excalidraw_proxy_upstream=None,
+                excalidraw_proxy_prefix="/excalidraw",
+                excalidraw_max_url_length=8000,
+                rebuild_token=None,
+                procedure_link_template="https://example.com/procedures/{procedure_id}",
+                block_link_template="https://example.com/blocks/{block_id}",
+            )
+        )
+
+        client_api = TestClient(create_app(settings))
+        index_response = client_api.get("/api/index")
+        scene_id = index_response.json()["items"][0]["scene_id"]
+
+        scene_response = client_api.get(f"/api/scenes/{scene_id}")
+        assert scene_response.status_code == 200
+        elements = scene_response.json()["elements"]
+        frame = next(
+            element
+            for element in elements
+            if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+        )
+        block = next(
+            element
+            for element in elements
+            if element.get("customData", {}).get("cjm", {}).get("role") == "block"
+            and element.get("customData", {}).get("cjm", {}).get("block_id") == "a"
+        )
+        assert frame.get("link") == "https://example.com/procedures/p1"
+        assert block.get("link") == "https://example.com/blocks/a"
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_ui_text_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
     excalidraw_out_dir = tmp_path / "excalidraw_out"

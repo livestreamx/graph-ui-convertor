@@ -48,6 +48,8 @@ class CatalogSettings(BaseModel):
     excalidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
+    procedure_link_template: str | None = None
+    block_link_template: str | None = None
 
     @field_validator("sort_order", mode="before")
     @classmethod

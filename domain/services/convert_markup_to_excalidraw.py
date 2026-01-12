@@ -24,6 +24,7 @@ from domain.models import (
     Size,
 )
 from domain.ports.layout import LayoutEngine
+from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_excalidraw_links
 from domain.services.excalidraw_title import apply_title_focus
 
 Metadata = dict[str, Any]
@@ -54,9 +55,14 @@ class ElementRegistry:
 
 
 class MarkupToExcalidrawConverter:
-    def __init__(self, layout_engine: LayoutEngine) -> None:
+    def __init__(
+        self,
+        layout_engine: LayoutEngine,
+        link_templates: ExcalidrawLinkTemplates | None = None,
+    ) -> None:
         self.layout_engine = layout_engine
         self.namespace = uuid.uuid5(uuid.NAMESPACE_DNS, "cjm-ui-convertor")
+        self.link_templates = link_templates
 
     def convert(self, document: MarkupDocument) -> ExcalidrawDocument:
         plan = self.layout_engine.build_plan(document)
@@ -135,6 +141,7 @@ class MarkupToExcalidrawConverter:
         self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
         self._build_service_title(plan, registry, base_metadata, document.service_name)
         self._center_on_first_frame(plan, registry.elements)
+        ensure_excalidraw_links(registry.elements, self.link_templates)
 
         app_state = {
             "viewBackgroundColor": "#ffffff",

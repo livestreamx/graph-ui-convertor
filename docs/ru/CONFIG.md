@@ -45,6 +45,8 @@ catalog:
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
   rebuild_token: ""
+  procedure_link_template: ""
+  block_link_template: ""
 ```
 
 ## Примечания к полям
@@ -69,6 +71,8 @@ catalog:
 - `ui_text_overrides`: опциональный словарь для подмены значений/ключей в Catalog UI.
   При установке через переменные окружения используйте JSON-объект.
 - `rebuild_token`: пустое значение отключает `/api/rebuild-index`. Задайте секрет для включения.
+- `procedure_link_template`: шаблон URL для ссылок на процедуры в Excalidraw (используйте `{procedure_id}`).
+- `block_link_template`: шаблон URL для ссылок на блоки в Excalidraw (используйте `{block_id}`).
 - `excalidraw_base_url`: URL или путь Excalidraw UI (например `/excalidraw`). При same-origin с Catalog
   сцена может быть внедрена через localStorage (рекомендуется для больших диаграмм). В противном случае
   используется `#json`, если URL достаточно короткий.
@@ -108,6 +112,18 @@ export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
+```
+
+## Локальные env-файлы
+
+Локальные переопределения для демо лежат в `config/catalog/env.local` и подхватываются `make demo` / `make catalog-up`.
+Если запускаете приложение напрямую (без Docker), подключите файл перед запуском:
+
+```bash
+set -a
+source config/catalog/env.local
+set +a
+cjm catalog serve --config config/catalog/app.s3.yaml
 ```
 
 ## Бандл конфигов

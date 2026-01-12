@@ -18,6 +18,7 @@ CATALOG_URL ?= http://localhost:$(CATALOG_PORT)
 CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
+CATALOG_ENV_FILE ?= config/catalog/env.local
 DEMO_NETWORK ?= cjm-demo
 S3_CONTAINER ?= cjm-s3
 S3_PORT ?= 9000
@@ -233,6 +234,7 @@ catalog-up: dirs
 		--network $(DEMO_NETWORK) \
 		-p $(CATALOG_PORT):8080 \
 		-e CJM_CONFIG_PATH=/config/app.yaml \
+		--env-file $(CATALOG_ENV_FILE) \
 		-v $(PWD)/$(DATA_DIR):/data \
 		-v $(PWD)/$(CATALOG_DOCKER_CONFIG):/config/app.yaml:ro \
 		$(CATALOG_IMAGE)

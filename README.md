@@ -214,5 +214,6 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 4. Откройте диаграмму в Excalidraw или скачайте `.excalidraw` / `markup.json` для ручного импорта или проверки.
 5. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
 6. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
+7. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
 
 В карточках и деталях каталога отображается `updated_at`;.

@@ -45,6 +45,8 @@ catalog:
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
   rebuild_token: ""
+  procedure_link_template: ""
+  block_link_template: ""
 ```
 
 ## Field notes
@@ -72,6 +74,8 @@ catalog:
 - `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
   When set via environment variables, pass a JSON object.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
+- `procedure_link_template`: URL template for procedure links in Excalidraw (use `{procedure_id}`).
+- `block_link_template`: URL template for block links in Excalidraw (use `{block_id}`).
 - `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
   Catalog, the app can inject scenes via local storage (recommended for large diagrams). Otherwise
   it falls back to URL fragments when short enough.
@@ -111,6 +115,18 @@ export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
+```
+
+## Local env files
+
+Local demo overrides live in `config/catalog/env.local` and are loaded by `make demo` / `make catalog-up`.
+When running the app directly (without Docker), source the file before starting:
+
+```bash
+set -a
+source config/catalog/env.local
+set +a
+cjm catalog serve --config config/catalog/app.s3.yaml
 ```
 
 ## Bundled configs

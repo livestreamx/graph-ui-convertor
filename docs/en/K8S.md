@@ -25,6 +25,9 @@ directly from S3 markup when a scene is requested (no pre-generation step requir
 - RWX PVC named `cjm-shared-data`
 - ConfigMap named `cjm-catalog-config` containing `app.yaml` (see `config/catalog/app.k8s.yaml`)
 - `CJM_CONFIG_PATH=/config/app.yaml`
+- Optional env overrides (example link templates):
+  - `CJM_CATALOG__PROCEDURE_LINK_TEMPLATE`
+  - `CJM_CATALOG__BLOCK_LINK_TEMPLATE`
 
 ## Excalidraw service
 

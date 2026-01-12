@@ -14,6 +14,7 @@ from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from domain.services.excalidraw_links import ExcalidrawLinkTemplates, build_link_templates
 from rich.console import Console
 
 from app.catalog_wiring import build_markup_repository, build_markup_source
@@ -33,11 +34,12 @@ def _run_convert_to_excalidraw(
     input_dir: Path,
     output_dir: Path,
     markup_repo: MarkupRepository | None = None,
+    link_templates: ExcalidrawLinkTemplates | None = None,
 ) -> None:
     markup_repo = markup_repo or FileSystemMarkupRepository()
     excal_repo = FileSystemExcalidrawRepository()
     layout = GridLayoutEngine()
-    converter = MarkupToExcalidrawConverter(layout)
+    converter = MarkupToExcalidrawConverter(layout, link_templates=link_templates)
 
     pairs = markup_repo.load_all_with_paths(input_dir)
     if not pairs:
@@ -170,7 +172,16 @@ def pipeline_build_all(
     settings = load_settings(config)
     markup_repo = build_markup_repository(settings)
     markup_dir = Path(settings.catalog.s3.prefix or "")
-    _run_convert_to_excalidraw(markup_dir, settings.catalog.excalidraw_in_dir, markup_repo)
+    link_templates = build_link_templates(
+        settings.catalog.procedure_link_template,
+        settings.catalog.block_link_template,
+    )
+    _run_convert_to_excalidraw(
+        markup_dir,
+        settings.catalog.excalidraw_in_dir,
+        markup_repo,
+        link_templates=link_templates,
+    )
     _run_build_index_from_settings(settings)
 
 
