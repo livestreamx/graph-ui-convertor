@@ -26,6 +26,7 @@ catalog:
   rebuild_index_on_start: false
   generate_excalidraw_on_demand: true
   cache_excalidraw_on_demand: true
+  invalidate_excalidraw_cache_on_start: true
   group_by:
     - "markup_type"
     - "custom.domain"
@@ -57,6 +58,9 @@ catalog:
 - `generate_excalidraw_on_demand`: Generate Excalidraw scenes from markup when a scene file is
   missing.
 - `cache_excalidraw_on_demand`: Persist generated scenes into `excalidraw_in_dir` for reuse.
+- `invalidate_excalidraw_cache_on_start`: Remove cached scenes from `excalidraw_in_dir` on startup
+  (only when `generate_excalidraw_on_demand` is enabled) so fresh diagrams are generated with the
+  current code.
 - `group_by`: List of dot-paths used to build nested groupings in the catalog list.
 - `title_field`: Dot-path used for the card title. Falls back to `service_name` or file stem.
 - `tag_fields`: Dot-paths used to populate tag pills.

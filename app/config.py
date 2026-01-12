@@ -35,6 +35,7 @@ class CatalogSettings(BaseModel):
     rebuild_index_on_start: bool = False
     generate_excalidraw_on_demand: bool = True
     cache_excalidraw_on_demand: bool = True
+    invalidate_excalidraw_cache_on_start: bool = True
     group_by: list[str] = Field(default_factory=lambda: ["markup_type"])
     title_field: str = "service_name"
     tag_fields: list[str] = Field(default_factory=list)

@@ -26,6 +26,7 @@ catalog:
   rebuild_index_on_start: false
   generate_excalidraw_on_demand: true
   cache_excalidraw_on_demand: true
+  invalidate_excalidraw_cache_on_start: true
   group_by:
     - "markup_type"
     - "custom.domain"
@@ -55,6 +56,8 @@ catalog:
 - `rebuild_index_on_start`: принудительная пересборка индекса при старте (полезно для S3).
 - `generate_excalidraw_on_demand`: генерировать сцены Excalidraw из markup, если файл сцены отсутствует.
 - `cache_excalidraw_on_demand`: сохранять сгенерированные сцены в `excalidraw_in_dir` для повторного использования.
+- `invalidate_excalidraw_cache_on_start`: очищать `excalidraw_in_dir` при старте (только если включен
+  `generate_excalidraw_on_demand`), чтобы сцены пересобирались на новом коде.
 - `group_by`: список dot-path для группировки в списке каталога.
 - `title_field`: dot-path для заголовка карточки. Иначе используется `service_name` или имя файла.
 - `tag_fields`: dot-path, используемые для тегов.

@@ -65,6 +65,7 @@ def create_app(settings: AppSettings) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
+        invalidate_excalidraw_cache(context)
         if settings.catalog.auto_build_index:
             if settings.catalog.rebuild_index_on_start:
                 context.index_builder.build(settings.catalog.to_index_config())
@@ -433,6 +434,15 @@ def create_app(settings: AppSettings) -> FastAPI:
 
 def get_context(request: Request) -> CatalogContext:
     return cast(CatalogContext, request.app.state.context)
+
+
+def invalidate_excalidraw_cache(context: CatalogContext) -> None:
+    settings = context.settings.catalog
+    if not settings.invalidate_excalidraw_cache_on_start:
+        return
+    if not settings.generate_excalidraw_on_demand:
+        return
+    context.scene_repo.clear_cache(settings.excalidraw_in_dir)
 
 
 def load_index(context: CatalogContext) -> CatalogIndex | None:
