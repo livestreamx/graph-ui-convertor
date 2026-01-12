@@ -73,7 +73,6 @@ class MarkupToExcalidrawConverter:
         if document.team_name:
             base_metadata["team_name"] = document.team_name
 
-        self._build_service_title(plan, registry, base_metadata, document.service_name)
         proc_name_lookup = {
             proc.procedure_id: proc.procedure_name
             for proc in document.procedures
@@ -133,6 +132,7 @@ class MarkupToExcalidrawConverter:
         )
         self._build_branch_edges(document, blocks, registry, base_metadata)
         self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
+        self._build_service_title(plan, registry, base_metadata, document.service_name)
         self._center_on_first_frame(plan, registry.elements)
 
         app_state = {

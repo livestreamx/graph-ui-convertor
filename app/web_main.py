@@ -22,6 +22,7 @@ from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from domain.services.excalidraw_title import ensure_service_title
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -257,6 +258,9 @@ def create_app(settings: AppSettings) -> FastAPI:
             payload = build_excalidraw_payload(context, item)
             if context.settings.catalog.cache_excalidraw_on_demand:
                 context.scene_repo.save(payload, path)
+        elements = payload.get("elements")
+        if isinstance(elements, list):
+            ensure_service_title(elements)
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{item.excalidraw_rel_path}"'
@@ -451,7 +455,11 @@ def build_excalidraw_payload(context: CatalogContext, item: CatalogItem) -> dict
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail="Markup file missing") from exc
     excal_doc = context.to_excalidraw.convert(markup)
-    return excal_doc.to_dict()
+    payload = excal_doc.to_dict()
+    elements = payload.get("elements")
+    if isinstance(elements, list):
+        ensure_service_title(elements)
+    return payload
 
 
 def filter_items(
