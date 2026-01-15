@@ -97,6 +97,7 @@ class BuildCatalogIndex:
 
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
+        unidraw_rel_path = f"{entry.path.stem}.unidraw"
 
         updated_at = entry.updated_at
         if updated_at.tzinfo is None:
@@ -122,6 +123,7 @@ class BuildCatalogIndex:
             markup_meta=markup_meta,
             markup_rel_path=markup_rel_path,
             excalidraw_rel_path=excalidraw_rel_path,
+            unidraw_rel_path=unidraw_rel_path,
         )
 
     def _relative_path(self, path: Path, base: Path) -> str:

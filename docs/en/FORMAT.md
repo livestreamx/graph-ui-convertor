@@ -1,6 +1,6 @@
 # Format & Mapping
 
-This project converts CJM markup JSON <-> Excalidraw scenes while preserving identifiers through metadata.
+This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preserving identifiers through metadata.
 
 ## Markup (input)
 
@@ -47,7 +47,19 @@ This project converts CJM markup JSON <-> Excalidraw scenes while preserving ide
 - Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 
-## Metadata (`customData.cjm`)
+## Unidraw (output)
+
+- Scene header uses `type=unidraw` and `version=1`.
+- Geometry is stored under `position`/`size` instead of flat `x`/`y`/`width`/`height`.
+- Rectangles/ellipses are `type=shape` with `shape=rectangle|ellipse`.
+- Arrows/lines are `type=line` with `points` and `tipPoints` bindings.
+- Styles are stored in a compact `style` dict (`fc`, `sc`, `tff`, `tfs`, `ta`, etc.).
+- Text content is HTML (`<p>...</p>`).
+- Metadata is stored under `cjm` on each element.
+
+## Metadata
+
+Excalidraw stores metadata under `customData.cjm`; Unidraw stores metadata under `cjm`.
 
 Stored on every shape/arrow/text:
 
@@ -78,6 +90,7 @@ This metadata enables round-trip even if elements are moved in UI.
 
 - Markup inputs: `*.json` in `data/markup/`.
 - Excalidraw scenes: `.excalidraw` or `.json` in `data/excalidraw_in` (export to `data/excalidraw_out` from UI).
+- Unidraw scenes: `.unidraw` in `data/unidraw_in`.
 - Round-trip outputs: `data/roundtrip/*.json`.
 
 ## Versioning

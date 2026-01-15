@@ -324,3 +324,18 @@ class ExcalidrawDocument:
             "appState": self.app_state,
             "files": self.files,
         }
+
+
+@dataclass(frozen=True)
+class UnidrawDocument:
+    elements: list[dict[str, Any]]
+    app_state: dict[str, Any]
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "type": "unidraw",
+            "version": 1,
+            "source": "cjm-ui-convertor",
+            "elements": self.elements,
+            "appState": self.app_state,
+        }

@@ -1,6 +1,6 @@
 # CJM UI Convertor
 
-Round-trip converter between CJM markup graphs and Excalidraw scenes with deterministic layout and metadata for lossless reconstruction.
+Round-trip converter between CJM markup graphs and Excalidraw/Unidraw scenes with deterministic layout and metadata for lossless reconstruction.
 
 Documentation is mirrored in `docs/en` and `docs/ru`. Russian version is below.
 
@@ -20,9 +20,12 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 # Open http://localhost:8080/catalog
 ```
 
+Set `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` and run `make convert-to-unidraw` to work with Unidraw scenes.
+
 ## Commands (Typer CLI)
 
 - `cjm convert to-excalidraw --input-dir data/markup --output-dir data/excalidraw_in`
+- `cjm convert to-unidraw --input-dir data/markup --output-dir data/unidraw_in`
 - `cjm convert from-excalidraw --input-dir data/excalidraw_out --output-dir data/roundtrip`
 - `cjm validate <path>` to sanity-check markup or Excalidraw JSON.
 - `cjm catalog build-index --config config/catalog/app.s3.yaml`
@@ -34,6 +37,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `app/` – CLI entrypoint (Typer).
 - `domain/` – models, ports, use-cases (hexagonal core).
 - `adapters/filesystem/` – JSON IO for markup/Excalidraw.
+- `adapters/unidraw/` – JSON IO for Unidraw scenes.
 - `adapters/layout/` – deterministic grid layout engine.
 - `examples/markup/` – sample markup JSON inputs.
 - `docs/en/FORMAT.md` – mapping + metadata schema.
@@ -44,7 +48,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `config/catalog/` – catalog config variants (local/docker/k8s).
 - `docker/catalog/` – Catalog UI Dockerfile.
 - `docker/compose.demo.yaml` – local demo composition (catalog + excalidraw + s3 stub).
-- `data/` – default runtime IO folders (created by `make dirs`).
+- `data/` – default runtime IO folders (created by `make dirs`, includes `unidraw_in`).
 - `tests/` – pytest suite (round-trip, metadata checks).
 
 ## Architecture (hexagonal)
@@ -56,7 +60,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 ## Round-trip contract
 
-- All Excalidraw elements carry `customData.cjm` metadata.
+- Excalidraw elements carry `customData.cjm` metadata; Unidraw elements carry `cjm`.
 - Stable IDs are derived via uuid5; do not change without a migration plan.
 - Layout is deterministic; manual UI moves are preserved but not re-applied on rebuild.
 - Start/End markers have fixed sizes (180x90), labels and edge bindings.
@@ -101,14 +105,15 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 1. Seed markup into S3 (local: `make s3-seed`).
 2. Open the catalog: `cjm catalog serve` and visit `/catalog`.
-3. Open the diagram in Excalidraw or download `.excalidraw` / `markup.json` for manual import or review.
-4. Export `.excalidraw` into `data/excalidraw_out`, then run `make convert-from-ui` to rebuild markup.
+3. Set `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` to switch the UI into Unidraw mode.
+4. Open the diagram in Excalidraw/Unidraw or download `.excalidraw`/`.unidraw` and `markup.json` for manual import or review.
+5. Export `.excalidraw` into `data/excalidraw_out`, then run `make convert-from-ui` to rebuild markup.
 
 ---
 
 # CJM UI Convertor (Русская версия)
 
-Круговой конвертер между CJM markup-графами и сценами Excalidraw с детерминированным лейаутом и метаданными для без потерь.
+Круговой конвертер между CJM markup-графами и сценами Excalidraw/Unidraw с детерминированным лейаутом и метаданными для без потерь.
 
 Документация зеркалируется в `docs/en` и `docs/ru`.
 
@@ -128,9 +133,12 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 # Открыть http://localhost:8080/catalog
 ```
 
+Чтобы использовать Unidraw, задайте `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и выполните `make convert-to-unidraw`.
+
 ## Команды (Typer CLI)
 
 - `cjm convert to-excalidraw --input-dir data/markup --output-dir data/excalidraw_in`
+- `cjm convert to-unidraw --input-dir data/markup --output-dir data/unidraw_in`
 - `cjm convert from-excalidraw --input-dir data/excalidraw_out --output-dir data/roundtrip`
 - `cjm validate <path>` для проверки корректности markup или Excalidraw JSON.
 - `cjm catalog build-index --config config/catalog/app.s3.yaml`
@@ -142,6 +150,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `app/` – CLI входная точка (Typer).
 - `domain/` – модели, порты, use-cases (hexagonal core).
 - `adapters/filesystem/` – JSON IO для markup/Excalidraw.
+- `adapters/unidraw/` – JSON IO для Unidraw сцен.
 - `adapters/layout/` – детерминированный grid layout engine.
 - `examples/markup/` – примеры входных markup JSON.
 - `docs/ru/FORMAT.md` – формат и схема метаданных.
@@ -152,7 +161,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - `config/catalog/` – варианты конфигурации каталога (local/docker/k8s).
 - `docker/catalog/` – Dockerfile для Catalog UI.
 - `docker/compose.demo.yaml` – локальный демо compose (catalog + excalidraw + s3 stub).
-- `data/` – директории runtime IO (создаются `make dirs`).
+- `data/` – директории runtime IO (создаются `make dirs`, включает `unidraw_in`).
 - `tests/` – pytest suite (round-trip, проверки метаданных).
 
 ## Архитектура (гексагональная)
@@ -164,7 +173,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 ## Контракт round-trip
 
-- Все элементы Excalidraw несут `customData.cjm` метаданные.
+- Элементы Excalidraw несут `customData.cjm`, элементы Unidraw — `cjm`.
 - Stable IDs получаются через uuid5; не менять без плана миграции.
 - Лейаут детерминированный; ручные перемещения в UI сохраняются, но не пересчитываются при rebuild.
 - Маркеры Start/End имеют фиксированные размеры (180x90), подписи и биндинги стрелок.
@@ -211,9 +220,10 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 1. Загрузите markup в S3 (локально: `make s3-seed`).
 2. Откройте каталог: `cjm catalog serve` и перейдите на `/catalog`.
 3. Используйте фильтры по критичности и команде (отображается `team_name`).
-4. Откройте диаграмму в Excalidraw или скачайте `.excalidraw` / `markup.json` для ручного импорта или проверки.
-5. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
-6. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
-7. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
+4. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw`, чтобы включить режим Unidraw.
+5. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
+6. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+7. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
+8. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
 
 В карточках и деталях каталога отображается `updated_at`;.

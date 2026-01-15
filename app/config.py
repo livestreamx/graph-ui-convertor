@@ -27,8 +27,11 @@ class S3Settings(BaseModel):
 class CatalogSettings(BaseModel):
     title: str = "CJM Catalog"
     s3: S3Settings = S3Settings()
+    diagram_format: str = "excalidraw"
     excalidraw_in_dir: Path = Path("data/excalidraw_in")
     excalidraw_out_dir: Path = Path("data/excalidraw_out")
+    unidraw_in_dir: Path = Path("data/unidraw_in")
+    unidraw_out_dir: Path = Path("data/unidraw_out")
     roundtrip_dir: Path = Path("data/roundtrip")
     index_path: Path = Path("data/catalog/index.json")
     auto_build_index: bool = True
@@ -46,6 +49,10 @@ class CatalogSettings(BaseModel):
     excalidraw_proxy_upstream: str | None = None
     excalidraw_proxy_prefix: str = "/excalidraw"
     excalidraw_max_url_length: int = 8000
+    unidraw_base_url: str = "/unidraw"
+    unidraw_proxy_upstream: str | None = None
+    unidraw_proxy_prefix: str = "/unidraw"
+    unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
     procedure_link_template: str | None = None
@@ -55,6 +62,12 @@ class CatalogSettings(BaseModel):
     @classmethod
     def normalize_sort_order(cls, value: object) -> str:
         return str(value).lower() if value else "asc"
+
+    @field_validator("diagram_format", mode="before")
+    @classmethod
+    def normalize_diagram_format(cls, value: object) -> str:
+        raw = str(value or "excalidraw").strip().lower()
+        return raw if raw in {"excalidraw", "unidraw"} else "excalidraw"
 
     @field_validator("group_by", "tag_fields", mode="before")
     @classmethod
@@ -89,6 +102,7 @@ class CatalogSettings(BaseModel):
         return CatalogIndexConfig(
             markup_dir=Path(self.s3.prefix or ""),
             excalidraw_in_dir=self.excalidraw_in_dir,
+            unidraw_in_dir=self.unidraw_in_dir,
             index_path=self.index_path,
             group_by=list(self.group_by),
             title_field=self.title_field,

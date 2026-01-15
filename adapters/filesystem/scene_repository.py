@@ -27,7 +27,7 @@ class FileSystemSceneRepository(SceneRepository):
             if not path.is_file():
                 continue
             suffix = path.suffix.lower()
-            if suffix in {".excalidraw", ".json"} or path.name.endswith(".lock"):
+            if suffix in {".excalidraw", ".unidraw", ".json"} or path.name.endswith(".lock"):
                 path.unlink()
                 removed += 1
         return removed

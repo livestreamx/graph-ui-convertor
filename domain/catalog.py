@@ -32,6 +32,7 @@ class CatalogItem:
     markup_meta: dict[str, str]
     markup_rel_path: str
     excalidraw_rel_path: str
+    unidraw_rel_path: str
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -49,6 +50,7 @@ class CatalogItem:
             "markup_meta": dict(self.markup_meta),
             "markup_rel_path": self.markup_rel_path,
             "excalidraw_rel_path": self.excalidraw_rel_path,
+            "unidraw_rel_path": self.unidraw_rel_path,
         }
 
     @classmethod
@@ -68,6 +70,7 @@ class CatalogItem:
             markup_meta=dict(payload.get("markup_meta", {}) or {}),
             markup_rel_path=str(payload.get("markup_rel_path", "")),
             excalidraw_rel_path=str(payload.get("excalidraw_rel_path", "")),
+            unidraw_rel_path=str(payload.get("unidraw_rel_path", "")),
         )
 
 
@@ -121,6 +124,7 @@ class CatalogIndexConfig:
     sort_by: str
     sort_order: str
     unknown_value: str
+    unidraw_in_dir: Path = Path("data/unidraw_in")
 
     def config_fields(self) -> list[str]:
         fields = [self.title_field, *self.tag_fields, *self.group_by]

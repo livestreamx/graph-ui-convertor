@@ -22,23 +22,23 @@
     <div class="detail-card">
       <h3>Open the diagram</h3>
       <p>
-        Open the scene in Excalidraw or download the file for manual import and editing.
+        Open the scene in {{ diagram_label }} or download the file for manual import and editing.
       </p>
       <div class="button-row">
-        <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">Open Excalidraw</a>
-        <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?download=true">Download .excalidraw</a>
+        <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">Open {{ diagram_label }}</a>
+        <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?download=true">Download {{ diagram_ext }}</a>
         <a class="ghost-button" href="/api/markup/{{ item.scene_id }}?download=true">Download markup.json</a>
       </div>
       {% if not scene_available %}
         {% if on_demand_enabled %}
           <p class="note">Scene will be generated on demand from markup.</p>
         {% else %}
-          <p class="note">Scene file not found in excalidraw_in. Run build-all before opening.</p>
+          <p class="note">Scene file not found in {{ diagram_dir_label }}. Run build-all before opening.</p>
         {% endif %}
       {% elif open_mode == "manual" %}
         <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
       {% elif open_mode == "local_storage" %}
-        <p class="note">Scene is injected via local storage for same-origin Excalidraw.</p>
+        <p class="note">Scene is injected via local storage for same-origin {{ diagram_label }}.</p>
       {% else %}
         <p class="note">If the scene does not load, import the downloaded file manually.</p>
       {% endif %}
@@ -53,8 +53,8 @@
         <div class="meta-value">{{ item.markup_rel_path }}</div>
       </div>
       <div>
-        <div class="meta-label">Excalidraw file</div>
-        <div class="meta-value">{{ item.excalidraw_rel_path }}</div>
+        <div class="meta-label">{{ diagram_label }} file</div>
+        <div class="meta-value">{{ diagram_rel_path }}</div>
       </div>
       <div>
         <div class="meta-label">FineDog unit</div>

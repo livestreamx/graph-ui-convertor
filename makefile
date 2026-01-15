@@ -19,6 +19,7 @@ CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 CATALOG_ENV_FILE ?= config/catalog/env.local
+CATALOG_ENV_EXTRA ?= $(if $(CJM_CATALOG__DIAGRAM_FORMAT),-e CJM_CATALOG__DIAGRAM_FORMAT=$(CJM_CATALOG__DIAGRAM_FORMAT),)
 DEMO_NETWORK ?= cjm-demo
 S3_CONTAINER ?= cjm-s3
 S3_PORT ?= 9000
@@ -43,6 +44,8 @@ DATA_DIR ?= data
 MARKUP_DIR ?= $(DATA_DIR)/markup
 EXCALIDRAW_IN_DIR ?= $(DATA_DIR)/excalidraw_in
 EXCALIDRAW_OUT_DIR ?= $(DATA_DIR)/excalidraw_out
+UNIDRAW_IN_DIR ?= $(DATA_DIR)/unidraw_in
+UNIDRAW_OUT_DIR ?= $(DATA_DIR)/unidraw_out
 ROUNDTRIP_DIR ?= $(DATA_DIR)/roundtrip
 CATALOG_DIR ?= $(DATA_DIR)/catalog
 VENV_DIR ?= .venv
@@ -82,6 +85,8 @@ help:
 	@echo "  make catalog-build-index - build catalog index with $(CATALOG_CONFIG)"
 	@echo "  make pipeline-build-all  - convert + index build with $(CATALOG_CONFIG)"
 	@echo "  make convert-to-ui    - convert markup json -> excalidraw json"
+	@echo "  make convert-to-excalidraw - convert markup json -> excalidraw json"
+	@echo "  make convert-to-unidraw - convert markup json -> unidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
 	@echo "  make c4-render        - render C4 diagrams to $(C4_OUT_DIRS)"
 	@echo "  make demo             - seed S3 + start UIs (on-demand conversion)"
@@ -129,7 +134,7 @@ bootstrap: install dirs
 
 .PHONY: dirs
 dirs:
-	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(ROUNDTRIP_DIR) $(CATALOG_DIR) $(S3_DATA_DIR)
+	@mkdir -p $(MARKUP_DIR) $(EXCALIDRAW_IN_DIR) $(EXCALIDRAW_OUT_DIR) $(UNIDRAW_IN_DIR) $(UNIDRAW_OUT_DIR) $(ROUNDTRIP_DIR) $(CATALOG_DIR) $(S3_DATA_DIR)
 
 # -------- Quality --------
 
@@ -150,11 +155,21 @@ fmt:
 # -------- Converters (to be implemented) --------
 
 .PHONY: convert-to-ui
-convert-to-ui: dirs
+convert-to-ui: convert-to-excalidraw
+
+.PHONY: convert-to-excalidraw
+convert-to-excalidraw: dirs
 	@echo "Converting markup -> excalidraw..."
 	@$(CLI) convert to-excalidraw \
 		--input-dir "$(MARKUP_DIR)" \
 		--output-dir "$(EXCALIDRAW_IN_DIR)"
+
+.PHONY: convert-to-unidraw
+convert-to-unidraw: dirs
+	@echo "Converting markup -> unidraw..."
+	@$(CLI) convert to-unidraw \
+		--input-dir "$(MARKUP_DIR)" \
+		--output-dir "$(UNIDRAW_IN_DIR)"
 
 .PHONY: convert-from-ui
 convert-from-ui: dirs
@@ -235,6 +250,7 @@ catalog-up: dirs
 		-p $(CATALOG_PORT):8080 \
 		-e CJM_CONFIG_PATH=/config/app.yaml \
 		--env-file $(CATALOG_ENV_FILE) \
+		$(CATALOG_ENV_EXTRA) \
 		-v $(PWD)/$(DATA_DIR):/data \
 		-v $(PWD)/$(CATALOG_DOCKER_CONFIG):/config/app.yaml:ro \
 		$(CATALOG_IMAGE)

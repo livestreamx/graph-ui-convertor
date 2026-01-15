@@ -18,8 +18,11 @@ catalog:
     secret_access_key: ""
     session_token: ""
     use_path_style: false
+  diagram_format: "excalidraw"
   excalidraw_in_dir: "data/excalidraw_in"
   excalidraw_out_dir: "data/excalidraw_out"
+  unidraw_in_dir: "data/unidraw_in"
+  unidraw_out_dir: "data/unidraw_out"
   roundtrip_dir: "data/roundtrip"
   index_path: "data/catalog/index.json"
   auto_build_index: true
@@ -44,6 +47,10 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
+  unidraw_base_url: "/unidraw"
+  unidraw_proxy_upstream: ""
+  unidraw_proxy_prefix: "/unidraw"
+  unidraw_max_url_length: 8000
   rebuild_token: ""
   procedure_link_template: ""
   block_link_template: ""
@@ -57,10 +64,10 @@ catalog:
   The prefix is also used to compute relative paths in the index.
 - `auto_build_index`: Build the catalog index on startup if it is missing.
 - `rebuild_index_on_start`: Force rebuilding the catalog index on startup (useful for S3).
-- `generate_excalidraw_on_demand`: Generate Excalidraw scenes from markup when a scene file is
-  missing.
-- `cache_excalidraw_on_demand`: Persist generated scenes into `excalidraw_in_dir` for reuse.
-- `invalidate_excalidraw_cache_on_start`: Remove cached scenes from `excalidraw_in_dir` on startup
+- `diagram_format`: Choose which diagram flavor the Catalog UI serves (`excalidraw` or `unidraw`).
+- `generate_excalidraw_on_demand`: Generate scenes from markup when a diagram file is missing.
+- `cache_excalidraw_on_demand`: Persist generated scenes into the active `*_in_dir` for reuse.
+- `invalidate_excalidraw_cache_on_start`: Remove cached scenes from the active `*_in_dir` on startup
   (only when `generate_excalidraw_on_demand` is enabled) so fresh diagrams are generated with the
   current code.
 - `group_by`: List of dot-paths used to build nested groupings in the catalog list.
@@ -84,6 +91,10 @@ catalog:
   also proxies Excalidraw static assets (for example `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
 - `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
+- `unidraw_base_url`: Unidraw UI URL or path (e.g. `/unidraw`).
+- `unidraw_proxy_upstream`: Optional upstream for proxying Unidraw through the Catalog service.
+- `unidraw_proxy_prefix`: Path prefix used for proxying Unidraw.
+- `unidraw_max_url_length`: Reserved for parity with Excalidraw URLs (currently unused).
 
 ## Large diagrams
 
@@ -93,7 +104,7 @@ catalog:
 
 ## Catalog UI
 
-- Detail view includes downloads for `.excalidraw` and the original `markup.json`.
+- Detail view includes downloads for `.excalidraw`/`.unidraw` and the original `markup.json`.
 
 ## Dot-path resolution
 
@@ -111,6 +122,7 @@ nesting delimiter. Example:
 
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
+export CJM_CATALOG__DIAGRAM_FORMAT="unidraw"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'
