@@ -47,7 +47,7 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
-  unidraw_base_url: "/unidraw"
+  unidraw_base_url: ""
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
@@ -89,7 +89,8 @@ catalog:
   ассеты Excalidraw (например `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: префикс пути для прокси Excalidraw.
 - `excalidraw_max_url_length`: максимальная длина URL для `#json`, после чего требуется ручной импорт.
-- `unidraw_base_url`: URL или путь Unidraw UI (например `/unidraw`).
+- `unidraw_base_url`: абсолютный URL внешнего Unidraw UI. Обязателен при `diagram_format=unidraw`
+  и задаётся через `CJM_CATALOG__UNIDRAW_BASE_URL`.
 - `unidraw_proxy_upstream`: опциональный upstream для проксирования Unidraw через Catalog.
 - `unidraw_proxy_prefix`: префикс пути для прокси Unidraw.
 - `unidraw_max_url_length`: параметр для паритета с Excalidraw URL (пока не используется).
@@ -121,6 +122,7 @@ Dot-path проходят по вложенным объектам raw markup JS
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
 export CJM_CATALOG__DIAGRAM_FORMAT="unidraw"
+export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'

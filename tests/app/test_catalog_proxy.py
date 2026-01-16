@@ -1,16 +1,22 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 import httpx
 import pytest
-from app.config import AppSettings, CatalogSettings, S3Settings
-from app.web_main import create_app
 from fastapi.testclient import TestClient
 
+from app.config import AppSettings
+from app.web_main import create_app
 
-def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+
+def test_proxy_serves_assets_and_static(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/":
             body = b'<html><script src="/assets/app.js"></script></html>'
@@ -36,35 +42,16 @@ def test_proxy_serves_assets_and_static(tmp_path: Path, monkeypatch: pytest.Monk
 
     monkeypatch.setattr(httpx, "AsyncClient", client_factory)
 
-    settings = AppSettings(
-        catalog=CatalogSettings(
-            title="Test Catalog",
-            s3=S3Settings(
-                bucket="cjm-bucket",
-                prefix="markup/",
-                region="us-east-1",
-                endpoint_url="http://stubbed-s3.local",
-                access_key_id="test",
-                secret_access_key="test",
-                use_path_style=True,
-            ),
-            excalidraw_in_dir=tmp_path / "excalidraw_in",
-            excalidraw_out_dir=tmp_path / "excalidraw_out",
-            roundtrip_dir=tmp_path / "roundtrip",
-            index_path=tmp_path / "catalog" / "index.json",
-            group_by=["markup_type"],
-            title_field="service_name",
-            tag_fields=[],
-            sort_by="title",
-            sort_order="asc",
-            unknown_value="unknown",
-            excalidraw_base_url="/excalidraw",
-            excalidraw_proxy_upstream="http://excalidraw.local",
-            excalidraw_proxy_prefix="/excalidraw",
-            excalidraw_max_url_length=8000,
-            rebuild_token=None,
-            auto_build_index=False,
-        )
+    settings = app_settings_factory(
+        excalidraw_in_dir=tmp_path / "excalidraw_in",
+        excalidraw_out_dir=tmp_path / "excalidraw_out",
+        roundtrip_dir=tmp_path / "roundtrip",
+        index_path=tmp_path / "catalog" / "index.json",
+        title_field="service_name",
+        excalidraw_base_url="/excalidraw",
+        excalidraw_proxy_upstream="http://excalidraw.local",
+        excalidraw_proxy_prefix="/excalidraw",
+        auto_build_index=False,
     )
 
     client = TestClient(create_app(settings))

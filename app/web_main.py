@@ -35,7 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app.catalog_wiring import build_markup_repository, build_markup_source
-from app.config import AppSettings, load_settings
+from app.config import AppSettings, load_settings, validate_unidraw_settings
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -68,6 +68,7 @@ class CatalogContext:
 
 
 def create_app(settings: AppSettings) -> FastAPI:
+    validate_unidraw_settings(settings)
     templates.env.filters["msk_datetime"] = format_msk_datetime
     templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
 

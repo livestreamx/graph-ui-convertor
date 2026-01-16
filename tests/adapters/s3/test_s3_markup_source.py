@@ -5,9 +5,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import boto3  # type: ignore[import-untyped]
-from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from botocore.response import StreamingBody  # type: ignore[import-untyped]
 from botocore.stub import Stubber  # type: ignore[import-untyped]
+
+from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 
 
 def test_s3_markup_catalog_source_loads_items() -> None:

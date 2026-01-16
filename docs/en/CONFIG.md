@@ -47,7 +47,7 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
-  unidraw_base_url: "/unidraw"
+  unidraw_base_url: ""
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
@@ -91,7 +91,8 @@ catalog:
   also proxies Excalidraw static assets (for example `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
 - `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
-- `unidraw_base_url`: Unidraw UI URL or path (e.g. `/unidraw`).
+- `unidraw_base_url`: Absolute URL of the external Unidraw UI. Required when `diagram_format=unidraw`
+  and must be provided via `CJM_CATALOG__UNIDRAW_BASE_URL`.
 - `unidraw_proxy_upstream`: Optional upstream for proxying Unidraw through the Catalog service.
 - `unidraw_proxy_prefix`: Path prefix used for proxying Unidraw.
 - `unidraw_max_url_length`: Reserved for parity with Excalidraw URLs (currently unused).
@@ -123,6 +124,7 @@ nesting delimiter. Example:
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
 export CJM_CATALOG__DIAGRAM_FORMAT="unidraw"
+export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'

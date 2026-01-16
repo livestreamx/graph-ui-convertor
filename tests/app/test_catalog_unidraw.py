@@ -1,25 +1,28 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.layout.grid import GridLayoutEngine
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from adapters.unidraw.repository import FileSystemUnidrawRepository
-from app.config import AppSettings, CatalogSettings, S3Settings
+from app.config import AppSettings, load_settings
 from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.models import MarkupDocument
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
-from fastapi.testclient import TestClient
-
-from tests.s3_utils import stub_s3_catalog
+from tests.adapters.s3.s3_utils import stub_s3_catalog
 
 
 def test_catalog_unidraw_open_uses_unidraw_storage(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
 ) -> None:
     unidraw_in_dir = tmp_path / "unidraw_in"
     roundtrip_dir = tmp_path / "roundtrip"
@@ -72,37 +75,16 @@ def test_catalog_unidraw_open_uses_unidraw_storage(
             FileSystemCatalogIndexRepository(),
         ).build(config)
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                diagram_format="unidraw",
-                s3=S3Settings(
-                    bucket="cjm-bucket",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url="http://stubbed-s3.local",
-                    access_key_id="test",
-                    secret_access_key="test",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=tmp_path / "excalidraw_in",
-                excalidraw_out_dir=tmp_path / "excalidraw_out",
-                unidraw_in_dir=unidraw_in_dir,
-                unidraw_out_dir=tmp_path / "unidraw_out",
-                roundtrip_dir=roundtrip_dir,
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="finedog_unit_meta.service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                unidraw_base_url="http://testserver/unidraw",
-                unidraw_proxy_upstream=None,
-                unidraw_proxy_prefix="/unidraw",
-                unidraw_max_url_length=8000,
-                rebuild_token=None,
-            )
+        monkeypatch.setenv("CJM_CATALOG__UNIDRAW_BASE_URL", "http://testserver/unidraw")
+        settings = app_settings_factory(
+            diagram_format="unidraw",
+            excalidraw_in_dir=tmp_path / "excalidraw_in",
+            excalidraw_out_dir=tmp_path / "excalidraw_out",
+            unidraw_in_dir=unidraw_in_dir,
+            unidraw_out_dir=tmp_path / "unidraw_out",
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            unidraw_base_url="http://testserver/unidraw",
         )
 
         client_api = TestClient(create_app(settings))
@@ -120,3 +102,12 @@ def test_catalog_unidraw_open_uses_unidraw_storage(
         assert payload.get("elements")
     finally:
         stubber.deactivate()
+
+
+def test_unidraw_requires_external_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CJM_CATALOG__DIAGRAM_FORMAT", "unidraw")
+    monkeypatch.delenv("CJM_CATALOG__UNIDRAW_BASE_URL", raising=False)
+    monkeypatch.delenv("CJM_CONFIG_PATH", raising=False)
+
+    with pytest.raises(ValueError, match="CJM_CATALOG__UNIDRAW_BASE_URL"):
+        load_settings()

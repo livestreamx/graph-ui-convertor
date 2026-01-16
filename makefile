@@ -19,7 +19,10 @@ CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 CATALOG_ENV_FILE ?= config/catalog/env.local
-CATALOG_ENV_EXTRA ?= $(if $(CJM_CATALOG__DIAGRAM_FORMAT),-e CJM_CATALOG__DIAGRAM_FORMAT=$(CJM_CATALOG__DIAGRAM_FORMAT),)
+CATALOG_ENV_EXTRA ?= $(strip \
+	$(if $(CJM_CATALOG__DIAGRAM_FORMAT),-e CJM_CATALOG__DIAGRAM_FORMAT=$(CJM_CATALOG__DIAGRAM_FORMAT),) \
+	$(if $(CJM_CATALOG__UNIDRAW_BASE_URL),-e CJM_CATALOG__UNIDRAW_BASE_URL=$(CJM_CATALOG__UNIDRAW_BASE_URL),) \
+)
 DEMO_NETWORK ?= cjm-demo
 S3_CONTAINER ?= cjm-s3
 S3_PORT ?= 9000
@@ -254,6 +257,11 @@ catalog-up: dirs
 		-v $(PWD)/$(DATA_DIR):/data \
 		-v $(PWD)/$(CATALOG_DOCKER_CONFIG):/config/app.yaml:ro \
 		$(CATALOG_IMAGE)
+	@sleep 2
+	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) >/dev/null 2>&1 || \
+		(echo "Catalog container not found after startup." && exit 1)
+	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) | grep -q true || \
+		(echo "Catalog failed to start. Logs:" && docker logs $(CATALOG_CONTAINER) && exit 1)
 	@echo "Catalog started on $(CATALOG_URL)"
 
 .PHONY: catalog-down

@@ -4,12 +4,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
-
-from tests.s3_utils import stub_s3_catalog
+from tests.adapters.s3.s3_utils import stub_s3_catalog
 
 
 def test_build_catalog_index_extracts_fields(

@@ -1,24 +1,29 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.layout.grid import GridLayoutEngine
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
-from app.config import AppSettings, CatalogSettings, S3Settings
+from app.config import AppSettings
 from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.models import MarkupDocument
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from fastapi.testclient import TestClient
-
-from tests.s3_utils import add_get_object, stub_s3_catalog
+from tests.adapters.s3.s3_utils import add_get_object, stub_s3_catalog
 
 
-def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_api_smoke(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
     excalidraw_out_dir = tmp_path / "excalidraw_out"
     roundtrip_dir = tmp_path / "roundtrip"
@@ -72,34 +77,12 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
             FileSystemCatalogIndexRepository(),
         ).build(config)
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                s3=S3Settings(
-                    bucket="cjm-bucket",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url="http://stubbed-s3.local",
-                    access_key_id="test",
-                    secret_access_key="test",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=excalidraw_in_dir,
-                excalidraw_out_dir=excalidraw_out_dir,
-                roundtrip_dir=roundtrip_dir,
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="finedog_unit_meta.service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                excalidraw_base_url="http://example.com",
-                excalidraw_proxy_upstream=None,
-                excalidraw_proxy_prefix="/excalidraw",
-                excalidraw_max_url_length=8000,
-                rebuild_token=None,
-            )
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
         )
 
         client_api = TestClient(create_app(settings))
@@ -133,7 +116,11 @@ def test_catalog_api_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
         stubber.deactivate()
 
 
-def test_catalog_scene_links_applied(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_scene_links_applied(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
     excalidraw_out_dir = tmp_path / "excalidraw_out"
     roundtrip_dir = tmp_path / "roundtrip"
@@ -186,36 +173,14 @@ def test_catalog_scene_links_applied(tmp_path: Path, monkeypatch: pytest.MonkeyP
             FileSystemCatalogIndexRepository(),
         ).build(config)
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                s3=S3Settings(
-                    bucket="cjm-bucket",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url="http://stubbed-s3.local",
-                    access_key_id="test",
-                    secret_access_key="test",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=excalidraw_in_dir,
-                excalidraw_out_dir=excalidraw_out_dir,
-                roundtrip_dir=roundtrip_dir,
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="finedog_unit_meta.service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                excalidraw_base_url="http://example.com",
-                excalidraw_proxy_upstream=None,
-                excalidraw_proxy_prefix="/excalidraw",
-                excalidraw_max_url_length=8000,
-                rebuild_token=None,
-                procedure_link_template="https://example.com/procedures/{procedure_id}",
-                block_link_template="https://example.com/blocks/{block_id}",
-            )
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+            procedure_link_template="https://example.com/procedures/{procedure_id}",
+            block_link_template="https://example.com/blocks/{block_id}",
         )
 
         client_api = TestClient(create_app(settings))
@@ -242,7 +207,11 @@ def test_catalog_scene_links_applied(tmp_path: Path, monkeypatch: pytest.MonkeyP
         stubber.deactivate()
 
 
-def test_catalog_ui_text_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_ui_text_overrides(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
     excalidraw_out_dir = tmp_path / "excalidraw_out"
     roundtrip_dir = tmp_path / "roundtrip"
@@ -290,38 +259,16 @@ def test_catalog_ui_text_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPat
             FileSystemCatalogIndexRepository(),
         ).build(config)
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                s3=S3Settings(
-                    bucket="cjm-bucket",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url="http://stubbed-s3.local",
-                    access_key_id="test",
-                    secret_access_key="test",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=excalidraw_in_dir,
-                excalidraw_out_dir=excalidraw_out_dir,
-                roundtrip_dir=roundtrip_dir,
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="finedog_unit_meta.service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                excalidraw_base_url="http://example.com",
-                excalidraw_proxy_upstream=None,
-                excalidraw_proxy_prefix="/excalidraw",
-                excalidraw_max_url_length=8000,
-                rebuild_token=None,
-                ui_text_overrides={
-                    "markup_type": "Kind",
-                    "service": "Svc",
-                },
-            )
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+            ui_text_overrides={
+                "markup_type": "Kind",
+                "service": "Svc",
+            },
         )
 
         client_api = TestClient(create_app(settings))
