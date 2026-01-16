@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from pathlib import Path
 
 import pytest
@@ -9,11 +9,20 @@ import pytest
 from app.config import AppSettings, CatalogSettings, S3Settings
 
 
-@pytest.fixture(autouse=True)
-def clear_cjm_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _clear_cjm_env() -> None:
     for key in list(os.environ):
         if key.startswith("CJM_"):
-            monkeypatch.delenv(key, raising=False)
+            os.environ.pop(key, None)
+
+
+_clear_cjm_env()
+
+
+@pytest.fixture(autouse=True)
+def clear_cjm_env() -> Generator[None, None, None]:
+    _clear_cjm_env()
+    yield
+    _clear_cjm_env()
 
 
 @pytest.fixture
