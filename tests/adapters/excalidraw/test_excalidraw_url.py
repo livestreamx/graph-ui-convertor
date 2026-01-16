@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 
-from adapters.excalidraw.url_encoder import encode_scene_payload
 from lzstring import LZString  # type: ignore[import-untyped]
+
+from adapters.excalidraw.url_encoder import encode_scene_payload
 
 
 def test_encode_scene_payload_roundtrip() -> None:

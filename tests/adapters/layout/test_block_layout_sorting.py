@@ -7,8 +7,15 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 
 
+def repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("Repository root not found")
+
+
 def load_markup_fixture(name: str) -> MarkupDocument:
-    fixture_path = Path(__file__).parent.parent / "examples" / "markup" / name
+    fixture_path = repo_root() / "examples" / "markup" / name
     return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
 
 

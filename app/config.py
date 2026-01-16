@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 from typing import ClassVar
+from urllib.parse import urlparse
 
 from domain.catalog import CatalogIndexConfig
 from pydantic import BaseModel, Field, field_validator
@@ -27,8 +28,11 @@ class S3Settings(BaseModel):
 class CatalogSettings(BaseModel):
     title: str = "CJM Catalog"
     s3: S3Settings = S3Settings()
+    diagram_format: str = "excalidraw"
     excalidraw_in_dir: Path = Path("data/excalidraw_in")
     excalidraw_out_dir: Path = Path("data/excalidraw_out")
+    unidraw_in_dir: Path = Path("data/unidraw_in")
+    unidraw_out_dir: Path = Path("data/unidraw_out")
     roundtrip_dir: Path = Path("data/roundtrip")
     index_path: Path = Path("data/catalog/index.json")
     auto_build_index: bool = True
@@ -46,6 +50,10 @@ class CatalogSettings(BaseModel):
     excalidraw_proxy_upstream: str | None = None
     excalidraw_proxy_prefix: str = "/excalidraw"
     excalidraw_max_url_length: int = 8000
+    unidraw_base_url: str = "/unidraw"
+    unidraw_proxy_upstream: str | None = None
+    unidraw_proxy_prefix: str = "/unidraw"
+    unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
     procedure_link_template: str | None = None
@@ -55,6 +63,12 @@ class CatalogSettings(BaseModel):
     @classmethod
     def normalize_sort_order(cls, value: object) -> str:
         return str(value).lower() if value else "asc"
+
+    @field_validator("diagram_format", mode="before")
+    @classmethod
+    def normalize_diagram_format(cls, value: object) -> str:
+        raw = str(value or "excalidraw").strip().lower()
+        return raw if raw in {"excalidraw", "unidraw"} else "excalidraw"
 
     @field_validator("group_by", "tag_fields", mode="before")
     @classmethod
@@ -89,6 +103,7 @@ class CatalogSettings(BaseModel):
         return CatalogIndexConfig(
             markup_dir=Path(self.s3.prefix or ""),
             excalidraw_in_dir=self.excalidraw_in_dir,
+            unidraw_in_dir=self.unidraw_in_dir,
             index_path=self.index_path,
             group_by=list(self.group_by),
             title_field=self.title_field,
@@ -115,10 +130,14 @@ class AppSettings(BaseSettings):
         dotenv_settings: PydanticBaseSettingsSource,
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
-        sources: list[PydanticBaseSettingsSource] = []
+        sources: list[PydanticBaseSettingsSource] = [
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+        ]
         if cls._yaml_path:
             sources.append(YamlConfigSettingsSource(settings_cls, yaml_file=cls._yaml_path))
-        sources.extend([init_settings, env_settings, dotenv_settings, file_secret_settings])
         return tuple(sources)
 
 
@@ -140,6 +159,29 @@ def load_settings(config_path: Path | None = None) -> AppSettings:
                 msg = f"Config file not found: {resolved_path}"
                 raise FileNotFoundError(msg)
             AppSettings._yaml_path = resolved_path
-        return AppSettings()
+        settings = AppSettings()
+        validate_unidraw_settings(settings)
+        return settings
     finally:
         AppSettings._yaml_path = previous
+
+
+def validate_unidraw_settings(settings: AppSettings) -> None:
+    if settings.catalog.diagram_format != "unidraw":
+        return
+    env_key = "CJM_CATALOG__UNIDRAW_BASE_URL"
+    env_value = os.getenv(env_key, "").strip()
+    if not env_value:
+        msg = f"{env_key} is required when CJM_CATALOG__DIAGRAM_FORMAT=unidraw"
+        raise ValueError(msg)
+    if not is_absolute_url(settings.catalog.unidraw_base_url):
+        msg = "catalog.unidraw_base_url must be an absolute http(s) URL"
+        raise ValueError(msg)
+
+
+def is_absolute_url(value: str) -> bool:
+    raw = str(value or "").strip()
+    if not raw:
+        return False
+    parsed = urlparse(raw)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)

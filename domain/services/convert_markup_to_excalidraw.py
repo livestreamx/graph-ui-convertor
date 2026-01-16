@@ -1,46 +1,48 @@
 from __future__ import annotations
 
-import random
-import uuid
-from collections.abc import Iterable
-from dataclasses import dataclass, field
 from typing import Any
 
-from domain.models import (
-    CUSTOM_DATA_KEY,
-    END_TYPE_COLORS,
-    END_TYPE_DEFAULT,
-    INTERMEDIATE_BLOCK_COLOR,
-    METADATA_SCHEMA_VERSION,
-    BlockPlacement,
-    ExcalidrawDocument,
-    FramePlacement,
-    LayoutPlan,
-    MarkerPlacement,
-    MarkupDocument,
-    Point,
-    ScenarioPlacement,
-    SeparatorPlacement,
-    Size,
-)
+from domain.models import CUSTOM_DATA_KEY, ExcalidrawDocument, FramePlacement, Point, Size
 from domain.ports.layout import LayoutEngine
+from domain.services.convert_markup_base import (
+    Element,
+    ElementRegistry,
+    MarkupToDiagramConverter,
+    Metadata,
+)
 from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_excalidraw_links
 from domain.services.excalidraw_title import apply_title_focus
 
-Metadata = dict[str, Any]
-Element = dict[str, Any]
 
+class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
+    def __init__(
+        self,
+        layout_engine: LayoutEngine,
+        link_templates: ExcalidrawLinkTemplates | None = None,
+    ) -> None:
+        super().__init__(layout_engine)
+        self.link_templates = link_templates
 
-@dataclass
-class ElementRegistry:
-    elements: list[Element] = field(default_factory=list)
-    index: dict[str, Element] = field(default_factory=dict)
+    def _build_document(
+        self, elements: list[Element], app_state: dict[str, Any]
+    ) -> ExcalidrawDocument:
+        return ExcalidrawDocument(elements=elements, app_state=app_state, files={})
 
-    def add(self, element: Element) -> None:
-        self.elements.append(element)
-        self.index[element["id"]] = element
+    def _build_app_state(self, elements: list[Element]) -> dict[str, Any]:
+        app_state = {
+            "viewBackgroundColor": "#ffffff",
+            "gridSize": None,
+            "currentItemFontFamily": 1,
+            "currentItemFontSize": 20,
+            "currentItemStrokeColor": "#1e1e1e",
+        }
+        apply_title_focus(app_state, elements)
+        return app_state
 
-    def bind_arrow(self, arrow: Element) -> None:
+    def _post_process_elements(self, elements: list[Element]) -> None:
+        ensure_excalidraw_links(elements, self.link_templates)
+
+    def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         arrow_id = arrow.get("id")
         if not arrow_id:
             return
@@ -49,807 +51,15 @@ class ElementRegistry:
             if not binding:
                 continue
             target_id = binding.get("elementId")
-            target = self.index.get(target_id)
+            target = registry.index.get(target_id)
             if target is not None:
                 target.setdefault("boundElements", []).append({"id": arrow_id, "type": "arrow"})
 
-
-class MarkupToExcalidrawConverter:
-    def __init__(
-        self,
-        layout_engine: LayoutEngine,
-        link_templates: ExcalidrawLinkTemplates | None = None,
-    ) -> None:
-        self.layout_engine = layout_engine
-        self.namespace = uuid.uuid5(uuid.NAMESPACE_DNS, "cjm-ui-convertor")
-        self.link_templates = link_templates
-
-    def convert(self, document: MarkupDocument) -> ExcalidrawDocument:
-        plan = self.layout_engine.build_plan(document)
-        registry = ElementRegistry()
-        base_metadata: Metadata = {
-            "schema_version": METADATA_SCHEMA_VERSION,
-            "markup_type": document.markup_type,
-        }
-        if document.service_name:
-            base_metadata["service_name"] = document.service_name
-        if document.criticality_level:
-            base_metadata["criticality_level"] = document.criticality_level
-        if document.team_id is not None:
-            base_metadata["team_id"] = document.team_id
-        if document.team_name:
-            base_metadata["team_name"] = document.team_name
-
-        proc_name_lookup = {
-            proc.procedure_id: proc.procedure_name
-            for proc in document.procedures
-            if proc.procedure_name
-        }
-        frame_ids = self._build_frames(plan.frames, registry, base_metadata, proc_name_lookup)
-        self._build_separators(plan.separators, registry, base_metadata)
-        self._build_scenarios(plan.scenarios, registry, base_metadata)
-        included_procs = {frame.procedure_id for frame in plan.frames}
-        end_block_type_lookup = {
-            (proc.procedure_id, block_id): proc.end_block_types.get(block_id, END_TYPE_DEFAULT)
-            for proc in document.procedures
-            if proc.procedure_id in included_procs
-            for block_id in proc.end_block_ids
-        }
-        block_name_lookup = {
-            (proc.procedure_id, block_id): name
-            for proc in document.procedures
-            for block_id, name in proc.block_id_to_block_name.items()
-            if name and block_id in proc.block_ids()
-        }
-        blocks = self._build_blocks(
-            plan.blocks,
-            frame_ids,
-            registry,
-            base_metadata,
-            end_block_type_lookup,
-            block_name_lookup,
-        )
-
-        start_label_index: dict[tuple[str, str], int] = {}
-        start_blocks_global = [
-            (proc.procedure_id, blk_id)
-            for proc in document.procedures
-            if proc.procedure_id in included_procs
-            for blk_id in proc.start_block_ids
-        ]
-        for idx, (proc_id, blk_id) in enumerate(start_blocks_global, start=1):
-            start_label_index[(proc_id, blk_id)] = idx
-        markers = self._build_markers(
-            plan.markers,
-            frame_ids,
-            registry,
-            base_metadata,
-            start_label_index,
-            end_block_type_lookup,
-        )
-
-        self._build_start_edges(document, blocks, markers, registry, base_metadata)
-        self._build_end_edges(
-            document,
-            blocks,
-            markers,
-            registry,
-            base_metadata,
-            end_block_type_lookup,
-        )
-        self._build_branch_edges(document, blocks, registry, base_metadata)
-        self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
-        self._build_service_title(plan, registry, base_metadata, document.service_name)
-        self._center_on_first_frame(plan, registry.elements)
-        ensure_excalidraw_links(registry.elements, self.link_templates)
-
-        app_state = {
-            "viewBackgroundColor": "#ffffff",
-            "gridSize": None,
-            "currentItemFontFamily": 1,
-            "currentItemFontSize": 20,
-            "currentItemStrokeColor": "#1e1e1e",
-        }
-        apply_title_focus(app_state, registry.elements)
-        return ExcalidrawDocument(elements=registry.elements, app_state=app_state, files={})
-
-    def _center_on_first_frame(self, plan: LayoutPlan, elements: list[Element]) -> None:
-        if not plan.frames:
+    def _offset_element(self, element: Element, dx: float, dy: float) -> None:
+        if "x" not in element or "y" not in element:
             return
-        first_frame = min(plan.frames, key=lambda frame: (frame.origin.x, frame.origin.y))
-        offset_x = -(first_frame.origin.x + first_frame.size.width / 2)
-        offset_y = -(first_frame.origin.y + first_frame.size.height / 2)
-        if offset_x == 0 and offset_y == 0:
-            return
-        for element in elements:
-            if "x" not in element or "y" not in element:
-                continue
-            element["x"] = float(element.get("x", 0.0)) + offset_x
-            element["y"] = float(element.get("y", 0.0)) + offset_y
-
-    def _build_frames(
-        self,
-        frames: Iterable[FramePlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-        proc_name_lookup: dict[str, str],
-    ) -> dict[str, str]:
-        frame_ids: dict[str, str] = {}
-        for frame in frames:
-            frame_id = self._stable_id("frame", frame.procedure_id)
-            frame_ids[frame.procedure_id] = frame_id
-            procedure_name = proc_name_lookup.get(frame.procedure_id)
-            label = self._format_procedure_label(procedure_name, frame.procedure_id)
-            frame_meta = {
-                "procedure_id": frame.procedure_id,
-                "role": "frame",
-            }
-            if procedure_name:
-                frame_meta["procedure_name"] = procedure_name
-            registry.add(
-                self._frame_element(
-                    element_id=frame_id,
-                    frame=frame,
-                    metadata=self._with_base_metadata(
-                        frame_meta,
-                        base_metadata,
-                    ),
-                    name=label,
-                )
-            )
-        return frame_ids
-
-    def _build_separators(
-        self,
-        separators: Iterable[SeparatorPlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-    ) -> None:
-        for idx, separator in enumerate(separators):
-            element_id = self._stable_id(
-                "separator", str(idx), str(separator.start), str(separator.end)
-            )
-            registry.add(
-                self._line_element(
-                    element_id=element_id,
-                    start=separator.start,
-                    end=separator.end,
-                    metadata=self._with_base_metadata(
-                        {"role": "separator", "separator_index": idx},
-                        base_metadata,
-                    ),
-                    stroke_color="#9e9e9e",
-                    stroke_style="dashed",
-                    stroke_width=2,
-                )
-            )
-
-    def _build_service_title(
-        self,
-        plan: LayoutPlan,
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-        service_name: str | None,
-    ) -> None:
-        if not service_name:
-            return
-        title = service_name.strip()
-        if not title:
-            return
-        bounds = self._plan_bounds(plan)
-        if not bounds:
-            return
-        min_x, min_y, max_x, _ = bounds
-        content_width = max_x - min_x
-        title_width = max(content_width + 160.0, 420.0)
-        title_height = 96.0
-        gap_y = 120.0
-        origin_x = (min_x + max_x) / 2 - title_width / 2
-        origin_y = min_y - gap_y - title_height
-        group_id = self._stable_id("diagram-title-group", title)
-        panel_id = self._stable_id("diagram-title-panel", title)
-        rule_id = self._stable_id("diagram-title-rule", title)
-        text_id = self._stable_id("diagram-title-text", title)
-        panel_meta = self._with_base_metadata({"role": "diagram_title_panel"}, base_metadata)
-        rule_meta = self._with_base_metadata({"role": "diagram_title_rule"}, base_metadata)
-        text_meta = self._with_base_metadata({"role": "diagram_title"}, base_metadata)
-        title_origin = Point(x=origin_x, y=origin_y)
-        registry.add(
-            self._title_panel_element(
-                element_id=panel_id,
-                origin=title_origin,
-                size=Size(title_width, title_height),
-                metadata=panel_meta,
-                group_ids=[group_id],
-            )
-        )
-        line_y = origin_y + title_height - 14.0
-        registry.add(
-            self._line_element(
-                element_id=rule_id,
-                start=Point(origin_x + 26.0, line_y),
-                end=Point(origin_x + title_width - 26.0, line_y),
-                metadata=rule_meta,
-                stroke_color="#7b8fb0",
-                stroke_width=3,
-                group_ids=[group_id],
-            )
-        )
-        title_center = Point(
-            x=origin_x + title_width / 2,
-            y=origin_y + title_height / 2,
-        )
-        registry.add(
-            self._text_element(
-                element_id=text_id,
-                text=title,
-                center=title_center,
-                container_id=None,
-                frame_id=None,
-                metadata=text_meta,
-                group_ids=[group_id],
-                max_width=title_width - 96.0,
-                max_height=title_height - 40.0,
-                font_size=36.0,
-            )
-        )
-
-    def _build_scenarios(
-        self,
-        scenarios: Iterable[ScenarioPlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-    ) -> None:
-        for idx, scenario in enumerate(scenarios, start=1):
-            group_id = self._stable_id("scenario-group", str(idx))
-            panel_id = self._stable_id("scenario-panel", str(idx))
-            title_id = self._stable_id("scenario-title", str(idx))
-            body_id = self._stable_id("scenario-body", str(idx))
-            cycle_id = self._stable_id("scenario-cycle", str(idx))
-            panel_meta = self._with_base_metadata(
-                {"role": "scenario_panel", "scenario_index": idx},
-                base_metadata,
-            )
-            registry.add(
-                self._scenario_panel_element(
-                    element_id=panel_id,
-                    origin=scenario.origin,
-                    size=scenario.size,
-                    metadata=panel_meta,
-                    group_ids=[group_id],
-                )
-            )
-            content_width = scenario.size.width - (scenario.padding * 2)
-            title_lines = scenario.title_text.splitlines() or [scenario.title_text]
-            body_lines = scenario.body_text.splitlines() or [scenario.body_text]
-            title_height = len(title_lines) * scenario.title_font_size * 1.35
-            body_height = len(body_lines) * scenario.body_font_size * 1.35
-            cycle_height = 0.0
-            cycle_lines = []
-            if scenario.cycle_text:
-                cycle_lines = scenario.cycle_text.splitlines()
-                cycle_height = len(cycle_lines) * scenario.cycle_font_size * 1.35
-            title_origin = Point(
-                x=scenario.origin.x + scenario.padding,
-                y=scenario.origin.y + scenario.padding,
-            )
-            cycle_origin = Point(
-                x=scenario.origin.x + scenario.padding,
-                y=scenario.origin.y + scenario.padding + title_height,
-            )
-            body_origin = Point(
-                x=scenario.origin.x + scenario.padding,
-                y=scenario.origin.y
-                + scenario.padding
-                + title_height
-                + (cycle_height + (scenario.section_gap if scenario.cycle_text else 0.0)),
-            )
-            registry.add(
-                self._text_block_element(
-                    element_id=title_id,
-                    text=scenario.title_text,
-                    origin=title_origin,
-                    width=content_width,
-                    height=title_height,
-                    metadata=self._with_base_metadata(
-                        {"role": "scenario_title", "scenario_index": idx},
-                        base_metadata,
-                    ),
-                    group_ids=[group_id],
-                    font_size=scenario.title_font_size,
-                )
-            )
-            if scenario.cycle_text:
-                registry.add(
-                    self._text_block_element(
-                        element_id=cycle_id,
-                        text=scenario.cycle_text,
-                        origin=cycle_origin,
-                        width=content_width,
-                        height=cycle_height,
-                        metadata=self._with_base_metadata(
-                            {"role": "scenario_cycle", "scenario_index": idx},
-                            base_metadata,
-                        ),
-                        group_ids=[group_id],
-                        font_size=scenario.cycle_font_size,
-                        text_color="#d32f2f",
-                    )
-                )
-            registry.add(
-                self._text_block_element(
-                    element_id=body_id,
-                    text=scenario.body_text,
-                    origin=body_origin,
-                    width=content_width,
-                    height=body_height,
-                    metadata=self._with_base_metadata(
-                        {"role": "scenario_body", "scenario_index": idx},
-                        base_metadata,
-                    ),
-                    group_ids=[group_id],
-                    font_size=scenario.body_font_size,
-                )
-            )
-            procedures_group = self._stable_id("scenario-procedures-group", str(idx))
-            procedures_panel_id = self._stable_id("scenario-procedures-panel", str(idx))
-            procedures_text_id = self._stable_id("scenario-procedures-text", str(idx))
-            registry.add(
-                self._scenario_procedures_panel_element(
-                    element_id=procedures_panel_id,
-                    origin=scenario.procedures_origin,
-                    size=scenario.procedures_size,
-                    metadata=self._with_base_metadata(
-                        {"role": "scenario_procedures_panel", "scenario_index": idx},
-                        base_metadata,
-                    ),
-                    group_ids=[procedures_group],
-                )
-            )
-            procedures_width = scenario.procedures_size.width - (scenario.procedures_padding * 2)
-            procedures_lines = scenario.procedures_text.splitlines() or [scenario.procedures_text]
-            procedures_height = len(procedures_lines) * scenario.procedures_font_size * 1.35
-            procedures_origin = Point(
-                x=scenario.procedures_origin.x + scenario.procedures_padding,
-                y=scenario.procedures_origin.y + scenario.procedures_padding,
-            )
-            registry.add(
-                self._text_block_element(
-                    element_id=procedures_text_id,
-                    text=scenario.procedures_text,
-                    origin=procedures_origin,
-                    width=procedures_width,
-                    height=procedures_height,
-                    metadata=self._with_base_metadata(
-                        {"role": "scenario_procedures", "scenario_index": idx},
-                        base_metadata,
-                    ),
-                    group_ids=[procedures_group],
-                    font_size=scenario.procedures_font_size,
-                )
-            )
-
-    def _build_blocks(
-        self,
-        blocks: Iterable[BlockPlacement],
-        frame_ids: dict[str, str],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-        end_block_type_lookup: dict[tuple[str, str], str],
-        block_name_lookup: dict[tuple[str, str], str],
-    ) -> dict[tuple[str, str], BlockPlacement]:
-        placement_index: dict[tuple[str, str], BlockPlacement] = {}
-        for block in blocks:
-            placement_index[(block.procedure_id, block.block_id)] = block
-            group_id = self._stable_id("group", block.procedure_id, block.block_id)
-            rect_id = self._stable_id("block", block.procedure_id, block.block_id)
-            text_id = self._stable_id("block-text", block.procedure_id, block.block_id)
-            end_block_type = end_block_type_lookup.get((block.procedure_id, block.block_id))
-            block_meta = {
-                "procedure_id": block.procedure_id,
-                "block_id": block.block_id,
-                "role": "block",
-            }
-            if end_block_type:
-                block_meta["end_block_type"] = end_block_type
-            label_text = block_name_lookup.get((block.procedure_id, block.block_id), block.block_id)
-            registry.add(
-                self._rectangle_element(
-                    element_id=rect_id,
-                    position=block.position,
-                    size=block.size,
-                    frame_id=frame_ids.get(block.procedure_id),
-                    group_ids=[group_id],
-                    metadata=self._with_base_metadata(block_meta, base_metadata),
-                    background_color=(
-                        INTERMEDIATE_BLOCK_COLOR if end_block_type == "intermediate" else None
-                    ),
-                )
-            )
-            label_meta = {
-                "procedure_id": block.procedure_id,
-                "block_id": block.block_id,
-                "role": "block_label",
-                "end_block_type": end_block_type,
-            }
-            if label_text != block.block_id:
-                label_meta["block_name"] = label_text
-            registry.add(
-                self._text_element(
-                    element_id=text_id,
-                    text=label_text,
-                    center=self._center(block.position, block.size.width, block.size.height),
-                    container_id=rect_id,
-                    group_ids=[group_id],
-                    frame_id=frame_ids.get(block.procedure_id),
-                    metadata=self._with_base_metadata(label_meta, base_metadata),
-                    max_width=max(80.0, block.size.width - 30),
-                    max_height=max(24.0, block.size.height - 30),
-                    font_size=18.0,
-                )
-            )
-        return placement_index
-
-    def _build_markers(
-        self,
-        markers: Iterable[MarkerPlacement],
-        frame_ids: dict[str, str],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-        start_label_index: dict[tuple[str, str], int],
-        end_block_type_lookup: dict[tuple[str, str], str],
-    ) -> dict[tuple[str, str, str, str | None], MarkerPlacement]:
-        marker_index: dict[tuple[str, str, str, str | None], MarkerPlacement] = {}
-        for marker in markers:
-            marker_index[(marker.procedure_id, marker.block_id, marker.role, marker.end_type)] = (
-                marker
-            )
-            element_id = self._marker_element_id(
-                marker.procedure_id, marker.role, marker.block_id, marker.end_type
-            )
-            marker_meta = {
-                "procedure_id": marker.procedure_id,
-                "block_id": marker.block_id,
-                "role": marker.role,
-            }
-            end_type = None
-            block_end_type = None
-            background_color = None
-            if marker.role == "end_marker":
-                end_type = marker.end_type or END_TYPE_DEFAULT
-                block_end_type = end_block_type_lookup.get(
-                    (marker.procedure_id, marker.block_id), END_TYPE_DEFAULT
-                )
-                marker_meta["end_block_type"] = block_end_type
-                marker_meta["end_type"] = end_type
-                background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
-            registry.add(
-                self._ellipse_element(
-                    element_id=element_id,
-                    position=marker.position,
-                    size=marker.size,
-                    frame_id=frame_ids.get(marker.procedure_id),
-                    metadata=self._with_base_metadata(marker_meta, base_metadata),
-                    background_color=background_color,
-                )
-            )
-            label_id = self._stable_id(
-                "marker-text",
-                marker.procedure_id,
-                marker.role,
-                marker.block_id,
-                marker.end_type or "",
-            )
-            label_text = "START"
-            if marker.role == "start_marker":
-                idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
-                label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
-            elif marker.role == "end_marker":
-                if end_type in {"all", "intermediate"}:
-                    label_text = "END & EXIT"
-                else:
-                    label_text = "END" if end_type != "exit" else "EXIT"
-            registry.add(
-                self._text_element(
-                    element_id=label_id,
-                    text=label_text,
-                    center=self._center(marker.position, marker.size.width, marker.size.height),
-                    container_id=element_id,
-                    frame_id=frame_ids.get(marker.procedure_id),
-                    metadata=self._with_base_metadata(marker_meta, base_metadata),
-                    max_width=marker.size.width - 24,
-                    max_height=min(52.0, marker.size.height - 14),
-                    font_size=None,
-                )
-            )
-        return marker_index
-
-    def _build_start_edges(
-        self,
-        document: MarkupDocument,
-        blocks: dict[tuple[str, str], BlockPlacement],
-        markers: dict[tuple[str, str, str, str | None], MarkerPlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-    ) -> None:
-        for procedure in document.procedures:
-            for start_block_id in procedure.start_block_ids:
-                marker = markers.get((procedure.procedure_id, start_block_id, "start_marker", None))
-                block = blocks.get((procedure.procedure_id, start_block_id))
-                if not marker or not block:
-                    continue
-                start_center = self._marker_anchor(marker, side="right")
-                end_center = self._block_anchor(block, side="left")
-                arrow = self._arrow_element(
-                    start=start_center,
-                    end=end_center,
-                    label="start",
-                    metadata=self._with_base_metadata(
-                        {
-                            "procedure_id": procedure.procedure_id,
-                            "role": "edge",
-                            "edge_type": "start",
-                            "target_block_id": start_block_id,
-                        },
-                        base_metadata,
-                    ),
-                    start_binding=self._marker_element_id(
-                        procedure.procedure_id, "start_marker", start_block_id, None
-                    ),
-                    end_binding=self._stable_id("block", procedure.procedure_id, start_block_id),
-                )
-                registry.add(arrow)
-                registry.bind_arrow(arrow)
-
-    def _build_end_edges(
-        self,
-        document: MarkupDocument,
-        blocks: dict[tuple[str, str], BlockPlacement],
-        markers: dict[tuple[str, str, str, str | None], MarkerPlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-        end_block_type_lookup: dict[tuple[str, str], str],
-    ) -> None:
-        for (proc_id, block_id, role, marker_end_type), marker in markers.items():
-            if role != "end_marker":
-                continue
-            block = blocks.get((proc_id, block_id))
-            if not block:
-                continue
-            end_type = marker_end_type or END_TYPE_DEFAULT
-            block_end_type = end_block_type_lookup.get((proc_id, block_id), end_type)
-            start_center = self._block_anchor(block, side="right")
-            end_center = self._marker_anchor(marker, side="left")
-            arrow = self._arrow_element(
-                start=start_center,
-                end=end_center,
-                label="end",
-                metadata=self._with_base_metadata(
-                    {
-                        "procedure_id": proc_id,
-                        "role": "edge",
-                        "edge_type": "end",
-                        "end_type": end_type,
-                        "end_block_type": block_end_type,
-                        "source_block_id": block_id,
-                    },
-                    base_metadata,
-                ),
-                start_binding=self._stable_id("block", proc_id, block_id),
-                end_binding=self._marker_element_id(
-                    proc_id, "end_marker", block_id, marker_end_type
-                ),
-            )
-            registry.add(arrow)
-            registry.bind_arrow(arrow)
-
-    def _build_branch_edges(
-        self,
-        document: MarkupDocument,
-        blocks: dict[tuple[str, str], BlockPlacement],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-    ) -> None:
-        cycle_edges_by_proc: dict[str, set[tuple[str, str]]] = {
-            procedure.procedure_id: self._edges_in_cycles(procedure.branches)
-            for procedure in document.procedures
-        }
-        branch_offsets: dict[tuple[str, str], list[float]] = {}
-        for procedure in document.procedures:
-            for source_block, targets in procedure.branches.items():
-                count = max(1, len(targets))
-                offsets = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
-                branch_offsets[(procedure.procedure_id, source_block)] = offsets
-        branch_index: dict[tuple[str, str], int] = {}
-
-        # Index blocks by block_id for potential cross-procedure branches (best-effort).
-        block_by_id: dict[str, list[tuple[str, BlockPlacement]]] = {}
-        for (proc_id, blk_id), placement in blocks.items():
-            block_by_id.setdefault(blk_id, []).append((proc_id, placement))
-
-        for procedure in document.procedures:
-            for source_block, targets in procedure.branches.items():
-                source = blocks.get((procedure.procedure_id, source_block))
-                if not source:
-                    continue
-                for target_block in targets:
-                    target = blocks.get((procedure.procedure_id, target_block))
-                    target_proc_id = procedure.procedure_id
-                    if not target:
-                        candidates = block_by_id.get(target_block, [])
-                        if len(candidates) == 1:
-                            target_proc_id, target = candidates[0]
-                    if not target:
-                        continue
-                    offset_key = (procedure.procedure_id, source_block)
-                    offset_idx = branch_index.get(offset_key, 0)
-                    branch_index[offset_key] = offset_idx + 1
-                    is_cycle = (source_block, target_block) in cycle_edges_by_proc.get(
-                        procedure.procedure_id, set()
-                    )
-                    dy = branch_offsets.get(offset_key, [0])[
-                        min(offset_idx, len(branch_offsets.get(offset_key, [0])) - 1)
-                    ]
-                    if is_cycle:
-                        start_center = self._block_anchor(source, side="top")
-                        end_center = self._block_anchor(target, side="top")
-                        cycle_points = self._elbow_points(start_center, end_center, 80.0)
-                    else:
-                        start_center = self._block_anchor(source, side="right", y_offset=dy)
-                        end_center = self._block_anchor(target, side="left", y_offset=dy)
-                        cycle_points = None
-                    edge_type = "branch_cycle" if is_cycle else "branch"
-                    label = "ЦИКЛ" if is_cycle else "branch"
-                    arrow = self._arrow_element(
-                        start=start_center,
-                        end=end_center,
-                        label=label,
-                        metadata=self._with_base_metadata(
-                            {
-                                "procedure_id": procedure.procedure_id,
-                                "target_procedure_id": target_proc_id,
-                                "role": "edge",
-                                "edge_type": edge_type,
-                                "is_cycle": is_cycle,
-                                "source_block_id": source_block,
-                                "target_block_id": target_block,
-                            },
-                            base_metadata,
-                        ),
-                        start_binding=self._stable_id(
-                            "block", procedure.procedure_id, source_block
-                        ),
-                        end_binding=self._stable_id("block", target_proc_id, target_block),
-                        smoothing=0.15,
-                        stroke_style="dashed" if is_cycle else None,
-                        stroke_color="#d32f2f" if is_cycle else None,
-                        stroke_width=1 if is_cycle else None,
-                        points=cycle_points,
-                        end_arrowhead="arrow" if is_cycle else None,
-                    )
-                    registry.add(arrow)
-                    registry.bind_arrow(arrow)
-
-    def _build_procedure_flow_edges(
-        self,
-        document: MarkupDocument,
-        frames: Iterable[FramePlacement],
-        frame_ids: dict[str, str],
-        registry: ElementRegistry,
-        base_metadata: Metadata,
-    ) -> None:
-        frames_list = list(frames)
-        if len(frames_list) <= 1:
-            return
-        frame_lookup: dict[str, FramePlacement] = {f.procedure_id: f for f in frames_list}
-        graph_edges: list[tuple[str, str]] = []
-        cycle_edges: set[tuple[str, str]] = set()
-        for parent, children in document.procedure_graph.items():
-            if parent not in frame_lookup:
-                continue
-            for child in children:
-                if child in frame_lookup:
-                    graph_edges.append((parent, child))
-
-        if graph_edges:
-            seen: set[tuple[str, str]] = set()
-            edges_to_draw = []
-            for edge in graph_edges:
-                if edge in seen:
-                    continue
-                seen.add(edge)
-                edges_to_draw.append(edge)
-        else:
-            # Connect procedures when no explicit block-to-block cross edges.
-            proc_for_block: dict[str, str] = {}
-            for proc in document.procedures:
-                for blk in proc.block_ids():
-                    proc_for_block[blk] = proc.procedure_id
-
-            cross_edges = []
-            for proc in document.procedures:
-                for _src, targets in proc.branches.items():
-                    for tgt in targets:
-                        tgt_proc = proc_for_block.get(tgt)
-                        if tgt_proc and tgt_proc != proc.procedure_id:
-                            cross_edges.append((proc.procedure_id, tgt_proc))
-            seen_edges: set[tuple[str, str]] = set()
-            edges_to_draw = []
-            for edge in cross_edges:
-                if edge in seen_edges:
-                    continue
-                seen_edges.add(edge)
-                edges_to_draw.append(edge)
-        if edges_to_draw:
-            adjacency: dict[str, list[str]] = {}
-            for src, tgt in edges_to_draw:
-                adjacency.setdefault(src, []).append(tgt)
-            cycle_edges = self._edges_in_cycles(adjacency)
-
-        for left_id, right_id in edges_to_draw:
-            left_frame = frame_lookup.get(left_id)
-            right_frame = frame_lookup.get(right_id)
-            if not left_frame or not right_frame:
-                continue
-            is_cycle = (left_id, right_id) in cycle_edges
-            edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
-            label = "ЦИКЛ" if is_cycle else "procedure"
-            curve_direction = None
-            if is_cycle:
-                start = Point(
-                    x=left_frame.origin.x + left_frame.size.width / 2,
-                    y=left_frame.origin.y,
-                )
-                end = Point(
-                    x=right_frame.origin.x + right_frame.size.width / 2,
-                    y=right_frame.origin.y,
-                )
-                dx = end.x - start.x
-                dy = end.y - start.y
-                if dx == 0:
-                    curve_direction = -1.0 if dy >= 0 else 1.0
-                else:
-                    curve_direction = -1.0 if dx > 0 else 1.0
-            else:
-                start = Point(
-                    x=left_frame.origin.x + left_frame.size.width,
-                    y=left_frame.origin.y + left_frame.size.height / 2,
-                )
-                end = Point(
-                    x=right_frame.origin.x,
-                    y=right_frame.origin.y + right_frame.size.height / 2,
-                )
-            arrow = self._arrow_element(
-                start=start,
-                end=end,
-                label=label,
-                metadata=self._with_base_metadata(
-                    {
-                        "procedure_id": left_id,
-                        "target_procedure_id": right_id,
-                        "role": "edge",
-                        "edge_type": edge_type,
-                        "is_cycle": is_cycle,
-                    },
-                    base_metadata,
-                ),
-                start_binding=self._stable_id("frame", left_id),
-                end_binding=self._stable_id("frame", right_id),
-                smoothing=0.1,
-                stroke_style="dashed" if is_cycle else None,
-                stroke_color="#d32f2f" if is_cycle else None,
-                stroke_width=2 if is_cycle else None,
-                curve_offset=100.0 if is_cycle else None,
-                curve_direction=curve_direction if is_cycle else None,
-                end_arrowhead="arrow" if is_cycle else None,
-            )
-            registry.add(arrow)
-            registry.bind_arrow(arrow)
-
-    def _format_procedure_label(self, procedure_name: str | None, procedure_id: str) -> str:
-        if procedure_name:
-            return f"{procedure_name} ({procedure_id})"
-        return procedure_id
+        element["x"] = float(element.get("x", 0.0)) + dx
+        element["y"] = float(element.get("y", 0.0)) + dy
 
     def _frame_element(
         self,
@@ -1132,17 +342,6 @@ class MarkupToExcalidrawConverter:
             "customData": {CUSTOM_DATA_KEY: metadata},
         }
 
-    def _marker_element_id(
-        self,
-        procedure_id: str,
-        role: str,
-        block_id: str,
-        end_type: str | None,
-    ) -> str:
-        if role == "end_marker" and end_type:
-            return self._stable_id("marker", procedure_id, role, block_id, end_type)
-        return self._stable_id("marker", procedure_id, role, block_id)
-
     def _line_element(
         self,
         element_id: str,
@@ -1157,20 +356,14 @@ class MarkupToExcalidrawConverter:
         dx = end.x - start.x
         dy = end.y - start.y
         points = [[0.0, 0.0], [dx, dy]]
-        min_x = min(point[0] for point in points)
-        max_x = max(point[0] for point in points)
-        min_y = min(point[1] for point in points)
-        max_y = max(point[1] for point in points)
-        width = max_x - min_x
-        height = max_y - min_y
-        adjusted_points = [[point[0] - min_x, point[1] - min_y] for point in points]
+        position, size, adjusted_points = self._normalize_points(start, points)
         return {
             "id": element_id,
             "type": "line",
-            "x": start.x + min_x,
-            "y": start.y + min_y,
-            "width": width,
-            "height": height,
+            "x": position.x,
+            "y": position.y,
+            "width": size.width,
+            "height": size.height,
             "angle": 0,
             "strokeColor": stroke_color or "#1e1e1e",
             "backgroundColor": "transparent",
@@ -1190,21 +383,6 @@ class MarkupToExcalidrawConverter:
             "points": adjusted_points,
             "customData": {CUSTOM_DATA_KEY: metadata},
         }
-
-    def _elbow_points(
-        self,
-        start: Point,
-        end: Point,
-        offset: float,
-    ) -> list[list[float]]:
-        dx = end.x - start.x
-        dy = end.y - start.y
-        if dx == 0:
-            direction = -1.0 if dy >= 0 else 1.0
-        else:
-            direction = -1.0 if dx > 0 else 1.0
-        elbow_offset = offset * direction
-        return [[0.0, 0.0], [0.0, elbow_offset], [dx, elbow_offset], [dx, dy]]
 
     def _arrow_element(
         self,
@@ -1245,20 +423,14 @@ class MarkupToExcalidrawConverter:
         if roundness is None:
             roundness = {"type": 2}
 
-        min_x = min(point[0] for point in points)
-        max_x = max(point[0] for point in points)
-        min_y = min(point[1] for point in points)
-        max_y = max(point[1] for point in points)
-        width = max_x - min_x
-        height = max_y - min_y
-        adjusted_points = [[point[0] - min_x, point[1] - min_y] for point in points]
+        position, size, adjusted_points = self._normalize_points(start, points)
         arrow = {
             "id": arrow_id,
             "type": "arrow",
-            "x": start.x + min_x,
-            "y": start.y + min_y,
-            "width": width,
-            "height": height,
+            "x": position.x,
+            "y": position.y,
+            "width": size.width,
+            "height": size.height,
             "angle": 0,
             "strokeColor": stroke_color or "#1e1e1e",
             "backgroundColor": "transparent",
@@ -1291,95 +463,6 @@ class MarkupToExcalidrawConverter:
         if end_arrowhead is not None:
             arrow["endArrowhead"] = end_arrowhead
         return arrow
-
-    def _edges_in_cycles(self, adjacency: dict[str, list[str]]) -> set[tuple[str, str]]:
-        normalized: dict[str, list[str]] = {
-            node: list(children) for node, children in adjacency.items()
-        }
-
-        nodes = set(normalized.keys())
-        for children in normalized.values():
-            nodes.update(children)
-        if not nodes:
-            return set()
-
-        index = 0
-        indices: dict[str, int] = {}
-        lowlinks: dict[str, int] = {}
-        stack: list[str] = []
-        on_stack: set[str] = set()
-        components: list[list[str]] = []
-
-        def strongconnect(node: str) -> None:
-            nonlocal index
-            indices[node] = index
-            lowlinks[node] = index
-            index += 1
-            stack.append(node)
-            on_stack.add(node)
-
-            for child in normalized.get(node, []):
-                if child not in indices:
-                    strongconnect(child)
-                    lowlinks[node] = min(lowlinks[node], lowlinks[child])
-                elif child in on_stack:
-                    lowlinks[node] = min(lowlinks[node], indices[child])
-
-            if lowlinks[node] == indices[node]:
-                component: list[str] = []
-                while True:
-                    current = stack.pop()
-                    on_stack.remove(current)
-                    component.append(current)
-                    if current == node:
-                        break
-                components.append(component)
-
-        for node in nodes:
-            if node not in indices:
-                strongconnect(node)
-
-        component_id: dict[str, int] = {}
-        component_sizes: dict[int, int] = {}
-        for idx, component in enumerate(components):
-            component_sizes[idx] = len(component)
-            for node in component:
-                component_id[node] = idx
-
-        cycle_edges: set[tuple[str, str]] = set()
-        for source, targets in normalized.items():
-            for target in targets:
-                src_id = component_id.get(source)
-                tgt_id = component_id.get(target)
-                if src_id is None or tgt_id is None or src_id != tgt_id:
-                    continue
-                if component_sizes.get(src_id, 0) > 1 or source == target:
-                    cycle_edges.add((source, target))
-        return cycle_edges
-
-    def _plan_bounds(self, plan: LayoutPlan) -> tuple[float, float, float, float] | None:
-        min_x = float("inf")
-        min_y = float("inf")
-        max_x = float("-inf")
-        max_y = float("-inf")
-        for frame in plan.frames:
-            min_x = min(min_x, frame.origin.x)
-            min_y = min(min_y, frame.origin.y)
-            max_x = max(max_x, frame.origin.x + frame.size.width)
-            max_y = max(max_y, frame.origin.y + frame.size.height)
-        for scenario in plan.scenarios:
-            min_x = min(min_x, scenario.origin.x)
-            min_y = min(min_y, scenario.origin.y)
-            max_x = max(max_x, scenario.origin.x + scenario.size.width)
-            max_y = max(max_y, scenario.origin.y + scenario.size.height)
-        for separator in plan.separators:
-            min_x = min(min_x, separator.start.x, separator.end.x)
-            max_x = max(max_x, separator.start.x, separator.end.x)
-            min_y = min(min_y, separator.start.y, separator.end.y)
-            max_y = max(max_y, separator.start.y, separator.end.y)
-        if min_x == float("inf"):
-            return None
-        return min_x, min_y, max_x, max_y
 
     def _base_shape(
         self,
@@ -1417,110 +500,3 @@ class MarkupToExcalidrawConverter:
             "customData": {CUSTOM_DATA_KEY: metadata},
             **(extra or {}),
         }
-
-    def _center(self, position: Point, width: float, height: float) -> Point:
-        return Point(x=position.x + width / 2, y=position.y + height / 2)
-
-    def _block_anchor(
-        self,
-        block: BlockPlacement,
-        side: str,
-        x_offset: float = 0.0,
-        y_offset: float = 0.0,
-    ) -> Point:
-        if side == "left":
-            return Point(
-                x=block.position.x + x_offset,
-                y=block.position.y + block.size.height / 2 + y_offset,
-            )
-        if side == "top":
-            return Point(
-                x=block.position.x + block.size.width / 2 + x_offset,
-                y=block.position.y + y_offset,
-            )
-        return Point(
-            x=block.position.x + block.size.width + x_offset,
-            y=block.position.y + block.size.height / 2 + y_offset,
-        )
-
-    def _marker_anchor(self, marker: MarkerPlacement, side: str) -> Point:
-        if side == "left":
-            return Point(
-                x=marker.position.x,
-                y=marker.position.y + marker.size.height / 2,
-            )
-        return Point(
-            x=marker.position.x + marker.size.width,
-            y=marker.position.y + marker.size.height / 2,
-        )
-
-    def _fit_text(
-        self,
-        text: str,
-        max_width: float,
-        max_height: float,
-        min_size: float,
-        max_size: float,
-    ) -> tuple[str, float, float]:
-        if not text.strip():
-            size = max_size
-            height = min(max_height, size * 1.35)
-            return text, size, height
-
-        words = text.split()
-        width_factor = 0.6
-        line_height = 1.35
-
-        def wrap_words(max_chars: int) -> list[str]:
-            lines: list[str] = []
-            current: list[str] = []
-            count = 0
-            for word in words:
-                if not current:
-                    if len(word) <= max_chars:
-                        current = [word]
-                        count = len(word)
-                    else:
-                        for idx in range(0, len(word), max_chars):
-                            chunk = word[idx : idx + max_chars]
-                            if current:
-                                lines.append(" ".join(current))
-                            current = [chunk]
-                            count = len(chunk)
-                    continue
-                if count + 1 + len(word) <= max_chars:
-                    current.append(word)
-                    count += 1 + len(word)
-                else:
-                    lines.append(" ".join(current))
-                    current = [word]
-                    count = len(word)
-            if current:
-                lines.append(" ".join(current))
-            return lines
-
-        start = int(max_size)
-        end = int(min_size)
-        for size in range(start, end - 1, -1):
-            max_chars = max(1, int(max_width / (size * width_factor)))
-            lines = wrap_words(max_chars)
-            height_needed = len(lines) * size * line_height
-            if height_needed <= max_height:
-                return "\n".join(lines), float(size), min(max_height, height_needed)
-
-        size = max(min_size, 1.0)
-        max_chars = max(1, int(max_width / (size * width_factor)))
-        lines = wrap_words(max_chars)
-        height_needed = len(lines) * size * line_height
-        return "\n".join(lines), size, min(max_height, height_needed)
-
-    def _stable_id(self, *parts: str) -> str:
-        return str(uuid.uuid5(self.namespace, "|".join(parts)))
-
-    def _rand_seed(self) -> int:
-        return random.randint(1, 2**31 - 1)
-
-    def _with_base_metadata(self, metadata: Metadata, base: Metadata) -> Metadata:
-        merged = dict(base)
-        merged.update(metadata)
-        return merged

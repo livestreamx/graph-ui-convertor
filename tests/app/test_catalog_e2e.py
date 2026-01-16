@@ -2,27 +2,32 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
+from playwright.sync_api import Error as PlaywrightError
+from playwright.sync_api import sync_playwright
+
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.layout.grid import GridLayoutEngine
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
-from app.config import AppSettings, CatalogSettings, S3Settings
+from app.config import AppSettings
 from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.models import MarkupDocument
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from fastapi.testclient import TestClient
-from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import sync_playwright
-
-from tests.s3_utils import stub_s3_catalog
+from tests.adapters.s3.s3_utils import stub_s3_catalog
 
 
-def test_catalog_open_e2e(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_catalog_open_e2e(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
     excalidraw_out_dir = tmp_path / "excalidraw_out"
     roundtrip_dir = tmp_path / "roundtrip"
@@ -79,34 +84,14 @@ def test_catalog_open_e2e(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
         index = FileSystemCatalogIndexRepository().load(index_path)
         scene_id = index.items[0].scene_id
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                s3=S3Settings(
-                    bucket="cjm-bucket",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url="http://stubbed-s3.local",
-                    access_key_id="test",
-                    secret_access_key="test",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=excalidraw_in_dir,
-                excalidraw_out_dir=excalidraw_out_dir,
-                roundtrip_dir=roundtrip_dir,
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="finedog_unit_meta.service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                excalidraw_base_url="/excalidraw",
-                excalidraw_proxy_upstream="http://excalidraw.local",
-                excalidraw_proxy_prefix="/excalidraw",
-                excalidraw_max_url_length=8000,
-                rebuild_token=None,
-            )
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="/excalidraw",
+            excalidraw_proxy_upstream="http://excalidraw.local",
+            excalidraw_proxy_prefix="/excalidraw",
         )
 
         client_api = TestClient(create_app(settings))

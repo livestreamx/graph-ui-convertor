@@ -9,11 +9,13 @@ from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.layout.grid import GridLayoutEngine
+from adapters.unidraw.repository import FileSystemUnidrawRepository
 from domain.models import MarkupDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
 from domain.services.excalidraw_links import ExcalidrawLinkTemplates, build_link_templates
 from rich.console import Console
 
@@ -72,6 +74,29 @@ def _run_convert_from_excalidraw(input_dir: Path, output_dir: Path) -> None:
         console.print(f"[green]Wrote[/] {target_path}")
 
 
+def _run_convert_to_unidraw(
+    input_dir: Path,
+    output_dir: Path,
+    markup_repo: MarkupRepository | None = None,
+) -> None:
+    markup_repo = markup_repo or FileSystemMarkupRepository()
+    unidraw_repo = FileSystemUnidrawRepository()
+    layout = GridLayoutEngine()
+    converter = MarkupToUnidrawConverter(layout)
+
+    pairs = markup_repo.load_all_with_paths(input_dir)
+    if not pairs:
+        console.print(f"[yellow]No markup files found in {input_dir}[/]")
+        raise typer.Exit(code=0)
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for path, document in pairs:
+        scene = converter.convert(document)
+        target_path = output_dir / f"{path.stem}.unidraw"
+        unidraw_repo.save(scene, target_path)
+        console.print(f"[green]Wrote[/] {target_path}")
+
+
 def _run_build_index_from_settings(settings: AppSettings) -> None:
     builder = BuildCatalogIndex(
         build_markup_source(settings),
@@ -113,6 +138,20 @@ def convert_from_excalidraw(
     ),
 ) -> None:
     _run_convert_from_excalidraw(input_dir, output_dir)
+
+
+@convert_app.command("to-unidraw")
+def convert_to_unidraw(
+    input_dir: Path = typer.Option(
+        Path("data/markup"),
+        help="Directory with markup JSON files.",
+    ),
+    output_dir: Path = typer.Option(
+        Path("data/unidraw_in"),
+        help="Directory to write Unidraw scene files.",
+    ),
+) -> None:
+    _run_convert_to_unidraw(input_dir, output_dir)
 
 
 @app.command("validate")

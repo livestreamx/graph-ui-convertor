@@ -51,9 +51,10 @@ def main() -> None:
     if scene.get("elements") is None:
         raise RuntimeError("Scene payload missing elements")
 
-    status, _ = fetch(f"{catalog_base}/excalidraw/")
-    if status != 200:
-        raise RuntimeError("Excalidraw proxy not reachable")
+    if scene.get("type") != "unidraw":
+        status, _ = fetch(f"{catalog_base}/excalidraw/")
+        if status != 200:
+            raise RuntimeError("Excalidraw proxy not reachable")
 
     print("Smoke test passed.")
 

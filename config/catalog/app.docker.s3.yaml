@@ -9,8 +9,11 @@ catalog:
     secret_access_key: "minioadmin"
     session_token: ""
     use_path_style: true
+  diagram_format: "excalidraw"
   excalidraw_in_dir: "/data/excalidraw_in"
   excalidraw_out_dir: "/data/excalidraw_out"
+  unidraw_in_dir: "/data/unidraw_in"
+  unidraw_out_dir: "/data/unidraw_out"
   roundtrip_dir: "/data/roundtrip"
   index_path: "/data/catalog/index.json"
   auto_build_index: true
@@ -28,4 +31,8 @@ catalog:
   excalidraw_proxy_upstream: "http://excalidraw:80"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
+  unidraw_base_url: ""
+  unidraw_proxy_upstream: ""
+  unidraw_proxy_prefix: "/unidraw"
+  unidraw_max_url_length: 8000
   rebuild_token: ""

@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Protocol
 
-from domain.models import ExcalidrawDocument, MarkupDocument
+from domain.models import ExcalidrawDocument, MarkupDocument, UnidrawDocument
 
 
 class MarkupRepository(Protocol):
@@ -25,3 +25,11 @@ class ExcalidrawRepository(Protocol):
     def load_all_with_paths(self, directory: Path) -> Sequence[tuple[Path, ExcalidrawDocument]]: ...
 
     def save(self, document: ExcalidrawDocument, path: Path) -> None: ...
+
+
+class UnidrawRepository(Protocol):
+    def load_all(self, directory: Path) -> Sequence[UnidrawDocument]: ...
+
+    def load_all_with_paths(self, directory: Path) -> Sequence[tuple[Path, UnidrawDocument]]: ...
+
+    def save(self, document: UnidrawDocument, path: Path) -> None: ...

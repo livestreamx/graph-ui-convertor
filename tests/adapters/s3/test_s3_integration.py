@@ -6,22 +6,24 @@ import shutil
 import socket
 import subprocess
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 import boto3  # type: ignore[import-untyped]
 import pytest
+from botocore.response import StreamingBody  # type: ignore[import-untyped]
+from botocore.stub import Stubber  # type: ignore[import-untyped]
+from fastapi.testclient import TestClient
+
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from adapters.s3.s3_client import create_s3_client
-from app.config import AppSettings, CatalogSettings, S3Settings
+from app.config import AppSettings, S3Settings
 from app.web_main import create_app
-from botocore.response import StreamingBody  # type: ignore[import-untyped]
-from botocore.stub import Stubber  # type: ignore[import-untyped]
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
-from fastapi.testclient import TestClient
 
 
 def _free_port() -> int:
@@ -51,7 +53,12 @@ def _wait_for_minio(client: Any, timeout: int = 20) -> None:
     raise RuntimeError("MinIO did not become ready")
 
 
-def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_s3_integration_builds_index(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+    s3_settings_factory: Callable[..., S3Settings],
+) -> None:
     use_docker = _docker_available()
     port = None
     container = None
@@ -172,37 +179,24 @@ def test_s3_integration_builds_index(tmp_path: Path, monkeypatch: pytest.MonkeyP
         rel_paths = {item.markup_rel_path for item in index.items}
         assert rel_paths == {"team/alpha.json", "team/beta/service.json"}
 
-        settings = AppSettings(
-            catalog=CatalogSettings(
-                title="Test Catalog",
-                s3=S3Settings(
-                    bucket="cjm-markup",
-                    prefix="markup/",
-                    region="us-east-1",
-                    endpoint_url=endpoint_url,
-                    access_key_id="minioadmin",
-                    secret_access_key="minioadmin",
-                    use_path_style=True,
-                ),
-                excalidraw_in_dir=tmp_path / "excalidraw_in",
-                excalidraw_out_dir=tmp_path / "excalidraw_out",
-                roundtrip_dir=tmp_path / "roundtrip",
-                index_path=index_path,
-                group_by=["markup_type"],
-                title_field="service_name",
-                tag_fields=[],
-                sort_by="title",
-                sort_order="asc",
-                unknown_value="unknown",
-                excalidraw_base_url="http://example.com",
-                excalidraw_proxy_upstream=None,
-                excalidraw_proxy_prefix="/excalidraw",
-                excalidraw_max_url_length=8000,
-                rebuild_token=None,
-                auto_build_index=True,
-                generate_excalidraw_on_demand=True,
-                cache_excalidraw_on_demand=True,
-            )
+        settings = app_settings_factory(
+            s3=s3_settings_factory(
+                bucket="cjm-markup",
+                prefix="markup/",
+                endpoint_url=endpoint_url,
+                access_key_id="minioadmin",
+                secret_access_key="minioadmin",
+                use_path_style=True,
+            ),
+            excalidraw_in_dir=tmp_path / "excalidraw_in",
+            excalidraw_out_dir=tmp_path / "excalidraw_out",
+            roundtrip_dir=tmp_path / "roundtrip",
+            index_path=index_path,
+            title_field="service_name",
+            excalidraw_base_url="http://example.com",
+            auto_build_index=True,
+            generate_excalidraw_on_demand=True,
+            cache_excalidraw_on_demand=True,
         )
 
         client_api = TestClient(create_app(settings))

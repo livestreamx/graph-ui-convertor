@@ -4,6 +4,7 @@ from itertools import pairwise
 from typing import Any
 
 import pytest
+
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter

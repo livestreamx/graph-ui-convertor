@@ -1,6 +1,6 @@
 # Формат и сопоставление
 
-Проект конвертирует CJM markup JSON <-> сцены Excalidraw, сохраняя идентификаторы через метаданные.
+Проект конвертирует CJM markup JSON <-> сцены Excalidraw/Unidraw, сохраняя идентификаторы через метаданные.
 
 ## Markup (вход)
 
@@ -47,7 +47,19 @@
 - `service_name` выводится как композитный заголовок над графом.
 - Детерминированный лейаут: grid по процедурам, слева направо, сверху вниз.
 
-## Метаданные (`customData.cjm`)
+## Unidraw (выход)
+
+- Заголовок сцены: `type=unidraw`, `version=1`.
+- Геометрия хранится в `position`/`size` вместо плоских `x`/`y`/`width`/`height`.
+- Прямоугольники/эллипсы — `type=shape` с `shape=rectangle|ellipse`.
+- Стрелки/линии — `type=line` с `points` и `tipPoints` биндингами.
+- Стили в компактном `style` словаре (`fc`, `sc`, `tff`, `tfs`, `ta` и т.д.).
+- Текст — HTML (`<p>...</p>`).
+- Метаданные находятся в поле `cjm` на каждом элементе.
+
+## Метаданные
+
+В Excalidraw метаданные лежат в `customData.cjm`, в Unidraw — в `cjm`.
 
 Хранятся на каждой фигуре/стрелке/тексте:
 
@@ -78,6 +90,7 @@
 
 - Markup: `*.json` в `data/markup/`.
 - Excalidraw: `.excalidraw` или `.json` в `data/excalidraw_in` (экспорт в `data/excalidraw_out` из UI).
+- Unidraw: `.unidraw` в `data/unidraw_in`.
 - Round-trip: `data/roundtrip/*.json`.
 
 ## Версионирование
