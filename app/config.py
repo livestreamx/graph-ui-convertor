@@ -3,15 +3,37 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import ClassVar
+from typing import Annotated, ClassVar
 from urllib.parse import urlparse
 
-from domain.catalog import CatalogIndexConfig
-from pydantic import BaseModel, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    AliasChoices,
+    BaseModel,
+    Field,
+    HttpUrl,
+    TypeAdapter,
+    field_validator,
+)
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource, YamlConfigSettingsSource
 
+from domain.catalog import CatalogIndexConfig
+
 DEFAULT_CONFIG_PATH = Path("config/catalog/app.s3.yaml")
+
+_HTTP_URL_ADAPTER = TypeAdapter(HttpUrl)
+
+
+def _validate_link_path(value: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return ""
+    _HTTP_URL_ADAPTER.validate_python(normalized)
+    return normalized
+
+
+LinkPath = Annotated[str, AfterValidator(_validate_link_path)]
 
 
 class S3Settings(BaseModel):
@@ -56,8 +78,14 @@ class CatalogSettings(BaseModel):
     unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
-    procedure_link_template: str | None = None
-    block_link_template: str | None = None
+    procedure_link_path: LinkPath | None = Field(
+        default=None,
+        validation_alias=AliasChoices("procedure_link_path", "procedure_link_template"),
+    )
+    block_link_path: LinkPath | None = Field(
+        default=None,
+        validation_alias=AliasChoices("block_link_path", "block_link_template"),
+    )
 
     @field_validator("sort_order", mode="before")
     @classmethod

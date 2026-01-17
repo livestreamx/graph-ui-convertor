@@ -179,8 +179,8 @@ def test_catalog_scene_links_applied(
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             excalidraw_base_url="http://example.com",
-            procedure_link_template="https://example.com/procedures/{procedure_id}",
-            block_link_template="https://example.com/blocks/{block_id}",
+            procedure_link_path="https://example.com/procedures/{procedure_id}",
+            block_link_path="https://example.com/procedures/{procedure_id}/blocks/{block_id}",
         )
 
         client_api = TestClient(create_app(settings))
@@ -202,7 +202,7 @@ def test_catalog_scene_links_applied(
             and element.get("customData", {}).get("cjm", {}).get("block_id") == "a"
         )
         assert frame.get("link") == "https://example.com/procedures/p1"
-        assert block.get("link") == "https://example.com/blocks/a"
+        assert block.get("link") == "https://example.com/procedures/p1/blocks/a"
     finally:
         stubber.deactivate()
 

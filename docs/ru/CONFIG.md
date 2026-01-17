@@ -52,8 +52,8 @@ catalog:
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
   rebuild_token: ""
-  procedure_link_template: ""
-  block_link_template: ""
+  procedure_link_path: ""
+  block_link_path: ""
 ```
 
 ## Примечания к полям
@@ -79,8 +79,9 @@ catalog:
 - `ui_text_overrides`: опциональный словарь для подмены значений/ключей в Catalog UI.
   При установке через переменные окружения используйте JSON-объект.
 - `rebuild_token`: пустое значение отключает `/api/rebuild-index`. Задайте секрет для включения.
-- `procedure_link_template`: шаблон URL для ссылок на процедуры в Excalidraw (используйте `{procedure_id}`).
-- `block_link_template`: шаблон URL для ссылок на блоки в Excalidraw (используйте `{block_id}`).
+- `procedure_link_path`: шаблон URL для ссылок на процедуры в Excalidraw/Unidraw (используйте `{procedure_id}`).
+- `block_link_path`: шаблон URL для ссылок на блоки в Excalidraw/Unidraw (используйте `{block_id}` либо
+  `{procedure_id}` + `{block_id}`).
 - `excalidraw_base_url`: URL или путь Excalidraw UI (например `/excalidraw`). При same-origin с Catalog
   сцена может быть внедрена через localStorage (рекомендуется для больших диаграмм). В противном случае
   используется `#json`, если URL достаточно короткий.

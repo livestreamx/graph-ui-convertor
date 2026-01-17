@@ -5,11 +5,15 @@ from pathlib import Path
 
 import typer
 import uvicorn
+from rich.console import Console
+
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.layout.grid import GridLayoutEngine
 from adapters.unidraw.repository import FileSystemUnidrawRepository
+from app.catalog_wiring import build_markup_repository, build_markup_source
+from app.config import AppSettings, load_settings
 from domain.models import MarkupDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
@@ -17,10 +21,6 @@ from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConve
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
 from domain.services.excalidraw_links import ExcalidrawLinkTemplates, build_link_templates
-from rich.console import Console
-
-from app.catalog_wiring import build_markup_repository, build_markup_source
-from app.config import AppSettings, load_settings
 
 app = typer.Typer(no_args_is_help=True)
 convert_app = typer.Typer(no_args_is_help=True)
@@ -78,11 +78,12 @@ def _run_convert_to_unidraw(
     input_dir: Path,
     output_dir: Path,
     markup_repo: MarkupRepository | None = None,
+    link_templates: ExcalidrawLinkTemplates | None = None,
 ) -> None:
     markup_repo = markup_repo or FileSystemMarkupRepository()
     unidraw_repo = FileSystemUnidrawRepository()
     layout = GridLayoutEngine()
-    converter = MarkupToUnidrawConverter(layout)
+    converter = MarkupToUnidrawConverter(layout, link_templates=link_templates)
 
     pairs = markup_repo.load_all_with_paths(input_dir)
     if not pairs:
@@ -212,8 +213,8 @@ def pipeline_build_all(
     markup_repo = build_markup_repository(settings)
     markup_dir = Path(settings.catalog.s3.prefix or "")
     link_templates = build_link_templates(
-        settings.catalog.procedure_link_template,
-        settings.catalog.block_link_template,
+        settings.catalog.procedure_link_path,
+        settings.catalog.block_link_path,
     )
     _run_convert_to_excalidraw(
         markup_dir,

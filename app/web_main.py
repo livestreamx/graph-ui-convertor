@@ -12,11 +12,18 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import orjson
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
+from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+
 from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.filesystem.scene_repository import FileSystemSceneRepository
 from adapters.layout.grid import GridLayoutEngine
+from app.catalog_wiring import build_markup_repository, build_markup_source
+from app.config import AppSettings, load_settings, validate_unidraw_settings
 from domain.catalog import CatalogIndex, CatalogItem
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
@@ -27,15 +34,9 @@ from domain.services.excalidraw_links import (
     ExcalidrawLinkTemplates,
     build_link_templates,
     ensure_excalidraw_links,
+    ensure_unidraw_links,
 )
 from domain.services.excalidraw_title import apply_title_focus, ensure_service_title
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, UploadFile
-from fastapi.responses import HTMLResponse, ORJSONResponse, RedirectResponse, Response
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-
-from app.catalog_wiring import build_markup_repository, build_markup_source
-from app.config import AppSettings, load_settings, validate_unidraw_settings
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -89,8 +90,8 @@ def create_app(settings: AppSettings) -> FastAPI:
 
     index_repo = FileSystemCatalogIndexRepository()
     link_templates = build_link_templates(
-        settings.catalog.procedure_link_template,
-        settings.catalog.block_link_template,
+        settings.catalog.procedure_link_path,
+        settings.catalog.block_link_path,
     )
     context = CatalogContext(
         settings=settings,
@@ -106,7 +107,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         to_excalidraw=MarkupToExcalidrawConverter(
             GridLayoutEngine(), link_templates=link_templates
         ),
-        to_unidraw=MarkupToUnidrawConverter(GridLayoutEngine()),
+        to_unidraw=MarkupToUnidrawConverter(GridLayoutEngine(), link_templates=link_templates),
         link_templates=link_templates,
     )
     app.state.context = context
@@ -481,18 +482,19 @@ def invalidate_scene_cache(context: CatalogContext) -> None:
 
 def enhance_scene_payload(payload: dict[str, Any], context: CatalogContext) -> None:
     diagram_format = resolve_diagram_format(context.settings)
-    if diagram_format != "excalidraw":
-        return
     elements = payload.get("elements")
     if not isinstance(elements, list):
         return
-    ensure_service_title(elements)
-    ensure_excalidraw_links(elements, context.link_templates)
-    app_state = payload.get("appState")
-    if not isinstance(app_state, dict):
-        app_state = {}
-        payload["appState"] = app_state
-    apply_title_focus(app_state, elements)
+    if diagram_format == "excalidraw":
+        ensure_service_title(elements)
+        ensure_excalidraw_links(elements, context.link_templates)
+        app_state = payload.get("appState")
+        if not isinstance(app_state, dict):
+            app_state = {}
+            payload["appState"] = app_state
+        apply_title_focus(app_state, elements)
+    elif diagram_format == "unidraw":
+        ensure_unidraw_links(elements, context.link_templates)
 
 
 def load_index(context: CatalogContext) -> CatalogIndex | None:
