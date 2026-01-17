@@ -43,6 +43,7 @@ pre-commit = "^3.8.0"
 types-orjson = "^3.6.2"
 lzstring = "^1.0.4"
 playwright = "^1.57.0"
+pytest-xdist = "^3.8.0"
 
 [tool.poetry.scripts]
 cjm = "app.cli:app"

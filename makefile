@@ -143,7 +143,7 @@ dirs:
 
 .PHONY: test
 test:
-	@$(VENV_BIN)/pytest
+	@$(VENV_BIN)/pytest -n 3
 
 .PHONY: lint
 lint:
