@@ -28,6 +28,7 @@
   - `::exit`: завершение всего процесса.
   - `::all`: end + exit.
   - `::intermediate`: как `all`, но блок может продолжать ветвление.
+  - `::postpone`: проблема отложена (передача между ботом/линиями поддержки).
 - `branches` – граф смежности: ключ = исходный блок, значения = целевые блоки.
 - `finedog_unit_meta.service_name` – отображаемое имя сервиса.
 
@@ -38,11 +39,12 @@
 - Блоки с `end_block_type=intermediate` имеют оранжевую заливку.
 - Эллипсы для маркеров START/END.
 - Маркеры END размещаются как отдельные узлы в grid (как цели ветвлений).
-- Заливка END различается по `end_type`.
+- Заливка END различается по `end_type` (`postpone` — серый).
 - Стрелки:
   - START -> блок (label `start`, `edge_type=start`)
-  - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate`)
+  - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
   - `all`/`intermediate` в markup рисуют один END с подписью `END & EXIT`.
+  - `postpone` в markup рисует END с подписью `POSTPONE`.
   - ветки блок -> блок (label `branch`, `edge_type=branch`)
 - `service_name` выводится как композитный заголовок над графом.
 - Детерминированный лейаут: grid по процедурам, слева направо, сверху вниз.
@@ -74,8 +76,8 @@
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
 - `role` (заголовок): `diagram_title_panel|diagram_title|diagram_title_rule`
 - `edge_type`: `start|end|branch` (только для ребер)
-- `end_type`: `end|exit|all|intermediate` (end-маркеры и end-стрелки)
-- `end_block_type`: `end|exit|all|intermediate` (исходный тип блока в markup)
+- `end_type`: `end|exit|all|intermediate|postpone` (end-маркеры и end-стрелки)
+- `end_block_type`: `end|exit|all|intermediate|postpone` (исходный тип блока в markup)
 
 Эти метаданные обеспечивают round-trip даже при перемещении элементов в UI.
 

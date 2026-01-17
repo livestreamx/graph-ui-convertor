@@ -19,6 +19,8 @@ CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 CATALOG_ENV_FILE ?= config/catalog/env.local
+CATALOG_UID ?= $(shell id -u)
+CATALOG_GID ?= $(shell id -g)
 CATALOG_ENV_EXTRA ?= $(strip \
 	$(if $(CJM_CATALOG__DIAGRAM_FORMAT),-e CJM_CATALOG__DIAGRAM_FORMAT=$(CJM_CATALOG__DIAGRAM_FORMAT),) \
 	$(if $(CJM_CATALOG__UNIDRAW_BASE_URL),-e CJM_CATALOG__UNIDRAW_BASE_URL=$(CJM_CATALOG__UNIDRAW_BASE_URL),) \
@@ -257,6 +259,7 @@ catalog-up: dirs
 	@docker run --rm -d --name $(CATALOG_CONTAINER) \
 		--network $(DEMO_NETWORK) \
 		-p $(CATALOG_PORT):8080 \
+		-u $(CATALOG_UID):$(CATALOG_GID) \
 		-e CJM_CONFIG_PATH=/config/app.yaml \
 		--env-file $(CATALOG_ENV_FILE) \
 		$(CATALOG_ENV_EXTRA) \

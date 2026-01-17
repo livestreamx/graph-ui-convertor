@@ -18,7 +18,7 @@ from domain.models import (
 )
 
 _TAG_SPLIT_RE = re.compile(r"[,\\s]+")
-_INLINE_TAG_RE = re.compile(r"(?:#|::)(end|exit|all|intermediate)\\b", re.IGNORECASE)
+_INLINE_TAG_RE = re.compile(r"(?:#|::)(end|exit|all|intermediate|postpone)\\b", re.IGNORECASE)
 
 Metadata = dict[str, Any]
 Element = Mapping[str, Any]
