@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 PYTHON_BOOTSTRAP ?= python3.14
-POETRY_VERSION ?= 2.2.0
+POETRY_VERSION ?=
 
 PROJECT ?= cjm_ui_convertor
 
@@ -108,9 +108,15 @@ poetry-install: venv
 	@if [ -x "$(POETRY_BIN)" ]; then \
 		echo "Poetry already installed at $(POETRY_BIN)"; \
 	else \
-		echo "Installing Poetry $(POETRY_VERSION) into $(VENV_DIR)..."; \
-		$(VENV_PYTHON) -m pip install --upgrade pip; \
-		$(VENV_PYTHON) -m pip install "poetry==$(POETRY_VERSION)"; \
+		if [ -n "$(POETRY_VERSION)" ]; then \
+			echo "Installing Poetry $(POETRY_VERSION) into $(VENV_DIR)..."; \
+			$(VENV_PYTHON) -m pip install --upgrade pip; \
+			$(VENV_PYTHON) -m pip install "poetry==$(POETRY_VERSION)"; \
+		else \
+			echo "Installing latest Poetry into $(VENV_DIR)..."; \
+			$(VENV_PYTHON) -m pip install --upgrade pip; \
+			$(VENV_PYTHON) -m pip install "poetry"; \
+		fi; \
 	fi
 	@$(POETRY_BIN) config virtualenvs.create false --local
 	@$(POETRY_BIN) config virtualenvs.in-project true --local
@@ -255,7 +261,19 @@ catalog-up: dirs
 	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
 	@echo "Building Catalog image..."
 	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
-	@docker build -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
+	@POETRY_VERSION="$$( \
+		if [ -x "$(POETRY_BIN)" ]; then \
+			"$(POETRY_BIN)" --version 2>/dev/null; \
+		elif command -v poetry >/dev/null 2>&1; then \
+			poetry --version 2>/dev/null; \
+		fi | sed -E 's/[^0-9A-Za-z.+-]/ /g' | awk '{for (i = 1; i <= NF; i++) if ($$i ~ /[0-9]/) {gsub(/^[^0-9]+/, "", $$i); print $$i; exit}}' \
+	)"; \
+	if [ -z "$$POETRY_VERSION" ]; then \
+		echo "Poetry not found. Install Poetry or ensure it is on PATH before building the Catalog image."; \
+		exit 1; \
+	fi; \
+	echo "Using Poetry $$POETRY_VERSION for Catalog image build."; \
+	docker build --build-arg POETRY_VERSION="$$POETRY_VERSION" -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
 	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
 	@docker run -d --name $(CATALOG_CONTAINER) \

@@ -14,8 +14,15 @@ RUN addgroup --system app && adduser --system --ingroup app app
 RUN mkdir -p /data /config && chown -R app:app /data /config /app /opt/venv
 
 COPY pyproject.toml poetry.lock ./
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir "poetry==${POETRY_VERSION}" "poetry-plugin-export" \
+RUN POETRY_VERSION_CLEAN="$(printf '%s' "$POETRY_VERSION" | \
+        sed -E 's/[^0-9A-Za-z.+-]/ /g' | \
+        awk '{for (i = 1; i <= NF; i++) if ($i ~ /[0-9]/) {gsub(/^[^0-9]+/, "", $i); print $i; exit}}')" \
+    && if [ -z "$POETRY_VERSION_CLEAN" ]; then \
+        echo "Invalid POETRY_VERSION: $POETRY_VERSION" >&2; \
+        exit 1; \
+    fi \
+    && pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir "poetry==${POETRY_VERSION_CLEAN}" "poetry-plugin-export" \
     && poetry export -f requirements.txt --output /tmp/requirements.txt --without-hashes --only main \
     && pip install --no-cache-dir -r /tmp/requirements.txt \
     && pip uninstall -y poetry \
