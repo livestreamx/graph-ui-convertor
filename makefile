@@ -254,9 +254,11 @@ s3-seed:
 catalog-up: dirs
 	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
 	@echo "Building Catalog image..."
+	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
 	@docker build -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
+	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
-	@docker run --rm -d --name $(CATALOG_CONTAINER) \
+	@docker run -d --name $(CATALOG_CONTAINER) \
 		--network $(DEMO_NETWORK) \
 		-p $(CATALOG_PORT):8080 \
 		-u $(CATALOG_UID):$(CATALOG_GID) \
@@ -268,7 +270,11 @@ catalog-up: dirs
 		$(CATALOG_IMAGE)
 	@sleep 2
 	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) >/dev/null 2>&1 || \
-		(echo "Catalog container not found after startup." && exit 1)
+		(echo "Catalog container not found after startup." && \
+		 echo "Docker status (if any):" && \
+		 docker ps -a --filter "name=$(CATALOG_CONTAINER)" && \
+		 echo "Logs (if any):" && \
+		 docker logs $(CATALOG_CONTAINER) || true && exit 1)
 	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) | grep -q true || \
 		(echo "Catalog failed to start. Logs:" && docker logs $(CATALOG_CONTAINER) && exit 1)
 	@echo "Catalog started on $(CATALOG_URL)"
