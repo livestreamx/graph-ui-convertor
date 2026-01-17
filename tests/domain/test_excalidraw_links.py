@@ -21,7 +21,7 @@ def test_links_applied_to_procedure_and_block_elements() -> None:
     markup = MarkupDocument.model_validate(payload)
     templates = ExcalidrawLinkTemplates(
         procedure="https://example.com/procedures/{procedure_id}",
-        block="https://example.com/blocks/{block_id}",
+        block="https://example.com/procedures/{procedure_id}/blocks/{block_id}",
     )
     excal = MarkupToExcalidrawConverter(GridLayoutEngine(), link_templates=templates).convert(
         markup
@@ -46,5 +46,5 @@ def test_links_applied_to_procedure_and_block_elements() -> None:
         if element.get("customData", {}).get("cjm", {}).get("role") == "block_label"
         and element.get("customData", {}).get("cjm", {}).get("block_id") == "block-a"
     )
-    assert block_rect.get("link") == "https://example.com/blocks/block-a"
-    assert block_label.get("link") == "https://example.com/blocks/block-a"
+    assert block_rect.get("link") == "https://example.com/procedures/proc-1/blocks/block-a"
+    assert block_label.get("link") == "https://example.com/procedures/proc-1/blocks/block-a"

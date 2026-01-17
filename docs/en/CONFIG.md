@@ -52,8 +52,8 @@ catalog:
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
   rebuild_token: ""
-  procedure_link_template: ""
-  block_link_template: ""
+  procedure_link_path: ""
+  block_link_path: ""
 ```
 
 ## Field notes
@@ -81,8 +81,9 @@ catalog:
 - `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
   When set via environment variables, pass a JSON object.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
-- `procedure_link_template`: URL template for procedure links in Excalidraw (use `{procedure_id}`).
-- `block_link_template`: URL template for block links in Excalidraw (use `{block_id}`).
+- `procedure_link_path`: URL template for procedure links in Excalidraw/Unidraw (use `{procedure_id}`).
+- `block_link_path`: URL template for block links in Excalidraw/Unidraw (use `{block_id}` or
+  `{procedure_id}` + `{block_id}`).
 - `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
   Catalog, the app can inject scenes via local storage (recommended for large diagrams). Otherwise
   it falls back to URL fragments when short enough.

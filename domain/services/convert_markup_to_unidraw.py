@@ -19,15 +19,21 @@ from domain.services.convert_markup_base import (
     MarkupToDiagramConverter,
     Metadata,
 )
+from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_unidraw_links
 
 _DEFAULT_FONT_FAMILY = "Virgil"
 
 
 class MarkupToUnidrawConverter(MarkupToDiagramConverter):
-    def __init__(self, layout_engine: LayoutEngine) -> None:
+    def __init__(
+        self,
+        layout_engine: LayoutEngine,
+        link_templates: ExcalidrawLinkTemplates | None = None,
+    ) -> None:
         super().__init__(layout_engine)
         self._timestamp_ms = 0
         self._z_index = 0
+        self.link_templates = link_templates
 
     def convert(self, document: MarkupDocument) -> UnidrawDocument:
         self._timestamp_ms = int(time.time() * 1000)
@@ -44,6 +50,9 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             "viewBackgroundColor": "#ffffff",
             "gridSize": None,
         }
+
+    def _post_process_elements(self, elements: list[Element]) -> None:
+        ensure_unidraw_links(elements, self.link_templates)
 
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
         position = element.get("position")

@@ -21,17 +21,18 @@ def test_end_type_roundtrip_and_service_name() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::exit", "c::intermediate"],
-                "branches": {"a": ["b"], "b": ["c"]},
+                "end_block_ids": ["b::exit", "c::intermediate", "d::postpone"],
+                "branches": {"a": ["b"], "b": ["c"], "c": ["d"]},
             }
         ],
     }
 
     markup = MarkupDocument.model_validate(payload)
     procedure = markup.procedures[0]
-    assert procedure.end_block_ids == ["b", "c"]
+    assert procedure.end_block_ids == ["b", "c", "d"]
     assert procedure.end_block_types["b"] == "exit"
     assert procedure.end_block_types["c"] == "intermediate"
+    assert procedure.end_block_types["d"] == "postpone"
 
     excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
@@ -43,6 +44,7 @@ def test_end_type_roundtrip_and_service_name() -> None:
     assert reconstructed.team_name == "Support Core"
     assert reconstructed_proc.end_block_types["b"] == "exit"
     assert reconstructed_proc.end_block_types["c"] == "intermediate"
+    assert reconstructed_proc.end_block_types["d"] == "postpone"
 
     marker_elements = [
         element
@@ -54,10 +56,11 @@ def test_end_type_roundtrip_and_service_name() -> None:
     colors = {element.get("backgroundColor") for element in marker_elements}
     assert END_TYPE_COLORS["exit"] in colors
     assert END_TYPE_COLORS["intermediate"] in colors
+    assert END_TYPE_COLORS["postpone"] in colors
 
     serialized = markup.to_markup_dict()
     procedures = cast(list[dict[str, Any]], serialized["procedures"])
-    assert procedures[0]["end_block_ids"] == ["b::exit", "c::intermediate"]
+    assert procedures[0]["end_block_ids"] == ["b::exit", "c::intermediate", "d::postpone"]
     meta = cast(dict[str, Any], serialized.get("finedog_unit_meta"))
     assert meta["criticality_level"] == "BC"
     assert meta["team_id"] == 101

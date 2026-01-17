@@ -28,6 +28,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - `::exit`: terminate the whole process.
   - `::all`: end + exit.
   - `::intermediate`: same as `all`, but the block can still branch further.
+  - `::postpone`: issue is postponed (handoff between bot/agents/support lines).
 - `branches` – adjacency: key = source block, values = target blocks.
 - `finedog_unit_meta.service_name` – markup display name.
 
@@ -38,11 +39,12 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 - Blocks with `end_block_type=intermediate` use an orange fill.
 - Ellipse markers for START/END.
 - END markers are placed as separate nodes in the grid (like branch targets).
-- END marker fill color varies by `end_type` for visual distinction.
+- END marker fill color varies by `end_type` for visual distinction (`postpone` is gray).
 - Arrows:
   - START -> block (label `start`, `edge_type=start`)
-  - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate`)
+  - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
   - `all`/`intermediate` in markup render a single END marker labeled `END & EXIT`.
+  - `postpone` in markup renders an END marker labeled `POSTPONE`.
   - branch arrows block -> block (label `branch`, `edge_type=branch`)
 - Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
@@ -74,8 +76,8 @@ Stored on every shape/arrow/text:
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
 - `role` (title header): `diagram_title_panel|diagram_title|diagram_title_rule`
 - `edge_type`: `start|end|branch` (edges only)
-- `end_type`: `end|exit|all|intermediate` (end markers and end edges)
-- `end_block_type`: `end|exit|all|intermediate` (original markup type for the block)
+- `end_type`: `end|exit|all|intermediate|postpone` (end markers and end edges)
+- `end_block_type`: `end|exit|all|intermediate|postpone` (original markup type for the block)
 
 This metadata enables round-trip even if elements are moved in UI.
 

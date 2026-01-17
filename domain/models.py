@@ -9,12 +9,13 @@ METADATA_SCHEMA_VERSION = "1.0"
 CUSTOM_DATA_KEY = "cjm"
 END_BLOCK_SEPARATOR = "::"
 END_TYPE_DEFAULT = "end"
-END_TYPE_VALUES = {"end", "exit", "all", "intermediate"}
+END_TYPE_VALUES = {"end", "exit", "all", "intermediate", "postpone"}
 END_TYPE_COLORS = {
     "end": "#ffe4b5",
     "exit": "#ffb3b3",
     "all": "#fff3b0",
     "intermediate": "#cfe3ff",
+    "postpone": "#d9d9d9",
 }
 INTERMEDIATE_BLOCK_COLOR = "#ffb347"
 
@@ -41,6 +42,8 @@ def merge_end_types(existing: str | None, new: str) -> str:
         return new
     if existing == new:
         return existing
+    if existing == "postpone" or new == "postpone":
+        return "postpone"
     if existing == "intermediate" or new == "intermediate":
         return "intermediate"
     if existing == "all" or new == "all":

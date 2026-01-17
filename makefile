@@ -19,6 +19,8 @@ CATALOG_CONFIG ?= config/catalog/app.s3.yaml
 CATALOG_DOCKER_CONFIG ?= config/catalog/app.docker.s3.yaml
 CATALOG_DOCKERFILE ?= docker/catalog/Dockerfile
 CATALOG_ENV_FILE ?= config/catalog/env.local
+CATALOG_UID ?= $(shell id -u)
+CATALOG_GID ?= $(shell id -g)
 CATALOG_ENV_EXTRA ?= $(strip \
 	$(if $(CJM_CATALOG__DIAGRAM_FORMAT),-e CJM_CATALOG__DIAGRAM_FORMAT=$(CJM_CATALOG__DIAGRAM_FORMAT),) \
 	$(if $(CJM_CATALOG__UNIDRAW_BASE_URL),-e CJM_CATALOG__UNIDRAW_BASE_URL=$(CJM_CATALOG__UNIDRAW_BASE_URL),) \
@@ -78,6 +80,7 @@ help:
 	@echo "  make test             - run tests"
 	@echo "  make lint             - run linters"
 	@echo "  make fmt              - format code"
+	@echo "  make playwright-browsers - install Playwright browsers for e2e tests"
 	@echo "  make excalidraw-up    - start Excalidraw UI in Docker on $(EXCALIDRAW_URL)"
 	@echo "  make excalidraw-down  - stop Excalidraw UI"
 	@echo "  make s3-up            - start local S3 stub on $(S3_URL)"
@@ -133,7 +136,12 @@ update: poetry-install
 	@$(POETRY_BIN) install
 
 .PHONY: bootstrap
-bootstrap: install dirs
+bootstrap: install dirs playwright-browsers
+
+.PHONY: playwright-browsers
+playwright-browsers: install
+	@echo "Ensuring Playwright browsers (chromium) are installed"
+	@$(VENV_BIN)/playwright install --with-deps chromium
 
 .PHONY: dirs
 dirs:
@@ -143,7 +151,7 @@ dirs:
 
 .PHONY: test
 test:
-	@$(VENV_BIN)/pytest
+	@$(VENV_BIN)/pytest -n 3
 
 .PHONY: lint
 lint:
@@ -246,11 +254,14 @@ s3-seed:
 catalog-up: dirs
 	@command -v docker >/dev/null 2>&1 || (echo "Docker not found. Install Docker first." && exit 1)
 	@echo "Building Catalog image..."
+	@docker ps >/dev/null 2>&1 || (echo "Docker daemon is not accessible (start Docker Desktop or Colima)"; exit 1)
 	@docker build -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
+	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
-	@docker run --rm -d --name $(CATALOG_CONTAINER) \
+	@docker run -d --name $(CATALOG_CONTAINER) \
 		--network $(DEMO_NETWORK) \
 		-p $(CATALOG_PORT):8080 \
+		-u $(CATALOG_UID):$(CATALOG_GID) \
 		-e CJM_CONFIG_PATH=/config/app.yaml \
 		--env-file $(CATALOG_ENV_FILE) \
 		$(CATALOG_ENV_EXTRA) \
@@ -259,7 +270,11 @@ catalog-up: dirs
 		$(CATALOG_IMAGE)
 	@sleep 2
 	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) >/dev/null 2>&1 || \
-		(echo "Catalog container not found after startup." && exit 1)
+		(echo "Catalog container not found after startup." && \
+		 echo "Docker status (if any):" && \
+		 docker ps -a --filter "name=$(CATALOG_CONTAINER)" && \
+		 echo "Logs (if any):" && \
+		 docker logs $(CATALOG_CONTAINER) || true && exit 1)
 	@docker inspect -f '{{.State.Running}}' $(CATALOG_CONTAINER) | grep -q true || \
 		(echo "Catalog failed to start. Logs:" && docker logs $(CATALOG_CONTAINER) && exit 1)
 	@echo "Catalog started on $(CATALOG_URL)"

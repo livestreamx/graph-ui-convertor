@@ -26,8 +26,8 @@ Markup JSON в Kubernetes берется из S3. Настройте `catalog.s3
 - ConfigMap `cjm-catalog-config` с `app.yaml` (см. `config/catalog/app.k8s.yaml`)
 - `CJM_CONFIG_PATH=/config/app.yaml`
 - Опциональные env-переопределения (пример шаблонов ссылок):
-  - `CJM_CATALOG__PROCEDURE_LINK_TEMPLATE`
-  - `CJM_CATALOG__BLOCK_LINK_TEMPLATE`
+  - `CJM_CATALOG__PROCEDURE_LINK_PATH`
+  - `CJM_CATALOG__BLOCK_LINK_PATH`
 
 ## Сервис Excalidraw
 

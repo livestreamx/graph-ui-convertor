@@ -554,7 +554,9 @@ class MarkupToDiagramConverter(ABC):
                 idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
                 label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
             elif marker.role == "end_marker":
-                if end_type in {"all", "intermediate"}:
+                if end_type == "postpone":
+                    label_text = "POSTPONE"
+                elif end_type in {"all", "intermediate"}:
                     label_text = "END & EXIT"
                 else:
                     label_text = "END" if end_type != "exit" else "EXIT"

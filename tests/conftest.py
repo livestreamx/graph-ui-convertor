@@ -80,8 +80,8 @@ def catalog_settings(tmp_path: Path, s3_settings: S3Settings) -> CatalogSettings
         unidraw_proxy_prefix="/unidraw",
         unidraw_max_url_length=8000,
         rebuild_token=None,
-        procedure_link_template=None,
-        block_link_template=None,
+        procedure_link_path=None,
+        block_link_path=None,
     )
 
 
