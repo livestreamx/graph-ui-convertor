@@ -4,10 +4,10 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from domain.ports.catalog import SceneRepository
 from filelock import FileLock
 
 from adapters.filesystem.json_utils import load_json, write_json_atomic
+from domain.ports.catalog import SceneRepository
 
 
 class FileSystemSceneRepository(SceneRepository):

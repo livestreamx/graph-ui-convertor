@@ -22,6 +22,7 @@ class FileSystemUnidrawRepository(UnidrawRepository):
                     UnidrawDocument(
                         elements=data.get("elements", []),
                         app_state=data.get("appState", {}),
+                        files=data.get("files", {}),
                     ),
                 )
             )

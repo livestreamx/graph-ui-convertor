@@ -333,6 +333,7 @@ class ExcalidrawDocument:
 class UnidrawDocument:
     elements: list[dict[str, Any]]
     app_state: dict[str, Any]
+    files: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, object]:
         return {
@@ -341,4 +342,5 @@ class UnidrawDocument:
             "source": "cjm-ui-convertor",
             "elements": self.elements,
             "appState": self.app_state,
+            "files": self.files,
         }

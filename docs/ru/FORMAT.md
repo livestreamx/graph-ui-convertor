@@ -53,8 +53,8 @@
 
 - Заголовок сцены: `type=unidraw`, `version=1`.
 - Геометрия хранится в `position`/`size` вместо плоских `x`/`y`/`width`/`height`.
-- Прямоугольники/эллипсы — `type=shape` с `shape=rectangle|ellipse`.
-- Стрелки/линии — `type=line` с `points` и `tipPoints` биндингами.
+- Прямоугольники/эллипсы — `type=shape` с `shape=1` (прямоугольник) или `shape=5` (эллипс).
+- Стрелки/линии — `type=line` с пустыми `points` и `tipPoints={start,end}`.
 - Стили в компактном `style` словаре (`fc`, `sc`, `tff`, `tfs`, `ta` и т.д.).
 - Текст — HTML (`<p>...</p>`).
 - Метаданные находятся в поле `cjm` на каждом элементе.

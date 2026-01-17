@@ -53,8 +53,8 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 
 - Scene header uses `type=unidraw` and `version=1`.
 - Geometry is stored under `position`/`size` instead of flat `x`/`y`/`width`/`height`.
-- Rectangles/ellipses are `type=shape` with `shape=rectangle|ellipse`.
-- Arrows/lines are `type=line` with `points` and `tipPoints` bindings.
+- Rectangles/ellipses are `type=shape` with `shape=1` (rectangle) or `shape=5` (ellipse).
+- Arrows/lines are `type=line` with empty `points` and `tipPoints={start,end}` bindings.
 - Styles are stored in a compact `style` dict (`fc`, `sc`, `tff`, `tfs`, `ta`, etc.).
 - Text content is HTML (`<p>...</p>`).
 - Metadata is stored under `cjm` on each element.
