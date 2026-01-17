@@ -78,6 +78,7 @@ help:
 	@echo "  make test             - run tests"
 	@echo "  make lint             - run linters"
 	@echo "  make fmt              - format code"
+	@echo "  make playwright-browsers - install Playwright browsers for e2e tests"
 	@echo "  make excalidraw-up    - start Excalidraw UI in Docker on $(EXCALIDRAW_URL)"
 	@echo "  make excalidraw-down  - stop Excalidraw UI"
 	@echo "  make s3-up            - start local S3 stub on $(S3_URL)"
@@ -133,7 +134,12 @@ update: poetry-install
 	@$(POETRY_BIN) install
 
 .PHONY: bootstrap
-bootstrap: install dirs
+bootstrap: install dirs playwright-browsers
+
+.PHONY: playwright-browsers
+playwright-browsers: install
+	@echo "Ensuring Playwright browsers (chromium) are installed"
+	@$(VENV_BIN)/playwright install --with-deps chromium
 
 .PHONY: dirs
 dirs:
