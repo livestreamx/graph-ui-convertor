@@ -222,10 +222,11 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 1. Загрузите markup в S3 (локально: `make s3-seed`).
 2. Откройте каталог: `cjm catalog serve` и перейдите на `/catalog`.
 3. Используйте фильтры по критичности и команде (отображается `team_name`).
-4. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
-5. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
-6. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
-7. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
-8. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
+4. Перейдите на `/catalog/teams/graph`, выберите команды и нажмите Build graphs для общего графа процедур на основе `procedure_graph`.
+5. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
+6. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
+7. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+8. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
+9. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
 
 В карточках и деталях каталога отображается `updated_at`;.

@@ -21,15 +21,24 @@ from adapters.excalidraw.url_encoder import build_excalidraw_url
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
 from adapters.filesystem.scene_repository import FileSystemSceneRepository
-from adapters.layout.grid import GridLayoutEngine
+from adapters.layout.grid import GridLayoutEngine, LayoutConfig
+from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings, validate_unidraw_settings
 from domain.catalog import CatalogIndex, CatalogItem
+from domain.models import ExcalidrawDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
+from domain.services.convert_procedure_graph_to_excalidraw import (
+    ProcedureGraphToExcalidrawConverter,
+)
+from domain.services.convert_procedure_graph_to_unidraw import (
+    ProcedureGraphToUnidrawConverter,
+)
 from domain.services.excalidraw_links import (
     ExcalidrawLinkTemplates,
     build_link_templates,
@@ -65,6 +74,8 @@ class CatalogContext:
     to_markup: ExcalidrawToMarkupConverter
     to_excalidraw: MarkupToExcalidrawConverter
     to_unidraw: MarkupToUnidrawConverter
+    to_procedure_graph_excalidraw: ProcedureGraphToExcalidrawConverter
+    to_procedure_graph_unidraw: ProcedureGraphToUnidrawConverter
     link_templates: ExcalidrawLinkTemplates | None
 
 
@@ -93,6 +104,13 @@ def create_app(settings: AppSettings) -> FastAPI:
         settings.catalog.procedure_link_path,
         settings.catalog.block_link_path,
     )
+    procedure_graph_layout = ProcedureGraphLayoutEngine(
+        LayoutConfig(
+            block_size=Size(320.0, 180.0),
+            gap_y=120.0,
+            lane_gap=240.0,
+        )
+    )
     context = CatalogContext(
         settings=settings,
         index_repo=index_repo,
@@ -108,6 +126,14 @@ def create_app(settings: AppSettings) -> FastAPI:
             GridLayoutEngine(), link_templates=link_templates
         ),
         to_unidraw=MarkupToUnidrawConverter(GridLayoutEngine(), link_templates=link_templates),
+        to_procedure_graph_excalidraw=ProcedureGraphToExcalidrawConverter(
+            procedure_graph_layout,
+            link_templates=link_templates,
+        ),
+        to_procedure_graph_unidraw=ProcedureGraphToUnidrawConverter(
+            procedure_graph_layout,
+            link_templates=link_templates,
+        ),
         link_templates=link_templates,
     )
     app.state.context = context
@@ -169,6 +195,79 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "criticality_levels": criticality_levels,
                 "team_options": team_options,
                 "group_query_base": group_query_base,
+            },
+        )
+
+    @app.get("/catalog/teams/graph", response_class=HTMLResponse)
+    def catalog_team_graph(
+        request: Request,
+        team_ids: list[str] = Query(default_factory=list),
+        context: CatalogContext = Depends(get_context),
+    ) -> HTMLResponse:
+        index_data = load_index(context)
+        if index_data is None:
+            return templates.TemplateResponse(
+                request,
+                "catalog_empty.html",
+                {
+                    "request": request,
+                    "settings": context.settings,
+                },
+            )
+        _, team_options = build_filter_options(index_data.items, index_data.unknown_value)
+        team_lookup = dict(team_options)
+        team_ids = normalize_team_ids(team_ids)
+        selected_teams = [
+            {"id": team_id, "label": team_lookup.get(team_id, team_id)} for team_id in team_ids
+        ]
+
+        diagram_ready = False
+        diagram_open_url = None
+        diagram_label = None
+        diagram_ext = None
+        open_mode = None
+        team_query = ""
+        error_message = None
+        if team_ids:
+            items = filter_items_by_team_ids(index_data.items, team_ids)
+            if not items:
+                error_message = "No scenes for selected teams."
+            else:
+                diagram_format = resolve_diagram_format(context.settings)
+                diagram_label = resolve_diagram_label(diagram_format)
+                diagram_ext = resolve_diagram_extension(diagram_format)
+                diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
+                team_query = build_team_query(team_ids)
+                diagram_open_url = diagram_base_url
+                open_mode = "manual"
+                if is_same_origin(request, diagram_base_url):
+                    diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
+                    open_mode = "local_storage"
+                elif diagram_format == "excalidraw":
+                    payload = build_team_diagram_payload(context, items, diagram_format)
+                    diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
+                    if len(diagram_open_url) > context.settings.catalog.excalidraw_max_url_length:
+                        diagram_open_url = diagram_base_url
+                        open_mode = "manual"
+                    else:
+                        open_mode = "direct"
+                diagram_ready = True
+        return templates.TemplateResponse(
+            request,
+            "catalog_team_graph.html",
+            {
+                "request": request,
+                "settings": context.settings,
+                "diagram_ready": diagram_ready,
+                "diagram_label": diagram_label,
+                "diagram_ext": diagram_ext,
+                "diagram_open_url": diagram_open_url,
+                "open_mode": open_mode,
+                "team_options": team_options,
+                "team_ids": team_ids,
+                "selected_teams": selected_teams,
+                "team_query": team_query,
+                "error_message": error_message,
             },
         )
 
@@ -266,6 +365,36 @@ def create_app(settings: AppSettings) -> FastAPI:
             },
         )
 
+    @app.get("/catalog/teams/graph/open", response_class=HTMLResponse)
+    def catalog_team_graph_open(
+        request: Request,
+        team_ids: list[str] = Query(default_factory=list),
+        context: CatalogContext = Depends(get_context),
+    ) -> Response:
+        team_ids = normalize_team_ids(team_ids)
+        if not team_ids:
+            raise HTTPException(status_code=400, detail="team_ids is required")
+        diagram_format = resolve_diagram_format(context.settings)
+        diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
+        if not is_same_origin(request, diagram_url):
+            return RedirectResponse(url=diagram_url)
+        team_query = build_team_query(team_ids)
+        return templates.TemplateResponse(
+            request,
+            "catalog_open.html",
+            {
+                "request": request,
+                "settings": context.settings,
+                "scene_id": "team-graph",
+                "scene_api_url": f"/api/teams/graph?{team_query}",
+                "diagram_url": diagram_url,
+                "diagram_label": resolve_diagram_label(diagram_format),
+                "diagram_storage_key": resolve_diagram_storage_key(diagram_format),
+                "diagram_state_key": resolve_diagram_state_key(diagram_format),
+                "diagram_version_key": resolve_diagram_version_key(diagram_format),
+            },
+        )
+
     @app.get("/api/index")
     def api_index(context: CatalogContext = Depends(get_context)) -> ORJSONResponse:
         index_data = load_index(context)
@@ -298,6 +427,29 @@ def create_app(settings: AppSettings) -> FastAPI:
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{diagram_rel_path}"'
+        return ORJSONResponse(payload, headers=headers)
+
+    @app.get("/api/teams/graph")
+    def api_team_graph(
+        team_ids: list[str] = Query(default_factory=list),
+        download: bool = Query(default=False),
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        team_ids = normalize_team_ids(team_ids)
+        if not team_ids:
+            raise HTTPException(status_code=400, detail="team_ids is required")
+        index_data = load_index(context)
+        if index_data is None:
+            raise HTTPException(status_code=404, detail="Catalog index not found")
+        items = filter_items_by_team_ids(index_data.items, team_ids)
+        if not items:
+            raise HTTPException(status_code=404, detail="No scenes for selected teams")
+        diagram_format = resolve_diagram_format(context.settings)
+        payload = build_team_diagram_payload(context, items, diagram_format)
+        headers = {}
+        if download:
+            extension = resolve_diagram_extension(diagram_format)
+            headers["Content-Disposition"] = f'attachment; filename="team-graph{extension}"'
         return ORJSONResponse(payload, headers=headers)
 
     @app.get("/api/markup/{scene_id}")
@@ -592,6 +744,60 @@ def build_diagram_payload(
     else:
         document = context.to_unidraw.convert(markup)
     return cast(dict[str, Any], document.to_dict())
+
+
+def build_team_diagram_payload(
+    context: CatalogContext,
+    items: list[CatalogItem],
+    diagram_format: str,
+) -> dict[str, Any]:
+    markup_root = Path(context.settings.catalog.s3.prefix or "")
+    documents = []
+    for item in items:
+        markup_path = markup_root / item.markup_rel_path
+        try:
+            markup = context.markup_reader.load_by_path(markup_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Markup file missing") from exc
+        documents.append(markup)
+    try:
+        graph_document = BuildTeamProcedureGraph().build(documents)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    document: ExcalidrawDocument | UnidrawDocument
+    if diagram_format == "excalidraw":
+        document = context.to_procedure_graph_excalidraw.convert(graph_document)
+    else:
+        document = context.to_procedure_graph_unidraw.convert(graph_document)
+    payload = cast(dict[str, Any], document.to_dict())
+    enhance_scene_payload(payload, context)
+    return payload
+
+
+def build_team_query(team_ids: list[str]) -> str:
+    if not team_ids:
+        return ""
+    return urlencode({"team_ids": ",".join(team_ids)})
+
+
+def normalize_team_ids(team_ids: list[str]) -> list[str]:
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in team_ids:
+        for part in str(raw).split(","):
+            value = part.strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            normalized.append(value)
+    return normalized
+
+
+def filter_items_by_team_ids(items: list[CatalogItem], team_ids: list[str]) -> list[CatalogItem]:
+    if not team_ids:
+        return []
+    team_set = set(team_ids)
+    return [item for item in items if item.team_id in team_set]
 
 
 def filter_items(

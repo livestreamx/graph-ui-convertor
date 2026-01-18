@@ -257,6 +257,52 @@ def test_unidraw_converter_applies_arrowheads() -> None:
         procedure_edge.get("style", {}).get("let")
         == unidraw_module._UNIDRAW_LINE_END_PROCEDURE_ARROW
     )
+    assert block_edge.get("style", {}).get("sw") == 1.0
+    assert procedure_edge.get("style", {}).get("sw") == 2.0
+
+
+def test_unidraw_converter_curves_non_horizontal_edges() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a", "b"],
+                "end_block_ids": ["e"],
+                "branches": {"a": ["c"], "b": ["c"], "c": ["e"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene = cast(
+        dict[str, Any],
+        MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup).to_dict(),
+    )
+    elements = cast(list[dict[str, Any]], scene["elements"])
+    edges = [
+        element
+        for element in elements
+        if element.get("type") == "line" and element.get("cjm", {}).get("role") == "edge"
+    ]
+    non_horizontal = []
+    for edge in edges:
+        tips = edge.get("tipPoints", {})
+        start = tips.get("start", {})
+        end = tips.get("end", {})
+        start_pos = start.get("absolutePosition") or start.get("position") or {}
+        end_pos = end.get("absolutePosition") or end.get("position") or {}
+        dx = end_pos.get("x", 0.0) - start_pos.get("x", 0.0)
+        dy = end_pos.get("y", 0.0) - start_pos.get("y", 0.0)
+        if abs(dx) > 1.0 and abs(dy) > 1.0:
+            non_horizontal.append(edge)
+
+    assert non_horizontal
+    for edge in non_horizontal:
+        tips = edge.get("tipPoints", {})
+        start_normal = tips.get("start", {}).get("normal", {})
+        end_normal = tips.get("end", {}).get("normal", {})
+        assert abs(start_normal.get("y", 0.0)) < 0.01
+        assert abs(end_normal.get("y", 0.0)) < 0.01
 
 
 def test_unidraw_converter_frame_title_font_size() -> None:

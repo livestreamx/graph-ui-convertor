@@ -107,6 +107,9 @@ catalog:
 ## Catalog UI
 
 - Detail view includes downloads for `.excalidraw`/`.unidraw` and the original `markup.json`.
+- The Catalog page links to the cross-team graphs page. Use it to select multiple teams and open a
+  combined procedure-level graph built from `procedure_graph`
+  (`/catalog/teams/graph`, `/api/teams/graph`, `team_ids` supports comma-separated values).
 
 ## Dot-path resolution
 

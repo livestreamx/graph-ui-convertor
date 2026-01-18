@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="detail-header">
+    <a class="ghost-button" href="/catalog">Back to catalog</a>
+    <div class="detail-title">Cross-team procedure graphs</div>
+    <div class="detail-meta">
+      <span>Build combined procedure graphs across selected teams.</span>
+    </div>
+  </section>
+
+  <section class="team-graph-page">
+    <div class="detail-card team-graph-card">
+      <h3>Build graphs</h3>
+      <form class="team-graph-form" id="team-graph-form" action="/catalog/teams/graph" method="get">
+        <label class="filter-control">
+          <span>Select teams</span>
+          <select id="team-graph-select" multiple size="8">
+            {% for team_key, team_label in team_options %}
+              <option value="{{ team_key }}" {% if team_key in team_ids %}selected{% endif %}>
+                {{ team_label }}
+              </option>
+            {% endfor %}
+          </select>
+        </label>
+        <input
+          type="hidden"
+          id="team-graph-input"
+          name="team_ids"
+          value="{{ team_ids | join(',') }}"
+        />
+        <div class="team-graph-actions">
+          <button class="primary-button" type="submit">Build graphs</button>
+        </div>
+      </form>
+      <div class="team-graph-selected">
+        <div class="team-graph-selected-title">Teams in graph</div>
+        <div class="team-chip-grid">
+          {% if selected_teams %}
+            {% for team in selected_teams %}
+              <div class="team-chip">
+                <div class="team-chip-name">{{ team.label }}</div>
+                <div class="team-chip-id">{{ team.id }}</div>
+              </div>
+            {% endfor %}
+          {% else %}
+            <div class="team-chip-empty">Select teams to build a combined graph.</div>
+          {% endif %}
+        </div>
+      </div>
+      <div class="team-graph-hint">
+        Builds a procedure-level graph using <code>procedure_graph</code> across selected teams.
+      </div>
+    </div>
+
+    <div class="detail-card">
+      <h3>Open the diagram</h3>
+      {% if diagram_ready %}
+        <p>
+          Open the team graph in {{ diagram_label }} or download the file for manual import and
+          editing.
+        </p>
+        <div class="button-row">
+          <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">
+            Open {{ diagram_label }}
+          </a>
+          <a class="ghost-button" href="/api/teams/graph?{{ team_query }}&download=true">
+            Download {{ diagram_ext }}
+          </a>
+        </div>
+        {% if open_mode == "manual" %}
+          <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
+        {% elif open_mode == "local_storage" %}
+          <p class="note">Scene is injected via local storage for same-origin {{ diagram_label }}.</p>
+        {% else %}
+          <p class="note">If the scene does not load, import the downloaded file manually.</p>
+        {% endif %}
+      {% else %}
+        <p class="note">
+          {{ error_message or "Select teams and click Build graphs to generate a diagram." }}
+        </p>
+      {% endif %}
+    </div>
+  </section>
+
+  <script>
+    (() => {
+      const form = document.getElementById("team-graph-form");
+      const select = document.getElementById("team-graph-select");
+      const input = document.getElementById("team-graph-input");
+      if (!form || !select || !input) {
+        return;
+      }
+      const sync = () => {
+        const values = Array.from(select.selectedOptions).map((option) => option.value);
+        input.value = values.join(",");
+      };
+      select.addEventListener("change", sync);
+      form.addEventListener("submit", sync);
+      sync();
+    })();
+  </script>
+{% endblock %}
