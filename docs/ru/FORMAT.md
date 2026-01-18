@@ -44,10 +44,27 @@
   - START -> блок (label `start`, `edge_type=start`)
   - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
   - `all`/`intermediate` в markup рисуют один END с подписью `END & EXIT`.
-  - `postpone` в markup рисует END с подписью `POSTPONE`.
-  - ветки блок -> блок (label `branch`, `edge_type=branch`)
+- `postpone` в markup рисует END с подписью `POSTPONE`.
+- ветки блок -> блок (label `branch`, `edge_type=branch`)
 - `service_name` выводится как композитный заголовок над графом.
 - Детерминированный лейаут: grid по процедурам, слева направо, сверху вниз.
+
+## Цветовая схема (теги, блоки, стрелки)
+
+Цвета одинаковы для Excalidraw и Unidraw. Сначала описание для человека, затем точные hex.
+
+- Теги (типы завершения): теги вида `#end`, `#exit`, `#all`, `#intermediate`, `#postpone`
+  (также принимаются как `::end`, `::exit` и т.д.) задают заливку END‑маркеров и используются при
+  best‑effort импорте.
+  - `end` -> светлый песочный `#ffe4b5`
+  - `exit` -> мягкий красный `#ffb3b3`
+  - `all` -> бледно‑желтый `#fff3b0`
+  - `intermediate` -> светло‑синий `#cfe3ff`
+  - `postpone` -> нейтральный серый `#d9d9d9`
+- Блоки: базовая заливка блока — светло‑синяя `#cce5ff` с темным контуром; блоки с
+  `end_block_type=intermediate` подсвечены теплым оранжевым `#ffb347`.
+- Стрелки: базовый цвет — почти черный `#1e1e1e` (сплошной); циклы (`branch_cycle`,
+  `procedure_cycle`) — красный пунктир `#d32f2f` для акцента (для блоков толщина 1, для процедур 2).
 
 ## Unidraw (выход)
 

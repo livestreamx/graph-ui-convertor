@@ -44,10 +44,28 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - START -> block (label `start`, `edge_type=start`)
   - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
   - `all`/`intermediate` in markup render a single END marker labeled `END & EXIT`.
-  - `postpone` in markup renders an END marker labeled `POSTPONE`.
-  - branch arrows block -> block (label `branch`, `edge_type=branch`)
+- `postpone` in markup renders an END marker labeled `POSTPONE`.
+- branch arrows block -> block (label `branch`, `edge_type=branch`)
 - Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
+
+## Color scheme (tags, blocks, arrows)
+
+Colors are consistent across Excalidraw and Unidraw outputs. Human-friendly cues are listed first,
+hex values are shown for exact matching.
+
+- Tags (end types): tags like `#end`, `#exit`, `#all`, `#intermediate`, `#postpone` (also accepted as
+  `::end`, `::exit`, etc.) map to END marker fills and are used for best-effort import.
+  - `end` -> light sand `#ffe4b5`
+  - `exit` -> soft red `#ffb3b3`
+  - `all` -> pale yellow `#fff3b0`
+  - `intermediate` -> light blue `#cfe3ff`
+  - `postpone` -> neutral gray `#d9d9d9`
+- Blocks: default block fill is light blue `#cce5ff` with a dark outline; blocks with
+  `end_block_type=intermediate` use warm orange `#ffb347` to stand out.
+- Arrows: default stroke is near-black `#1e1e1e` (solid); cycle arrows (`branch_cycle`,
+  `procedure_cycle`) are dashed red `#d32f2f` to emphasize loops (block cycles use width 1, procedure
+  cycles use width 2).
 
 ## Unidraw (output)
 
