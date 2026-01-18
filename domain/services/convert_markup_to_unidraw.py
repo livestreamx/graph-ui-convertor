@@ -34,12 +34,15 @@ _UNIDRAW_STROKE_DASHED = "d"
 _UNIDRAW_LINE_TYPE_CONNECTOR = "c"
 _UNIDRAW_LINE_TYPE_ABSOLUTE = "a"
 _UNIDRAW_LINE_END = 0
+_UNIDRAW_LINE_END_BLOCK_ARROW = 2
+_UNIDRAW_LINE_END_PROCEDURE_ARROW = 14
 _UNIDRAW_LINE_CAP = 1
 _SHAPE_RECTANGLE = "1"
 _SHAPE_ELLIPSE = "5"
-_FRAME_FONT_SIZE = 13
+_FRAME_FONT_SIZE = 20
 _SHAPE_FONT_SIZE = 20
 _UNIDRAW_TEXT_WIDTH_FACTOR = 0.38
+_UNIDRAW_MARKER_TEXT_WIDTH_FACTOR = 0.46
 _UNIDRAW_TEXT_LINE_HEIGHT = 1.11
 _UNIDRAW_TEXT_MIN_SIZE = 11.0
 _EMPTY_PARAGRAPH = "<p></p>"
@@ -292,15 +295,18 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         font_size: float | None = None,
     ) -> Element:
         max_size = font_size or 20.0
+        width_factor = self._text_width_factor(metadata)
         size = max_size
         content = text
         if max_width is not None and max_height is not None and text.strip():
-            content, size, height = self._fit_text(
+            content, size, height = self._fit_text_with_metrics(
                 text=text,
                 max_width=max_width,
                 max_height=max_height,
                 min_size=_UNIDRAW_TEXT_MIN_SIZE,
                 max_size=max_size,
+                width_factor=width_factor,
+                line_height=_UNIDRAW_TEXT_LINE_HEIGHT,
             )
         else:
             if max_width is not None and text.strip():
@@ -309,14 +315,14 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 if max_len > 0:
                     size = min(
                         max_size,
-                        max_width / (max_len * _UNIDRAW_TEXT_WIDTH_FACTOR),
+                        max_width / (max_len * width_factor),
                     )
                 size = max(_UNIDRAW_TEXT_MIN_SIZE, size)
             line_count = max(1, len(content.splitlines())) if content else 1
             height = line_count * size * _UNIDRAW_TEXT_LINE_HEIGHT
             if max_height is not None:
                 height = min(max_height, height)
-        width = self._text_width(content, size, max_width)
+        width = self._text_width(content, size, max_width, width_factor)
         x = center.x - width / 2
         y = center.y - height / 2
         return self._base_element(
@@ -343,14 +349,32 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         min_size: float,
         max_size: float,
     ) -> tuple[str, float, float]:
+        return self._fit_text_with_metrics(
+            text=text,
+            max_width=max_width,
+            max_height=max_height,
+            min_size=min_size,
+            max_size=max_size,
+            width_factor=_UNIDRAW_TEXT_WIDTH_FACTOR,
+            line_height=_UNIDRAW_TEXT_LINE_HEIGHT,
+        )
+
+    def _fit_text_with_metrics(
+        self,
+        text: str,
+        max_width: float,
+        max_height: float,
+        min_size: float,
+        max_size: float,
+        width_factor: float,
+        line_height: float,
+    ) -> tuple[str, float, float]:
         if not text.strip():
             size = max_size
-            height = min(max_height, size * _UNIDRAW_TEXT_LINE_HEIGHT)
+            height = min(max_height, size * line_height)
             return text, size, height
 
         words = text.split()
-        width_factor = _UNIDRAW_TEXT_WIDTH_FACTOR
-        line_height = _UNIDRAW_TEXT_LINE_HEIGHT
 
         def wrap_words(max_chars: int) -> list[str]:
             lines: list[str] = []
@@ -400,13 +424,14 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         content: str,
         font_size: float,
         max_width: float | None,
+        width_factor: float,
     ) -> float:
         lines = content.splitlines() if content else []
         if not lines:
             width = max_width if max_width is not None else 1.0
             return max(1.0, width)
         max_len = max(len(line) for line in lines)
-        width = max_len * font_size * _UNIDRAW_TEXT_WIDTH_FACTOR
+        width = max_len * font_size * width_factor
         if max_width is not None:
             width = min(width, max_width)
         return max(1.0, width)
@@ -465,13 +490,16 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         arrow_id = self._stable_id(
             "arrow", metadata.get("procedure_id", ""), label, str(start), str(end)
         )
-        dx = end.x - start.x
-        dy = end.y - start.y
-        position, size = self._line_bounds(start, end)
+        start_point, end_point = self._procedure_cycle_points(
+            start, end, metadata, start_binding, end_binding
+        )
+        dx = end_point.x - start_point.x
+        dy = end_point.y - start_point.y
+        position, size = self._line_bounds(start_point, end_point)
         direction = self._unit_vector(dx, dy)
         tip_points = {
-            "start": self._bound_tip_point(start, start_binding, direction),
-            "end": self._bound_tip_point(end, end_binding, (-direction[0], -direction[1])),
+            "start": self._bound_tip_point(start_point, start_binding, direction),
+            "end": self._bound_tip_point(end_point, end_binding, (-direction[0], -direction[1])),
         }
         return self._base_element(
             element_id=arrow_id,
@@ -488,6 +516,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 stroke_width=stroke_width if stroke_width is not None else 1.0,
                 stroke_style=stroke_style or "solid",
                 line_type=_UNIDRAW_LINE_TYPE_CONNECTOR,
+                line_end=self._arrow_line_end(metadata),
             ),
             version_nonce=0,
         )
@@ -604,6 +633,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         stroke_width: float,
         stroke_style: str,
         line_type: str,
+        line_start: int | None = None,
+        line_end: int | None = None,
     ) -> dict[str, Any]:
         return {
             "ss": self._stroke_style_code(stroke_style),
@@ -611,8 +642,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             "sw": stroke_width,
             "fc": "transparent",
             "fs": _UNIDRAW_FILL_STYLE,
-            "lst": _UNIDRAW_LINE_END,
-            "let": _UNIDRAW_LINE_END,
+            "lst": _UNIDRAW_LINE_END if line_start is None else line_start,
+            "let": _UNIDRAW_LINE_END if line_end is None else line_end,
             "lt": line_type,
             "lsc": _UNIDRAW_LINE_CAP,
         }
@@ -680,6 +711,48 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         if not lines:
             return _EMPTY_PARAGRAPH
         return "".join(f"<p>{html.escape(line)}</p>" for line in lines)
+
+    def _text_width_factor(self, metadata: Metadata) -> float:
+        role = metadata.get("role") if metadata else None
+        if role in {"start_marker", "end_marker"}:
+            return _UNIDRAW_MARKER_TEXT_WIDTH_FACTOR
+        return _UNIDRAW_TEXT_WIDTH_FACTOR
+
+    def _arrow_line_end(self, metadata: Metadata) -> int:
+        edge_type = metadata.get("edge_type") if metadata else None
+        if edge_type in {"procedure_flow", "procedure_cycle"}:
+            return _UNIDRAW_LINE_END_PROCEDURE_ARROW
+        return _UNIDRAW_LINE_END_BLOCK_ARROW
+
+    def _procedure_cycle_points(
+        self,
+        start: Point,
+        end: Point,
+        metadata: Metadata,
+        start_binding: str | None,
+        end_binding: str | None,
+    ) -> tuple[Point, Point]:
+        if metadata.get("edge_type") != "procedure_cycle":
+            return start, end
+        if not start_binding or not end_binding:
+            return start, end
+        start_bounds = self._element_bounds.get(start_binding)
+        end_bounds = self._element_bounds.get(end_binding)
+        if not start_bounds or not end_bounds:
+            return start, end
+        start_origin, start_size = start_bounds
+        end_origin, end_size = end_bounds
+        if start_origin.x < end_origin.x:
+            return start, end
+        start_point = Point(
+            x=start_origin.x + start_size.width / 2,
+            y=start_origin.y,
+        )
+        end_point = Point(
+            x=end_origin.x,
+            y=end_origin.y + end_size.height / 2,
+        )
+        return start_point, end_point
 
     def _next_z_index(self) -> int:
         self._z_index += 1

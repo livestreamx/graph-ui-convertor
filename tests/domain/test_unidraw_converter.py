@@ -97,6 +97,48 @@ def test_unidraw_converter_sizes_centered_text() -> None:
     assert label["size"]["width"] < (block["size"]["width"] - 30)
 
 
+def test_unidraw_converter_centers_marker_text() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene = cast(
+        dict[str, Any],
+        MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup).to_dict(),
+    )
+    elements = cast(list[dict[str, Any]], scene["elements"])
+    marker = next(
+        element
+        for element in elements
+        if element.get("type") == "shape"
+        and element.get("shape") == "5"
+        and element.get("cjm", {}).get("role") == "start_marker"
+    )
+    label = next(
+        element
+        for element in elements
+        if element.get("type") == "text" and element.get("cjm", {}).get("role") == "start_marker"
+    )
+    marker_center = (
+        marker["position"]["x"] + marker["size"]["width"] / 2,
+        marker["position"]["y"] + marker["size"]["height"] / 2,
+    )
+    label_center = (
+        label["position"]["x"] + label["size"]["width"] / 2,
+        label["position"]["y"] + label["size"]["height"] / 2,
+    )
+    assert abs(label_center[0] - marker_center[0]) < 0.5
+    assert abs(label_center[1] - marker_center[1]) < 0.5
+
+
 def test_unidraw_converter_renders_postpone_end_marker() -> None:
     payload = {
         "markup_type": "service",
@@ -169,4 +211,71 @@ def test_unidraw_converter_applies_links() -> None:
 
     assert frame.get("link") == "https://example.com/procedures/p1"
     assert block.get("link") == "https://example.com/procedures/p1/blocks/a"
-    assert block_label.get("link") == "https://example.com/procedures/p1/blocks/a"
+    assert block_label.get("link") is None
+
+
+def test_unidraw_converter_applies_arrowheads() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene = cast(
+        dict[str, Any],
+        MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup).to_dict(),
+    )
+    elements = cast(list[dict[str, Any]], scene["elements"])
+    edges = [
+        element
+        for element in elements
+        if element.get("type") == "line" and element.get("cjm", {}).get("role") == "edge"
+    ]
+    block_edge = next(
+        element
+        for element in edges
+        if element.get("cjm", {}).get("edge_type") in {"start", "end", "branch"}
+    )
+    procedure_edge = next(
+        element for element in edges if element.get("cjm", {}).get("edge_type") == "procedure_flow"
+    )
+    assert block_edge.get("style", {}).get("let") == unidraw_module._UNIDRAW_LINE_END_BLOCK_ARROW
+    assert (
+        procedure_edge.get("style", {}).get("let")
+        == unidraw_module._UNIDRAW_LINE_END_PROCEDURE_ARROW
+    )
+
+
+def test_unidraw_converter_frame_title_font_size() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene = cast(
+        dict[str, Any],
+        MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup).to_dict(),
+    )
+    elements = cast(list[dict[str, Any]], scene["elements"])
+    frame = next(element for element in elements if element.get("cjm", {}).get("role") == "frame")
+    assert frame.get("style", {}).get("tfs") == unidraw_module._FRAME_FONT_SIZE

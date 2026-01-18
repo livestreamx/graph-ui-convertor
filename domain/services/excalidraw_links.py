@@ -76,7 +76,7 @@ def ensure_unidraw_links(
                 link = templates.procedure_link(procedure_id)
                 if link:
                     element["link"] = link
-        elif role in {"block", "block_label"}:
+        elif role == "block":
             block_id = meta.get("block_id")
             procedure_id = meta.get("procedure_id")
             if isinstance(block_id, str):
