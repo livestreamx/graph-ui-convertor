@@ -101,8 +101,18 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     assert merged.procedure_meta["shared"]["procedure_color"] == "#ffd6d6"
     services = merged.procedure_meta["shared"]["services"]
     assert isinstance(services, list)
-    assert {"team_name": "Alpha", "service_name": "Payments"} in services
-    assert {"team_name": "Beta", "service_name": "Loans"} in services
+    assert any(
+        service.get("team_name") == "Alpha"
+        and service.get("service_name") == "Payments"
+        and isinstance(service.get("service_color"), str)
+        for service in services
+    )
+    assert any(
+        service.get("team_name") == "Beta"
+        and service.get("service_name") == "Loans"
+        and isinstance(service.get("service_color"), str)
+        for service in services
+    )
 
 
 def test_procedure_graph_layout_lists_services_per_component() -> None:
@@ -148,9 +158,11 @@ def test_procedure_graph_layout_lists_services_per_component() -> None:
 
     assert plan.scenarios
     procedures_text = plan.scenarios[0].procedures_text
-    assert "Alpha - Payments" in procedures_text
-    assert "- Start Flow" in procedures_text
-    assert "Beta - Refunds" in procedures_text
+    assert "Разметки:" in procedures_text
+    assert "Alpha" in procedures_text
+    assert "- Payments" in procedures_text
+    assert "Beta" in procedures_text
+    assert "- Refunds" in procedures_text
 
 
 def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None:
@@ -185,9 +197,11 @@ def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None
 
     assert plan.scenarios
     procedures_text = plan.scenarios[0].procedures_text
-    assert "Alpha - Payments" in procedures_text
-    assert "Beta - Loans" in procedures_text
-    assert procedures_text.count("- Shared Flow") == 2
+    assert "Разметки:" in procedures_text
+    assert "Alpha" in procedures_text
+    assert "Beta" in procedures_text
+    assert procedures_text.count("- Payments") == 1
+    assert procedures_text.count("- Loans") == 1
 
 
 def test_procedure_graph_separator_below_services_block() -> None:
@@ -369,16 +383,16 @@ def test_procedure_graph_unidraw_cycle_edges_follow_offsets() -> None:
     tips_forward = edge_left_to_right.get("tipPoints", {})
     start_forward = tips_forward.get("start", {}).get("position", {})
     end_forward = tips_forward.get("end", {}).get("position", {})
-    assert round(start_forward.get("x", 0.0), 2) == 0.5
-    assert round(start_forward.get("y", 0.0), 2) == 0.0
-    assert round(end_forward.get("x", 0.0), 2) == 0.5
-    assert round(end_forward.get("y", 0.0), 2) == 0.0
+    assert round(start_forward.get("x", 0.0), 2) == 1.0
+    assert round(start_forward.get("y", 0.0), 2) == 0.5
+    assert round(end_forward.get("x", 0.0), 2) == 0.0
+    assert round(end_forward.get("y", 0.0), 2) == 0.5
 
     tips_reverse = edge_right_to_left.get("tipPoints", {})
     start_reverse = tips_reverse.get("start", {}).get("position", {})
     end_reverse = tips_reverse.get("end", {}).get("position", {})
     assert round(start_reverse.get("x", 0.0), 2) == 0.5
-    assert round(start_reverse.get("y", 0.0), 2) == 0.0
+    assert round(start_reverse.get("y", 0.0), 2) == 1.0
     assert round(end_reverse.get("x", 0.0), 2) == 0.0
     assert round(end_reverse.get("y", 0.0), 2) == 0.5
 

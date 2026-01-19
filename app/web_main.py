@@ -461,7 +461,9 @@ def create_app(settings: AppSettings) -> FastAPI:
         headers = {}
         if download:
             extension = resolve_diagram_extension(diagram_format)
-            headers["Content-Disposition"] = f'attachment; filename="team-graph{extension}"'
+            suffix = "_".join(team_ids)
+            filename = f"team-graph_{suffix}{extension}" if suffix else f"team-graph{extension}"
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
 
     @app.get("/api/markup/{scene_id}")

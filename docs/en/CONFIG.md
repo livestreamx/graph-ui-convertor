@@ -112,6 +112,8 @@ catalog:
   `/api/teams/graph`, `team_ids` supports comma-separated values).
 - The cross-team builder keeps selection details under the help tooltip next to Build graphs and
   colors procedures by service; shared procedures are highlighted in light red.
+- Cross-team graph downloads append the selected `team_ids` to the filename (for example
+  `team-graph_alpha_beta.excalidraw`).
 
 ## Dot-path resolution
 

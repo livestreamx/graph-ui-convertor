@@ -62,6 +62,11 @@ class BuildTeamProcedureGraph:
             key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
             for idx, key in enumerate(service_key_list)
         }
+        for service_map in procedure_services.values():
+            for service_key, payload in service_map.items():
+                color = service_colors.get(service_key)
+                if color:
+                    payload["service_color"] = color
         for proc_id in procedure_order:
             payload = procedure_payloads[proc_id]
             procedures.append(Procedure.model_validate(payload))

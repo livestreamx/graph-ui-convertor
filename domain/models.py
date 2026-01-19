@@ -302,6 +302,18 @@ class ScenarioPlacement:
     procedures_text: str
     procedures_font_size: float
     procedures_padding: float
+    procedures_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
+    procedures_block_padding: float | None = None
+
+
+@dataclass(frozen=True)
+class ScenarioProceduresBlock:
+    kind: str
+    text: str
+    height: float
+    color: str | None = None
+    font_size: float | None = None
+    underline: bool = False
 
 
 @dataclass(frozen=True)

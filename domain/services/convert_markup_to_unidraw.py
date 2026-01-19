@@ -207,6 +207,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         size: Size,
         metadata: Metadata,
         group_ids: list[str],
+        background_color: str | None = None,
+        stroke_color: str | None = None,
     ) -> Element:
         return self._base_element(
             element_id=element_id,
@@ -217,8 +219,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             group_ids=group_ids,
             extra={"shape": _SHAPE_RECTANGLE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
-                stroke_color="#7a8aa8",
-                background_color="#e9f0fb",
+                stroke_color=stroke_color or "#7a8aa8",
+                background_color=background_color or "#e9f0fb",
                 stroke_width=1.0,
             ),
         )
@@ -788,11 +790,11 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             return start, end
         start_origin, start_size = start_bounds
         end_origin, end_size = end_bounds
-        if start_origin.x < end_origin.x:
+        if start_origin.x <= end_origin.x:
             return start, end
         start_point = Point(
             x=start_origin.x + start_size.width / 2,
-            y=start_origin.y,
+            y=start_origin.y + start_size.height,
         )
         end_point = Point(
             x=end_origin.x,

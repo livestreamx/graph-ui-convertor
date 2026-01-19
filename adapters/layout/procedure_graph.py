@@ -10,6 +10,7 @@ from domain.models import (
     Point,
     Procedure,
     ScenarioPlacement,
+    ScenarioProceduresBlock,
     SeparatorPlacement,
     Size,
 )
@@ -201,26 +202,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         scenario_width = self.config.scenario_width
         x_left = min_x - self.config.scenario_gap - scenario_width
         origin = Point(x=x_left, y=min_y)
-        procedures_lines = self._component_service_lines(
-            component, procedure_map, frame_lookup, procedure_meta
+        procedures_blocks, procedures_text, block_padding = self._component_service_blocks(
+            component, procedure_meta
         )
-        procedures_body = (
-            ["Услуги:", *procedures_lines]
-            if procedures_lines
-            else [
-                "Услуги:",
-                "- (нет данных)",
-            ]
-        )
-        procedures_max_width = scenario_width - (self.config.scenario_procedures_padding * 2)
-        procedures_lines_wrapped = self._wrap_lines(
-            procedures_body, procedures_max_width, self.config.scenario_procedures_font_size
-        )
-        procedures_text = "\n".join(procedures_lines_wrapped)
+        procedures_content_height = sum(block.height for block in procedures_blocks)
         procedures_height = max(
             self.config.scenario_procedures_min_height,
-            len(procedures_lines_wrapped) * self.config.scenario_procedures_font_size * 1.35
-            + self.config.scenario_procedures_padding * 2,
+            procedures_content_height + self.config.scenario_procedures_padding * 2,
         )
         procedures_origin = Point(
             x=x_left,
@@ -242,59 +230,172 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             procedures_text=procedures_text,
             procedures_font_size=self.config.scenario_procedures_font_size,
             procedures_padding=self.config.scenario_procedures_padding,
+            procedures_blocks=tuple(procedures_blocks) if procedures_blocks else None,
+            procedures_block_padding=block_padding,
         )
 
-    def _component_service_lines(
+    def _component_service_blocks(
         self,
         component: set[str],
-        procedure_map: Mapping[str, Procedure],
-        frame_lookup: Mapping[str, FramePlacement],
         procedure_meta: Mapping[str, Mapping[str, object]],
-    ) -> list[str]:
-        service_entries: dict[tuple[str, str], list[tuple[float, str]]] = {}
+    ) -> tuple[list[ScenarioProceduresBlock], str, float]:
+        groups, summary = self._component_service_groups(component, procedure_meta)
+        header = "Разметки:"
+        font_size = self.config.scenario_procedures_font_size
+        line_height = font_size * 1.35
+        team_font_size = font_size + 2.0
+        team_line_height = team_font_size * 1.35
+        header_gap = max(6.0, font_size * 0.6)
+        team_gap = max(8.0, font_size * 0.8)
+        service_gap = max(4.0, font_size * 0.4)
+        service_padding = max(6.0, font_size * 0.4)
+        content_width = self.config.scenario_width - (self.config.scenario_procedures_padding * 2)
+        blocks: list[ScenarioProceduresBlock] = []
+
+        header_lines = self._wrap_lines([header], content_width, font_size)
+        header_text = "\n".join(header_lines)
+        blocks.append(
+            ScenarioProceduresBlock(
+                kind="header",
+                text=header_text,
+                height=len(header_lines) * line_height,
+                font_size=font_size,
+            )
+        )
+        blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
+
+        lines = [header, ""]
+        if not groups:
+            empty_text = "- (нет данных)"
+            empty_lines = self._wrap_lines([empty_text], content_width, font_size)
+            blocks.append(
+                ScenarioProceduresBlock(
+                    kind="summary",
+                    text="\n".join(empty_lines),
+                    height=len(empty_lines) * line_height,
+                    font_size=font_size,
+                )
+            )
+            lines.append(empty_text)
+            return blocks, "\n".join(lines), service_padding
+
+        for team_idx, (team_name, services) in enumerate(groups):
+            team_lines = self._wrap_lines([team_name], content_width, team_font_size)
+            blocks.append(
+                ScenarioProceduresBlock(
+                    kind="team",
+                    text="\n".join(team_lines),
+                    height=len(team_lines) * team_line_height,
+                    font_size=team_font_size,
+                    underline=True,
+                )
+            )
+            blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=service_gap))
+            lines.append(team_name)
+            for service_idx, (service_name, service_color) in enumerate(services):
+                wrapped = self._wrap_lines(
+                    [service_name],
+                    content_width - service_padding * 2,
+                    font_size,
+                )
+                blocks.append(
+                    ScenarioProceduresBlock(
+                        kind="service",
+                        text="\n".join(wrapped),
+                        height=len(wrapped) * line_height + service_padding * 2,
+                        color=service_color,
+                        font_size=font_size,
+                    )
+                )
+                lines.append(f"- {service_name}")
+                if service_idx < len(services) - 1:
+                    blocks.append(
+                        ScenarioProceduresBlock(kind="spacer", text="", height=service_gap)
+                    )
+            if team_idx < len(groups) - 1:
+                blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=team_gap))
+                lines.append("")
+
+        if summary:
+            blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=team_gap))
+            summary_lines = self._wrap_lines([summary], content_width, font_size)
+            blocks.append(
+                ScenarioProceduresBlock(
+                    kind="summary",
+                    text="\n".join(summary_lines),
+                    height=len(summary_lines) * line_height,
+                    font_size=font_size,
+                )
+            )
+            lines.append("")
+            lines.append(summary)
+
+        if lines and not lines[-1]:
+            lines.pop()
+        return blocks, "\n".join(lines), service_padding
+
+    def _component_service_groups(
+        self,
+        component: set[str],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+    ) -> tuple[list[tuple[str, list[tuple[str, str]]]], str | None]:
+        team_services: dict[str, dict[str, str]] = {}
         for proc_id in sorted(component):
-            proc = procedure_map.get(proc_id)
-            if proc is None:
-                continue
-            frame = frame_lookup.get(proc_id)
-            x_pos = frame.origin.x if frame else 0.0
             meta = procedure_meta.get(proc_id, {})
-            label = proc.procedure_name or proc.procedure_id
             services = meta.get("services")
             if isinstance(services, list) and services:
-                seen: set[tuple[str, str]] = set()
                 for service in services:
                     if not isinstance(service, Mapping):
                         continue
                     team_name = str(service.get("team_name") or "Unknown team")
                     service_name = str(service.get("service_name") or "Unknown service")
-                    key = (team_name, service_name)
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    service_entries.setdefault(key, []).append((x_pos, label))
+                    color = service.get("service_color")
+                    if not isinstance(color, str):
+                        color = meta.get("procedure_color")
+                    team_services.setdefault(team_name, {})[service_name] = (
+                        color if isinstance(color, str) else "#e9f0fb"
+                    )
             else:
                 team_name = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
                 service_name = str(meta.get("service_name") or "Unknown service")
-                service_entries.setdefault((team_name, service_name), []).append((x_pos, label))
+                color = meta.get("procedure_color")
+                team_services.setdefault(team_name, {})[service_name] = (
+                    color if isinstance(color, str) else "#e9f0fb"
+                )
 
-        if not service_entries:
-            return []
+        if not team_services:
+            return [], None
 
-        lines: list[str] = []
-        limit = 8
-        sorted_services = sorted(
-            service_entries.items(),
-            key=lambda entry: (entry[0][0].lower(), entry[0][1].lower()),
-        )
-        for (team_name, service_name), entries in sorted_services:
-            lines.append(f"{team_name} - {service_name}")
-            entries.sort(key=lambda item: (item[0], item[1]))
-            labels = [label for _, label in entries]
-            if len(labels) > limit:
-                trimmed = labels[:limit]
-                lines.extend([f"- {label}" for label in trimmed])
-                lines.append(f"- и еще {len(labels) - limit}")
-            else:
-                lines.extend([f"- {label}" for label in labels])
-        return lines
+        teams_sorted = sorted(team_services.keys(), key=lambda name: name.lower())
+        max_services = 8
+        shown_groups: list[tuple[str, list[tuple[str, str]]]] = []
+        remaining_services = 0
+        remaining_teams: set[str] = set()
+        services_shown = 0
+        for idx, team_name in enumerate(teams_sorted):
+            services = sorted(
+                team_services[team_name].items(),
+                key=lambda item: item[0].lower(),
+            )
+            if services_shown >= max_services:
+                remaining_services += len(services)
+                remaining_teams.add(team_name)
+                continue
+            available = max_services - services_shown
+            if len(services) > available:
+                shown = services[:available]
+                remaining_services += len(services) - available
+                remaining_teams.add(team_name)
+                for tail_team in teams_sorted[idx + 1 :]:
+                    remaining_services += len(team_services[tail_team])
+                    remaining_teams.add(tail_team)
+                shown_groups.append((team_name, shown))
+                services_shown += len(shown)
+                break
+            shown_groups.append((team_name, services))
+            services_shown += len(services)
+
+        summary = None
+        if remaining_services > 0:
+            summary = f"и еще {remaining_services} услуг из {len(remaining_teams)} команд"
+        return shown_groups, summary

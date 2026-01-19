@@ -401,28 +401,150 @@ class MarkupToDiagramConverter(ABC):
                     group_ids=[procedures_group],
                 )
             )
-            procedures_width = scenario.procedures_size.width - (scenario.procedures_padding * 2)
-            procedures_lines = scenario.procedures_text.splitlines() or [scenario.procedures_text]
-            procedures_height = len(procedures_lines) * scenario.procedures_font_size * 1.35
-            procedures_origin = Point(
-                x=scenario.procedures_origin.x + scenario.procedures_padding,
-                y=scenario.procedures_origin.y + scenario.procedures_padding,
-            )
-            registry.add(
-                self._text_block_element(
-                    element_id=procedures_text_id,
-                    text=scenario.procedures_text,
-                    origin=procedures_origin,
-                    width=procedures_width,
-                    height=procedures_height,
-                    metadata=self._with_base_metadata(
-                        {"role": "scenario_procedures", "scenario_index": idx},
-                        base_metadata,
-                    ),
-                    group_ids=[procedures_group],
-                    font_size=scenario.procedures_font_size,
+            procedures_blocks = getattr(scenario, "procedures_blocks", None)
+            if procedures_blocks:
+                block_padding = (
+                    scenario.procedures_block_padding
+                    if scenario.procedures_block_padding is not None
+                    else 0.0
                 )
-            )
+                content_x = scenario.procedures_origin.x + scenario.procedures_padding
+                content_y = scenario.procedures_origin.y + scenario.procedures_padding
+                content_width = scenario.procedures_size.width - (scenario.procedures_padding * 2)
+                current_y = content_y
+                for block_idx, block in enumerate(procedures_blocks):
+                    kind = block.kind
+                    if kind == "spacer":
+                        current_y += block.height
+                        continue
+                    block_font_size = (
+                        block.font_size
+                        if block.font_size is not None
+                        else scenario.procedures_font_size
+                    )
+                    if kind == "service":
+                        panel_id = self._stable_id(
+                            "scenario-procedures-service-panel",
+                            str(idx),
+                            str(block_idx),
+                            block.text,
+                        )
+                        registry.add(
+                            self._scenario_procedures_panel_element(
+                                element_id=panel_id,
+                                origin=Point(content_x, current_y),
+                                size=Size(content_width, block.height),
+                                metadata=self._with_base_metadata(
+                                    {
+                                        "role": "scenario_procedures_service_panel",
+                                        "scenario_index": idx,
+                                    },
+                                    base_metadata,
+                                ),
+                                group_ids=[procedures_group],
+                                background_color=block.color,
+                            )
+                        )
+                        text_origin = Point(
+                            x=content_x + block_padding,
+                            y=current_y + block_padding,
+                        )
+                        text_height = max(0.0, block.height - block_padding * 2)
+                        registry.add(
+                            self._text_block_element(
+                                element_id=self._stable_id(
+                                    "scenario-procedures-service-text",
+                                    str(idx),
+                                    str(block_idx),
+                                ),
+                                text=block.text,
+                                origin=text_origin,
+                                width=max(0.0, content_width - block_padding * 2),
+                                height=text_height,
+                                metadata=self._with_base_metadata(
+                                    {
+                                        "role": "scenario_procedures_service",
+                                        "scenario_index": idx,
+                                    },
+                                    base_metadata,
+                                ),
+                                group_ids=[procedures_group],
+                                font_size=block_font_size,
+                            )
+                        )
+                        current_y += block.height
+                        continue
+                    text_origin = Point(content_x, current_y)
+                    registry.add(
+                        self._text_block_element(
+                            element_id=self._stable_id(
+                                "scenario-procedures-block",
+                                str(idx),
+                                str(block_idx),
+                            ),
+                            text=block.text,
+                            origin=text_origin,
+                            width=content_width,
+                            height=block.height,
+                            metadata=self._with_base_metadata(
+                                {"role": "scenario_procedures", "scenario_index": idx},
+                                base_metadata,
+                            ),
+                            group_ids=[procedures_group],
+                            font_size=block_font_size,
+                        )
+                    )
+                    if block.underline:
+                        line_y = current_y + block.height - max(2.0, block_font_size * 0.15)
+                        registry.add(
+                            self._line_element(
+                                element_id=self._stable_id(
+                                    "scenario-procedures-underline",
+                                    str(idx),
+                                    str(block_idx),
+                                ),
+                                start=Point(content_x, line_y),
+                                end=Point(content_x + content_width, line_y),
+                                metadata=self._with_base_metadata(
+                                    {
+                                        "role": "scenario_procedures_underline",
+                                        "scenario_index": idx,
+                                    },
+                                    base_metadata,
+                                ),
+                                stroke_color="#1e1e1e",
+                                stroke_width=2.0,
+                                group_ids=[procedures_group],
+                            )
+                        )
+                    current_y += block.height
+            else:
+                procedures_width = scenario.procedures_size.width - (
+                    scenario.procedures_padding * 2
+                )
+                procedures_lines = scenario.procedures_text.splitlines() or [
+                    scenario.procedures_text
+                ]
+                procedures_height = len(procedures_lines) * scenario.procedures_font_size * 1.35
+                procedures_origin = Point(
+                    x=scenario.procedures_origin.x + scenario.procedures_padding,
+                    y=scenario.procedures_origin.y + scenario.procedures_padding,
+                )
+                registry.add(
+                    self._text_block_element(
+                        element_id=procedures_text_id,
+                        text=scenario.procedures_text,
+                        origin=procedures_origin,
+                        width=procedures_width,
+                        height=procedures_height,
+                        metadata=self._with_base_metadata(
+                            {"role": "scenario_procedures", "scenario_index": idx},
+                            base_metadata,
+                        ),
+                        group_ids=[procedures_group],
+                        font_size=scenario.procedures_font_size,
+                    )
+                )
 
     def _build_blocks(
         self,
@@ -800,24 +922,34 @@ class MarkupToDiagramConverter(ABC):
                 adjacency.setdefault(src, []).append(tgt)
             cycle_edges = self._edges_in_cycles(adjacency)
 
-        for left_id, right_id in edges_to_draw:
-            left_frame = frame_lookup.get(left_id)
-            right_frame = frame_lookup.get(right_id)
-            if not left_frame or not right_frame:
+        for source_id, target_id in edges_to_draw:
+            source_frame = frame_lookup.get(source_id)
+            target_frame = frame_lookup.get(target_id)
+            if not source_frame or not target_frame:
                 continue
-            is_cycle = (left_id, right_id) in cycle_edges
+            is_cycle = (source_id, target_id) in cycle_edges
             edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
             label = "ЦИКЛ" if is_cycle else "procedure"
             curve_direction = None
             if is_cycle:
-                start = Point(
-                    x=left_frame.origin.x + left_frame.size.width / 2,
-                    y=left_frame.origin.y,
-                )
-                end = Point(
-                    x=right_frame.origin.x + right_frame.size.width / 2,
-                    y=right_frame.origin.y,
-                )
+                if source_frame.origin.x <= target_frame.origin.x:
+                    start = Point(
+                        x=source_frame.origin.x + source_frame.size.width,
+                        y=source_frame.origin.y + source_frame.size.height / 2,
+                    )
+                    end = Point(
+                        x=target_frame.origin.x,
+                        y=target_frame.origin.y + target_frame.size.height / 2,
+                    )
+                else:
+                    start = Point(
+                        x=source_frame.origin.x + source_frame.size.width / 2,
+                        y=source_frame.origin.y + source_frame.size.height,
+                    )
+                    end = Point(
+                        x=target_frame.origin.x,
+                        y=target_frame.origin.y + target_frame.size.height / 2,
+                    )
                 dx = end.x - start.x
                 dy = end.y - start.y
                 if dx == 0:
@@ -826,12 +958,12 @@ class MarkupToDiagramConverter(ABC):
                     curve_direction = -1.0 if dx > 0 else 1.0
             else:
                 start = Point(
-                    x=left_frame.origin.x + left_frame.size.width,
-                    y=left_frame.origin.y + left_frame.size.height / 2,
+                    x=source_frame.origin.x + source_frame.size.width,
+                    y=source_frame.origin.y + source_frame.size.height / 2,
                 )
                 end = Point(
-                    x=right_frame.origin.x,
-                    y=right_frame.origin.y + right_frame.size.height / 2,
+                    x=target_frame.origin.x,
+                    y=target_frame.origin.y + target_frame.size.height / 2,
                 )
             arrow = self._arrow_element(
                 start=start,
@@ -839,16 +971,16 @@ class MarkupToDiagramConverter(ABC):
                 label=label,
                 metadata=self._with_base_metadata(
                     {
-                        "procedure_id": left_id,
-                        "target_procedure_id": right_id,
+                        "procedure_id": source_id,
+                        "target_procedure_id": target_id,
                         "role": "edge",
                         "edge_type": edge_type,
                         "is_cycle": is_cycle,
                     },
                     base_metadata,
                 ),
-                start_binding=self._stable_id("frame", left_id),
-                end_binding=self._stable_id("frame", right_id),
+                start_binding=self._stable_id("frame", source_id),
+                end_binding=self._stable_id("frame", target_id),
                 smoothing=0.1,
                 stroke_style="dashed" if is_cycle else None,
                 stroke_color="#d32f2f" if is_cycle else None,
@@ -1143,6 +1275,8 @@ class MarkupToDiagramConverter(ABC):
         size: Size,
         metadata: Metadata,
         group_ids: list[str],
+        background_color: str | None = None,
+        stroke_color: str | None = None,
     ) -> Element:
         raise NotImplementedError
 

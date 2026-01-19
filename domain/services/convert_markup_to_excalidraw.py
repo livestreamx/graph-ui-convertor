@@ -164,6 +164,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         size: Size,
         metadata: Metadata,
         group_ids: list[str],
+        background_color: str | None = None,
+        stroke_color: str | None = None,
     ) -> Element:
         return self._base_shape(
             element_id=element_id,
@@ -173,8 +175,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=size.height,
             group_ids=group_ids,
             extra={
-                "strokeColor": "#7a8aa8",
-                "backgroundColor": "#e9f0fb",
+                "strokeColor": stroke_color or "#7a8aa8",
+                "backgroundColor": background_color or "#e9f0fb",
                 "fillStyle": "solid",
                 "roughness": 0,
                 "seed": self._rand_seed(),
