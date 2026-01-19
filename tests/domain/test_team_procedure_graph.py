@@ -48,11 +48,38 @@ def test_build_team_procedure_graph_merges_documents() -> None:
 
     merged = BuildTeamProcedureGraph().build([doc_beta, doc_alpha])
 
-    assert merged.service_name == "Alpha, Beta"
+    assert merged.service_name == "Alpha + Beta"
     assert {proc.procedure_id for proc in merged.procedures} == {"p1", "p2"}
     assert merged.procedure_meta["p1"]["service_name"] == "Payments"
     assert merged.procedure_meta["p1"]["team_name"] == "Alpha"
     assert merged.procedure_graph["p2"] == []
+
+
+def test_build_team_procedure_graph_title_limits_team_names() -> None:
+    documents = []
+    for idx, team_name in enumerate(["Alpha", "Beta", "Gamma", "Zeta"], start=1):
+        documents.append(
+            MarkupDocument.model_validate(
+                {
+                    "markup_type": "service",
+                    "service_name": f"Service {idx}",
+                    "team_name": team_name,
+                    "procedures": [
+                        {
+                            "proc_id": f"p{idx}",
+                            "start_block_ids": [f"a{idx}"],
+                            "end_block_ids": [f"b{idx}::end"],
+                            "branches": {f"a{idx}": [f"b{idx}"]},
+                        }
+                    ],
+                    "procedure_graph": {f"p{idx}": []},
+                }
+            )
+        )
+
+    merged = BuildTeamProcedureGraph().build(documents)
+
+    assert merged.service_name == "Alpha + Beta + Gamma + еще 1 команд"
 
 
 def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
@@ -297,9 +324,9 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert "Процедуры мержа" in merge_text
-    assert "Shared Flow" in merge_text
-    assert "Alpha/Payments" in merge_text
+    assert "Узлы слияния" in merge_text
+    assert "shared" in merge_text
+    assert "Shared Flow" not in merge_text
 
 
 def test_procedure_graph_separator_below_services_block() -> None:
@@ -496,9 +523,9 @@ def test_procedure_graph_unidraw_cycle_edges_follow_offsets() -> None:
     tips_reverse = edge_right_to_left.get("tipPoints", {})
     start_reverse = tips_reverse.get("start", {}).get("position", {})
     end_reverse = tips_reverse.get("end", {}).get("position", {})
-    assert round(start_reverse.get("x", 0.0), 2) == 0.0
-    assert round(start_reverse.get("y", 0.0), 2) == 0.5
-    assert round(end_reverse.get("x", 0.0), 2) == 1.0
+    assert round(start_reverse.get("x", 0.0), 2) == 0.5
+    assert round(start_reverse.get("y", 0.0), 2) == 1.0
+    assert round(end_reverse.get("x", 0.0), 2) == 0.0
     assert round(end_reverse.get("y", 0.0), 2) == 0.5
 
     assert edge_left_to_right.get("style", {}).get("sw") == 1.0

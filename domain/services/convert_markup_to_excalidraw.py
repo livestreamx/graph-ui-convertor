@@ -41,16 +41,22 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_excalidraw_links(elements, self.link_templates)
-        edges: list[Element] = []
+        procedure_edges: list[Element] = []
+        other_edges: list[Element] = []
         rest: list[Element] = []
         for element in elements:
-            meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {}).get("role")
-            if element.get("type") == "arrow" or meta == "edge":
-                edges.append(element)
+            meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {})
+            role = meta.get("role")
+            edge_type = meta.get("edge_type")
+            if element.get("type") == "arrow" or role == "edge":
+                if edge_type in {"procedure_flow", "procedure_cycle"}:
+                    procedure_edges.append(element)
+                else:
+                    other_edges.append(element)
             else:
                 rest.append(element)
-        if edges:
-            elements[:] = edges + rest
+        if procedure_edges or other_edges:
+            elements[:] = procedure_edges + other_edges + rest
 
     def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         arrow_id = arrow.get("id")

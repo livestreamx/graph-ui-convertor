@@ -379,12 +379,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             return [], None, None
 
         merge_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
-        header = "Процедуры мержа:"
+        header = "Узлы слияния:"
         font_size = self.config.scenario_merge_font_size
         line_height = font_size * 1.35
-        header_gap = max(6.0, font_size * 0.6)
-        item_gap = max(4.0, font_size * 0.4)
-        item_padding = max(6.0, font_size * 0.4)
+        header_gap = 0.0
+        item_gap = 0.0
+        item_padding = 0.0
         content_width = self.config.scenario_width - (self.config.scenario_merge_padding * 2)
         blocks: list[ScenarioProceduresBlock] = []
 
@@ -398,33 +398,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 underline=True,
             )
         )
-        blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
+        if header_gap:
+            blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
 
-        lines = [header, ""]
+        lines = [header]
         for idx, proc_id in enumerate(merge_ids):
-            proc = procedure_map.get(proc_id)
-            if proc and proc.procedure_name:
-                label = f"{proc.procedure_name} ({proc_id})"
-            else:
-                label = proc_id
-            meta = procedure_meta.get(proc_id, {})
-            services: list[str] = []
-            raw_services = meta.get("services")
-            if isinstance(raw_services, list) and raw_services:
-                for service in raw_services:
-                    if not isinstance(service, Mapping):
-                        continue
-                    team = str(service.get("team_name") or "Unknown team")
-                    service_name = str(service.get("service_name") or "Unknown service")
-                    services.append(f"{team}/{service_name}")
-            else:
-                team = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
-                service_name = str(meta.get("service_name") or "Unknown service")
-                services.append(f"{team}/{service_name}")
-            services_text = ", ".join(sorted(set(services), key=lambda name: name.lower()))
-            line = f"- {label}"
-            if services_text:
-                line = f"{line}: {services_text}"
+            line = proc_id
             wrapped = self._wrap_lines([line], content_width - item_padding * 2, font_size)
             blocks.append(
                 ScenarioProceduresBlock(
@@ -435,7 +414,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
             )
             lines.append(line)
-            if idx < len(merge_ids) - 1:
+            if idx < len(merge_ids) - 1 and item_gap:
                 blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=item_gap))
 
         if lines and not lines[-1]:

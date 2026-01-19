@@ -121,7 +121,7 @@ class BuildTeamProcedureGraph:
             procedure_graph.setdefault(proc.procedure_id, [])
 
         team_list = sorted(team_labels, key=lambda name: name.lower())
-        title = ", ".join(team_list) if team_list else "Unknown team"
+        title = self._format_team_title(team_list)
 
         return MarkupDocument(
             markup_type="procedure_graph",
@@ -145,6 +145,14 @@ class BuildTeamProcedureGraph:
 
     def _service_key(self, team_label: str, service_label: str) -> str:
         return f"{team_label}::{service_label}"
+
+    def _format_team_title(self, team_list: Sequence[str]) -> str:
+        if not team_list:
+            return "Unknown team"
+        if len(team_list) <= 3:
+            return " + ".join(team_list)
+        extra_count = len(team_list) - 3
+        return " + ".join(team_list[:3]) + f" + еще {extra_count} команд"
 
     def _procedure_payload(self, proc: Procedure) -> dict[str, Any]:
         return {

@@ -81,16 +81,24 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_unidraw_links(elements, self.link_templates)
-        edges: list[Element] = []
+        procedure_edges: list[Element] = []
+        other_edges: list[Element] = []
         rest: list[Element] = []
         for element in elements:
-            if element.get("cjm", {}).get("role") == "edge":
-                edges.append(element)
+            meta = element.get("cjm", {})
+            if meta.get("role") == "edge":
+                if meta.get("edge_type") in {"procedure_flow", "procedure_cycle"}:
+                    procedure_edges.append(element)
+                else:
+                    other_edges.append(element)
             else:
                 rest.append(element)
-        if edges:
+        if procedure_edges or other_edges:
+            edges = procedure_edges + other_edges
             elements[:] = edges + rest
-            for idx, element in enumerate(elements, start=1):
+            for idx, element in enumerate(edges, start=1):
+                element["zIndex"] = -idx
+            for idx, element in enumerate(rest, start=1):
                 element["zIndex"] = idx
 
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
@@ -526,6 +534,9 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             start_binding=start_binding,
             end_binding=end_binding,
         )
+        if metadata.get("edge_type") == "procedure_cycle":
+            start_normal = self._binding_normal(start_binding, start_point, start_normal)
+            end_normal = self._binding_normal(end_binding, end_point, end_normal)
         tip_points = {
             "start": self._bound_tip_point(start_point, start_binding, start_normal),
             "end": self._bound_tip_point(end_point, end_binding, end_normal),
@@ -777,6 +788,29 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         curve_dir = 1.0 if dx >= 0 else -1.0
         return (curve_dir, 0.0), (-curve_dir, 0.0)
 
+    def _binding_normal(
+        self,
+        binding: str | None,
+        point: Point,
+        fallback: tuple[float, float],
+    ) -> tuple[float, float]:
+        if not binding:
+            return fallback
+        relative = self._relative_position(binding, point)
+        if not relative:
+            return fallback
+        rel_x = relative.get("x", 0.5)
+        rel_y = relative.get("y", 0.5)
+        if rel_y >= 0.95:
+            return (0.0, 1.0)
+        if rel_y <= 0.05:
+            return (0.0, -1.0)
+        if rel_x >= 0.95:
+            return (1.0, 0.0)
+        if rel_x <= 0.05:
+            return (-1.0, 0.0)
+        return fallback
+
     def _procedure_cycle_points(
         self,
         start: Point,
@@ -799,11 +833,11 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             return start, end
         return (
             Point(
-                x=start_origin.x,
-                y=start_origin.y + start_size.height / 2,
+                x=start_origin.x + start_size.width / 2,
+                y=start_origin.y + start_size.height,
             ),
             Point(
-                x=end_origin.x + end_size.width,
+                x=end_origin.x,
                 y=end_origin.y + end_size.height / 2,
             ),
         )

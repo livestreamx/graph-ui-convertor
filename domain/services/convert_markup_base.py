@@ -1035,11 +1035,11 @@ class MarkupToDiagramConverter(ABC):
             curve_direction = None
             if cycle_marker:
                 start = Point(
-                    x=source_frame.origin.x,
-                    y=source_frame.origin.y + source_frame.size.height / 2,
+                    x=source_frame.origin.x + source_frame.size.width / 2,
+                    y=source_frame.origin.y + source_frame.size.height,
                 )
                 end = Point(
-                    x=target_frame.origin.x + target_frame.size.width,
+                    x=target_frame.origin.x,
                     y=target_frame.origin.y + target_frame.size.height / 2,
                 )
                 dx = end.x - start.x
