@@ -304,6 +304,13 @@ class ScenarioPlacement:
     procedures_padding: float
     procedures_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
     procedures_block_padding: float | None = None
+    merge_origin: Point | None = None
+    merge_size: Size | None = None
+    merge_text: str | None = None
+    merge_font_size: float | None = None
+    merge_padding: float | None = None
+    merge_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
+    merge_block_padding: float | None = None
 
 
 @dataclass(frozen=True)

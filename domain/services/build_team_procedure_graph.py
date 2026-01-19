@@ -28,6 +28,7 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, str]]] = {}
         team_labels: set[str] = set()
         service_keys: set[str] = set()
+        service_key_to_team: dict[str, str] = {}
 
         for document in documents:
             team_label = self._resolve_team_label(document)
@@ -36,6 +37,7 @@ class BuildTeamProcedureGraph:
             if team_label:
                 team_labels.add(team_label)
             service_keys.add(service_key)
+            service_key_to_team[service_key] = team_label
 
             for proc in document.procedures:
                 proc_id = proc.procedure_id
@@ -58,10 +60,21 @@ class BuildTeamProcedureGraph:
                         procedure_graph[parent].append(child)
 
         service_key_list = sorted(service_keys, key=lambda value: value.lower())
-        service_colors = {
-            key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
-            for idx, key in enumerate(service_key_list)
-        }
+        if len(service_key_list) > len(_SERVICE_COLORS):
+            team_list = sorted(team_labels, key=lambda name: name.lower())
+            team_colors = {
+                team: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
+                for idx, team in enumerate(team_list)
+            }
+            service_colors = {
+                key: team_colors.get(service_key_to_team.get(key, ""), _SERVICE_COLORS[0])
+                for key in service_key_list
+            }
+        else:
+            service_colors = {
+                key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
+                for idx, key in enumerate(service_key_list)
+            }
         for service_map in procedure_services.values():
             for service_key, payload in service_map.items():
                 color = service_colors.get(service_key)

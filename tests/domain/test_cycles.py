@@ -130,7 +130,10 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         and element.get("customData", {}).get("cjm", {}).get("role") == "frame"
     }
     assert cycle_edges
-    assert not flow_edges
+    assert flow_edges
+    assert len(cycle_edges) == 1
+    assert len(flow_edges) == 1
+    assert all(edge.get("strokeStyle") != "dashed" for edge in flow_edges)
     assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
     assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
     assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
@@ -147,16 +150,11 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
         end = _arrow_endpoint(edge, -1)
         source_x = source.get("x", 0.0)
         target_x = target.get("x", 0.0)
-        if source_x <= target_x:
-            assert start[0] == pytest.approx(source_x + source.get("width", 0.0))
-            assert start[1] == pytest.approx(source.get("y", 0.0) + source.get("height", 0.0) / 2)
-            assert end[0] == pytest.approx(target.get("x", 0.0))
-            assert end[1] == pytest.approx(target.get("y", 0.0) + target.get("height", 0.0) / 2)
-        else:
-            assert start[0] == pytest.approx(source.get("x", 0.0) + source.get("width", 0.0) / 2)
-            assert start[1] == pytest.approx(source.get("y", 0.0) + source.get("height", 0.0))
-            assert end[0] == pytest.approx(target.get("x", 0.0))
-            assert end[1] == pytest.approx(target.get("y", 0.0) + target.get("height", 0.0) / 2)
+        assert source_x > target_x
+        assert start[0] == pytest.approx(source_x)
+        assert start[1] == pytest.approx(source.get("y", 0.0) + source.get("height", 0.0) / 2)
+        assert end[0] == pytest.approx(target_x + target.get("width", 0.0))
+        assert end[1] == pytest.approx(target.get("y", 0.0) + target.get("height", 0.0) / 2)
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     graph = reconstructed.procedure_graph

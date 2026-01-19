@@ -386,6 +386,103 @@ class MarkupToDiagramConverter(ABC):
                     font_size=scenario.body_font_size,
                 )
             )
+            merge_origin = getattr(scenario, "merge_origin", None)
+            merge_size = getattr(scenario, "merge_size", None)
+            merge_text = getattr(scenario, "merge_text", None)
+            merge_blocks = getattr(scenario, "merge_blocks", None)
+            merge_padding = getattr(scenario, "merge_padding", None) or 0.0
+            merge_font_size = (
+                getattr(scenario, "merge_font_size", None) or scenario.procedures_font_size
+            )
+            if merge_origin and merge_size:
+                merge_group = self._stable_id("scenario-merge-group", str(idx))
+                merge_panel_id = self._stable_id("scenario-merge-panel", str(idx))
+                registry.add(
+                    self._scenario_procedures_panel_element(
+                        element_id=merge_panel_id,
+                        origin=merge_origin,
+                        size=merge_size,
+                        metadata=self._with_base_metadata(
+                            {"role": "scenario_merge_panel", "scenario_index": idx},
+                            base_metadata,
+                        ),
+                        group_ids=[merge_group],
+                        background_color="#fff6d6",
+                        stroke_color="#c9b27a",
+                    )
+                )
+                if merge_blocks:
+                    block_padding = getattr(scenario, "merge_block_padding", None) or 0.0
+                    content_x = merge_origin.x + merge_padding
+                    content_y = merge_origin.y + merge_padding
+                    content_width = merge_size.width - (merge_padding * 2)
+                    current_y = content_y
+                    for block_idx, block in enumerate(merge_blocks):
+                        if block.kind == "spacer":
+                            current_y += block.height
+                            continue
+                        block_font_size = (
+                            block.font_size if block.font_size is not None else merge_font_size
+                        )
+                        text_origin = Point(content_x, current_y)
+                        registry.add(
+                            self._text_block_element(
+                                element_id=self._stable_id(
+                                    "scenario-merge-block",
+                                    str(idx),
+                                    str(block_idx),
+                                ),
+                                text=block.text,
+                                origin=text_origin,
+                                width=content_width,
+                                height=block.height,
+                                metadata=self._with_base_metadata(
+                                    {"role": "scenario_merge", "scenario_index": idx},
+                                    base_metadata,
+                                ),
+                                group_ids=[merge_group],
+                                font_size=block_font_size,
+                            )
+                        )
+                        if block.underline:
+                            line_y = current_y + block.height - max(2.0, block_font_size * 0.15)
+                            registry.add(
+                                self._line_element(
+                                    element_id=self._stable_id(
+                                        "scenario-merge-underline",
+                                        str(idx),
+                                        str(block_idx),
+                                    ),
+                                    start=Point(content_x, line_y),
+                                    end=Point(content_x + content_width, line_y),
+                                    metadata=self._with_base_metadata(
+                                        {"role": "scenario_merge_underline", "scenario_index": idx},
+                                        base_metadata,
+                                    ),
+                                    stroke_color="#1e1e1e",
+                                    stroke_width=2.0,
+                                    group_ids=[merge_group],
+                                )
+                            )
+                        current_y += block.height
+                elif merge_text:
+                    registry.add(
+                        self._text_block_element(
+                            element_id=self._stable_id("scenario-merge-text", str(idx)),
+                            text=merge_text,
+                            origin=Point(
+                                merge_origin.x + merge_padding, merge_origin.y + merge_padding
+                            ),
+                            width=merge_size.width - (merge_padding * 2),
+                            height=merge_size.height - (merge_padding * 2),
+                            metadata=self._with_base_metadata(
+                                {"role": "scenario_merge", "scenario_index": idx},
+                                base_metadata,
+                            ),
+                            group_ids=[merge_group],
+                            font_size=merge_font_size,
+                        )
+                    )
             procedures_group = self._stable_id("scenario-procedures-group", str(idx))
             procedures_panel_id = self._stable_id("scenario-procedures-panel", str(idx))
             procedures_text_id = self._stable_id("scenario-procedures-text", str(idx))
@@ -928,28 +1025,23 @@ class MarkupToDiagramConverter(ABC):
             if not source_frame or not target_frame:
                 continue
             is_cycle = (source_id, target_id) in cycle_edges
-            edge_type = "procedure_cycle" if is_cycle else "procedure_flow"
-            label = "ЦИКЛ" if is_cycle else "procedure"
+            if source_frame.origin.x == target_frame.origin.x:
+                is_reverse = source_frame.origin.y > target_frame.origin.y
+            else:
+                is_reverse = source_frame.origin.x > target_frame.origin.x
+            cycle_marker = is_cycle and is_reverse
+            edge_type = "procedure_cycle" if cycle_marker else "procedure_flow"
+            label = "ЦИКЛ" if cycle_marker else "procedure"
             curve_direction = None
-            if is_cycle:
-                if source_frame.origin.x <= target_frame.origin.x:
-                    start = Point(
-                        x=source_frame.origin.x + source_frame.size.width,
-                        y=source_frame.origin.y + source_frame.size.height / 2,
-                    )
-                    end = Point(
-                        x=target_frame.origin.x,
-                        y=target_frame.origin.y + target_frame.size.height / 2,
-                    )
-                else:
-                    start = Point(
-                        x=source_frame.origin.x + source_frame.size.width / 2,
-                        y=source_frame.origin.y + source_frame.size.height,
-                    )
-                    end = Point(
-                        x=target_frame.origin.x,
-                        y=target_frame.origin.y + target_frame.size.height / 2,
-                    )
+            if cycle_marker:
+                start = Point(
+                    x=source_frame.origin.x,
+                    y=source_frame.origin.y + source_frame.size.height / 2,
+                )
+                end = Point(
+                    x=target_frame.origin.x + target_frame.size.width,
+                    y=target_frame.origin.y + target_frame.size.height / 2,
+                )
                 dx = end.x - start.x
                 dy = end.y - start.y
                 if dx == 0:
@@ -975,19 +1067,19 @@ class MarkupToDiagramConverter(ABC):
                         "target_procedure_id": target_id,
                         "role": "edge",
                         "edge_type": edge_type,
-                        "is_cycle": is_cycle,
+                        "is_cycle": cycle_marker,
                     },
                     base_metadata,
                 ),
                 start_binding=self._stable_id("frame", source_id),
                 end_binding=self._stable_id("frame", target_id),
                 smoothing=0.1,
-                stroke_style="dashed" if is_cycle else None,
-                stroke_color="#d32f2f" if is_cycle else None,
-                stroke_width=self._procedure_edge_stroke_width(is_cycle),
-                curve_offset=100.0 if is_cycle else None,
-                curve_direction=curve_direction if is_cycle else None,
-                end_arrowhead="arrow" if is_cycle else None,
+                stroke_style="dashed" if cycle_marker else None,
+                stroke_color="#d32f2f" if cycle_marker else None,
+                stroke_width=self._procedure_edge_stroke_width(cycle_marker),
+                curve_offset=100.0 if cycle_marker else None,
+                curve_direction=curve_direction if cycle_marker else None,
+                end_arrowhead="arrow" if cycle_marker else None,
             )
             registry.add(arrow)
             self._register_edge_bindings(arrow, registry)
@@ -1300,6 +1392,9 @@ class MarkupToDiagramConverter(ABC):
         frame_id: str | None,
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
+        stroke_style: str | None = None,
+        stroke_width: float | None = None,
     ) -> Element:
         raise NotImplementedError
 

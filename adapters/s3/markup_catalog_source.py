@@ -9,12 +9,12 @@ from typing import Any, cast
 from botocore.client import BaseClient  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from botocore.response import StreamingBody  # type: ignore[import-untyped]
-from domain.catalog import MarkupSourceItem
-from domain.models import MarkupDocument
-from domain.ports.catalog import MarkupCatalogSource
 
 from adapters.filesystem.markup_utils import strip_markup_comments
 from adapters.s3.s3_client import create_s3_client
+from domain.catalog import MarkupSourceItem
+from domain.models import MarkupDocument
+from domain.ports.catalog import MarkupCatalogSource
 
 
 class S3MarkupCatalogSource(MarkupCatalogSource):

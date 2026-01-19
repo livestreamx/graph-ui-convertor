@@ -205,14 +205,36 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedures_blocks, procedures_text, block_padding = self._component_service_blocks(
             component, procedure_meta
         )
+        merge_blocks, merge_text, merge_block_padding = self._component_merge_blocks(
+            component, procedure_map, procedure_meta, order_index
+        )
+        merge_height = 0.0
+        merge_origin = None
+        merge_size = None
+        if merge_blocks:
+            merge_content_height = sum(block.height for block in merge_blocks)
+            merge_height = max(
+                self.config.scenario_merge_min_height,
+                merge_content_height + self.config.scenario_merge_padding * 2,
+            )
+            merge_origin = Point(
+                x=x_left,
+                y=origin.y + scenario_height + self.config.scenario_merge_gap,
+            )
+            merge_size = Size(scenario_width, merge_height)
+            procedures_origin = Point(
+                x=x_left,
+                y=merge_origin.y + merge_height + self.config.scenario_procedures_gap,
+            )
+        else:
+            procedures_origin = Point(
+                x=x_left,
+                y=origin.y + scenario_height + self.config.scenario_procedures_gap,
+            )
         procedures_content_height = sum(block.height for block in procedures_blocks)
         procedures_height = max(
             self.config.scenario_procedures_min_height,
             procedures_content_height + self.config.scenario_procedures_padding * 2,
-        )
-        procedures_origin = Point(
-            x=x_left,
-            y=origin.y + scenario_height + self.config.scenario_procedures_gap,
         )
         return ScenarioPlacement(
             origin=origin,
@@ -232,6 +254,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             procedures_padding=self.config.scenario_procedures_padding,
             procedures_blocks=tuple(procedures_blocks) if procedures_blocks else None,
             procedures_block_padding=block_padding,
+            merge_origin=merge_origin,
+            merge_size=merge_size,
+            merge_text=merge_text,
+            merge_font_size=self.config.scenario_merge_font_size if merge_blocks else None,
+            merge_padding=self.config.scenario_merge_padding if merge_blocks else None,
+            merge_blocks=tuple(merge_blocks) if merge_blocks else None,
+            merge_block_padding=merge_block_padding if merge_blocks else None,
         )
 
     def _component_service_blocks(
@@ -334,6 +363,85 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             lines.pop()
         return blocks, "\n".join(lines), service_padding
 
+    def _component_merge_blocks(
+        self,
+        component: set[str],
+        procedure_map: Mapping[str, Procedure],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+        order_index: Mapping[str, int],
+    ) -> tuple[list[ScenarioProceduresBlock], str | None, float | None]:
+        merge_ids = [
+            proc_id
+            for proc_id in component
+            if procedure_meta.get(proc_id, {}).get("is_intersection") is True
+        ]
+        if not merge_ids:
+            return [], None, None
+
+        merge_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+        header = "Процедуры мержа:"
+        font_size = self.config.scenario_merge_font_size
+        line_height = font_size * 1.35
+        header_gap = max(6.0, font_size * 0.6)
+        item_gap = max(4.0, font_size * 0.4)
+        item_padding = max(6.0, font_size * 0.4)
+        content_width = self.config.scenario_width - (self.config.scenario_merge_padding * 2)
+        blocks: list[ScenarioProceduresBlock] = []
+
+        header_lines = self._wrap_lines([header], content_width, font_size)
+        blocks.append(
+            ScenarioProceduresBlock(
+                kind="header",
+                text="\n".join(header_lines),
+                height=len(header_lines) * line_height,
+                font_size=font_size,
+                underline=True,
+            )
+        )
+        blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
+
+        lines = [header, ""]
+        for idx, proc_id in enumerate(merge_ids):
+            proc = procedure_map.get(proc_id)
+            if proc and proc.procedure_name:
+                label = f"{proc.procedure_name} ({proc_id})"
+            else:
+                label = proc_id
+            meta = procedure_meta.get(proc_id, {})
+            services: list[str] = []
+            raw_services = meta.get("services")
+            if isinstance(raw_services, list) and raw_services:
+                for service in raw_services:
+                    if not isinstance(service, Mapping):
+                        continue
+                    team = str(service.get("team_name") or "Unknown team")
+                    service_name = str(service.get("service_name") or "Unknown service")
+                    services.append(f"{team}/{service_name}")
+            else:
+                team = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
+                service_name = str(meta.get("service_name") or "Unknown service")
+                services.append(f"{team}/{service_name}")
+            services_text = ", ".join(sorted(set(services), key=lambda name: name.lower()))
+            line = f"- {label}"
+            if services_text:
+                line = f"{line}: {services_text}"
+            wrapped = self._wrap_lines([line], content_width - item_padding * 2, font_size)
+            blocks.append(
+                ScenarioProceduresBlock(
+                    kind="merge_item",
+                    text="\n".join(wrapped),
+                    height=len(wrapped) * line_height + item_padding * 2,
+                    font_size=font_size,
+                )
+            )
+            lines.append(line)
+            if idx < len(merge_ids) - 1:
+                blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=item_gap))
+
+        if lines and not lines[-1]:
+            lines.pop()
+        return blocks, "\n".join(lines), item_padding
+
     def _component_service_groups(
         self,
         component: set[str],
@@ -367,35 +475,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             return [], None
 
         teams_sorted = sorted(team_services.keys(), key=lambda name: name.lower())
-        max_services = 8
-        shown_groups: list[tuple[str, list[tuple[str, str]]]] = []
-        remaining_services = 0
-        remaining_teams: set[str] = set()
-        services_shown = 0
-        for idx, team_name in enumerate(teams_sorted):
-            services = sorted(
-                team_services[team_name].items(),
-                key=lambda item: item[0].lower(),
+        groups = [
+            (
+                team_name,
+                sorted(
+                    team_services[team_name].items(),
+                    key=lambda item: item[0].lower(),
+                ),
             )
-            if services_shown >= max_services:
-                remaining_services += len(services)
-                remaining_teams.add(team_name)
-                continue
-            available = max_services - services_shown
-            if len(services) > available:
-                shown = services[:available]
-                remaining_services += len(services) - available
-                remaining_teams.add(team_name)
-                for tail_team in teams_sorted[idx + 1 :]:
-                    remaining_services += len(team_services[tail_team])
-                    remaining_teams.add(tail_team)
-                shown_groups.append((team_name, shown))
-                services_shown += len(shown)
-                break
-            shown_groups.append((team_name, services))
-            services_shown += len(services)
-
-        summary = None
-        if remaining_services > 0:
-            summary = f"и еще {remaining_services} услуг из {len(remaining_teams)} команд"
-        return shown_groups, summary
+            for team_name in teams_sorted
+        ]
+        return groups, None

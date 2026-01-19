@@ -224,6 +224,9 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         frame_id: str | None,
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
+        stroke_style: str | None = None,
+        stroke_width: float | None = None,
     ) -> Element:
         return self._base_shape(
             element_id=element_id,
@@ -233,9 +236,11 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=size.height,
             frame_id=frame_id,
             extra={
-                "strokeColor": "#1e1e1e",
+                "strokeColor": stroke_color or "#1e1e1e",
                 "backgroundColor": background_color or "#d1ffd6",
                 "fillStyle": "solid",
+                "strokeStyle": stroke_style or "solid",
+                "strokeWidth": stroke_width if stroke_width is not None else 1,
                 "seed": self._rand_seed(),
                 "version": 1,
                 "versionNonce": self._rand_seed(),

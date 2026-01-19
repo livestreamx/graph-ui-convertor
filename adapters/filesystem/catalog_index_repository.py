@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from domain.catalog import CatalogIndex
-from domain.ports.catalog import CatalogIndexRepository
 from filelock import FileLock
 
 from adapters.filesystem.json_utils import load_json, write_json_atomic
+from domain.catalog import CatalogIndex
+from domain.ports.catalog import CatalogIndexRepository
 
 
 class FileSystemCatalogIndexRepository(CatalogIndexRepository):

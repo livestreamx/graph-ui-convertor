@@ -71,7 +71,8 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             color = meta.get("procedure_color")
             if isinstance(color, str) and color:
                 frame_meta["procedure_color"] = color
-            if meta.get("is_intersection") is True:
+            is_intersection = meta.get("is_intersection") is True
+            if is_intersection:
                 frame_meta["is_intersection"] = True
             registry.add(
                 self._frame_element(
@@ -81,6 +82,63 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                     name=label,
                 )
             )
+            if not is_intersection:
+                continue
+            highlight_padding = 18.0
+            highlight_color = "#f5c542"
+            highlight_meta = self._with_base_metadata(
+                {
+                    "procedure_id": frame.procedure_id,
+                    "role": "intersection_highlight",
+                },
+                base_metadata,
+            )
+            registry.add(
+                self._ellipse_element(
+                    element_id=self._stable_id("intersection-oval", frame.procedure_id),
+                    position=Point(
+                        x=frame.origin.x - highlight_padding,
+                        y=frame.origin.y - highlight_padding,
+                    ),
+                    size=Size(
+                        frame.size.width + highlight_padding * 2,
+                        frame.size.height + highlight_padding * 2,
+                    ),
+                    frame_id=None,
+                    metadata=highlight_meta,
+                    background_color="transparent",
+                    stroke_color=highlight_color,
+                    stroke_style="dashed",
+                    stroke_width=2.0,
+                )
+            )
+            pointer_meta = self._with_base_metadata(
+                {
+                    "procedure_id": frame.procedure_id,
+                    "role": "intersection_pointer",
+                },
+                base_metadata,
+            )
+            pointer_start = Point(
+                x=frame.origin.x - highlight_padding * 3.5,
+                y=frame.origin.y - highlight_padding * 2.0,
+            )
+            pointer_end = Point(
+                x=frame.origin.x - highlight_padding * 0.4,
+                y=frame.origin.y + frame.size.height * 0.2,
+            )
+            arrow = self._arrow_element(
+                start=pointer_start,
+                end=pointer_end,
+                label="merge",
+                metadata=pointer_meta,
+                end_binding=frame_id,
+                stroke_color=highlight_color,
+                stroke_width=3.0,
+                end_arrowhead="arrow",
+            )
+            registry.add(arrow)
+            self._register_edge_bindings(arrow, registry)
         return frame_ids
 
     def _build_procedure_stats(

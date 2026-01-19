@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from adapters.s3.markup_repository import S3MarkupRepository
+from app.config import AppSettings
 from domain.ports.catalog import MarkupCatalogSource
 from domain.ports.repositories import MarkupRepository
-
-from app.config import AppSettings
 
 
 def build_markup_source(settings: AppSettings) -> MarkupCatalogSource:

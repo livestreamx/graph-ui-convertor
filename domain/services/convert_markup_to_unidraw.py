@@ -256,6 +256,9 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         frame_id: str | None,
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
+        stroke_style: str | None = None,
+        stroke_width: float | None = None,
     ) -> Element:
         return self._base_element(
             element_id=element_id,
@@ -265,9 +268,10 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             metadata=metadata,
             extra={"shape": _SHAPE_ELLIPSE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
-                stroke_color="#1e1e1e",
+                stroke_color=stroke_color or "#1e1e1e",
                 background_color=background_color or "#d1ffd6",
-                stroke_width=1.0,
+                stroke_width=stroke_width if stroke_width is not None else 1.0,
+                stroke_style=stroke_style,
             ),
         )
 
@@ -616,6 +620,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         stroke_color: str,
         background_color: str,
         stroke_width: float,
+        stroke_style: str | None = None,
     ) -> dict[str, Any]:
         style = self._text_style(
             text_color=_SHAPE_TEXT_COLOR,
@@ -629,7 +634,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 "fs": _UNIDRAW_FILL_STYLE,
                 "sc": stroke_color,
                 "sw": stroke_width,
-                "ss": _UNIDRAW_STROKE_SOLID,
+                "ss": _UNIDRAW_STROKE_DASHED if stroke_style == "dashed" else _UNIDRAW_STROKE_SOLID,
             }
         )
         return style
@@ -792,15 +797,16 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         end_origin, end_size = end_bounds
         if start_origin.x <= end_origin.x:
             return start, end
-        start_point = Point(
-            x=start_origin.x + start_size.width / 2,
-            y=start_origin.y + start_size.height,
+        return (
+            Point(
+                x=start_origin.x,
+                y=start_origin.y + start_size.height / 2,
+            ),
+            Point(
+                x=end_origin.x + end_size.width,
+                y=end_origin.y + end_size.height / 2,
+            ),
         )
-        end_point = Point(
-            x=end_origin.x,
-            y=end_origin.y + end_size.height / 2,
-        )
-        return start_point, end_point
 
     def _next_z_index(self) -> int:
         self._z_index += 1

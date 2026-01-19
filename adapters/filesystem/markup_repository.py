@@ -3,10 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from adapters.filesystem.markup_utils import iter_markup_paths, strip_markup_comments
 from domain.models import MarkupDocument
 from domain.ports.repositories import MarkupRepository
-
-from adapters.filesystem.markup_utils import iter_markup_paths, strip_markup_comments
 
 
 class FileSystemMarkupRepository(MarkupRepository):

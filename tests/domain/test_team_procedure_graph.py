@@ -115,6 +115,64 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
+def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted() -> None:
+    documents = []
+    for idx in range(5):
+        documents.append(
+            MarkupDocument.model_validate(
+                {
+                    "markup_type": "service",
+                    "service_name": f"Alpha Service {idx}",
+                    "team_name": "Alpha",
+                    "procedures": [
+                        {
+                            "proc_id": "shared",
+                            "proc_name": "Shared Flow",
+                            "start_block_ids": ["a"],
+                            "end_block_ids": ["b::end"],
+                            "branches": {"a": ["b"]},
+                        }
+                    ],
+                    "procedure_graph": {"shared": []},
+                }
+            )
+        )
+    for idx in range(4):
+        documents.append(
+            MarkupDocument.model_validate(
+                {
+                    "markup_type": "service",
+                    "service_name": f"Beta Service {idx}",
+                    "team_name": "Beta",
+                    "procedures": [
+                        {
+                            "proc_id": "shared",
+                            "proc_name": "Shared Flow",
+                            "start_block_ids": ["c"],
+                            "end_block_ids": ["d::end"],
+                            "branches": {"c": ["d"]},
+                        }
+                    ],
+                    "procedure_graph": {"shared": []},
+                }
+            )
+        )
+
+    merged = BuildTeamProcedureGraph().build(documents)
+
+    services = merged.procedure_meta["shared"]["services"]
+    assert isinstance(services, list)
+    alpha_colors = {
+        service.get("service_color") for service in services if service.get("team_name") == "Alpha"
+    }
+    beta_colors = {
+        service.get("service_color") for service in services if service.get("team_name") == "Beta"
+    }
+    assert len(alpha_colors) == 1
+    assert len(beta_colors) == 1
+    assert alpha_colors != beta_colors
+
+
 def test_procedure_graph_layout_lists_services_per_component() -> None:
     payload = {
         "markup_type": "service",
@@ -202,6 +260,46 @@ def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None
     assert "Beta" in procedures_text
     assert procedures_text.count("- Payments") == 1
     assert procedures_text.count("- Loans") == 1
+
+
+def test_procedure_graph_layout_includes_merge_panel() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "is_intersection": True,
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                }
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+
+    assert plan.scenarios
+    merge_text = plan.scenarios[0].merge_text or ""
+    assert "Процедуры мержа" in merge_text
+    assert "Shared Flow" in merge_text
+    assert "Alpha/Payments" in merge_text
 
 
 def test_procedure_graph_separator_below_services_block() -> None:
@@ -365,11 +463,18 @@ def test_procedure_graph_unidraw_cycle_edges_follow_offsets() -> None:
         if element.get("type") == "line"
         and element.get("cjm", {}).get("edge_type") == "procedure_cycle"
     ]
-    assert len(cycle_edges) == 2
+    flow_edges = [
+        element
+        for element in scene.elements
+        if element.get("type") == "line"
+        and element.get("cjm", {}).get("edge_type") == "procedure_flow"
+    ]
+    assert len(cycle_edges) == 1
+    assert len(flow_edges) == 1
 
     edge_left_to_right = next(
         edge
-        for edge in cycle_edges
+        for edge in flow_edges
         if edge.get("cjm", {}).get("procedure_id") == "p1"
         and edge.get("cjm", {}).get("target_procedure_id") == "p2"
     )
@@ -391,9 +496,9 @@ def test_procedure_graph_unidraw_cycle_edges_follow_offsets() -> None:
     tips_reverse = edge_right_to_left.get("tipPoints", {})
     start_reverse = tips_reverse.get("start", {}).get("position", {})
     end_reverse = tips_reverse.get("end", {}).get("position", {})
-    assert round(start_reverse.get("x", 0.0), 2) == 0.5
-    assert round(start_reverse.get("y", 0.0), 2) == 1.0
-    assert round(end_reverse.get("x", 0.0), 2) == 0.0
+    assert round(start_reverse.get("x", 0.0), 2) == 0.0
+    assert round(start_reverse.get("y", 0.0), 2) == 0.5
+    assert round(end_reverse.get("x", 0.0), 2) == 1.0
     assert round(end_reverse.get("y", 0.0), 2) == 0.5
 
     assert edge_left_to_right.get("style", {}).get("sw") == 1.0

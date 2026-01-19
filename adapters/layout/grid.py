@@ -43,6 +43,10 @@ class LayoutConfig:
     scenario_procedures_padding: float = 20.0
     scenario_procedures_gap: float = 16.0
     scenario_procedures_min_height: float = 140.0
+    scenario_merge_font_size: float = 15.0
+    scenario_merge_padding: float = 18.0
+    scenario_merge_gap: float = 12.0
+    scenario_merge_min_height: float = 90.0
     scenario_min_height: float = 180.0
 
 
