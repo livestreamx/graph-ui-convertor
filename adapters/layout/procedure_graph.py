@@ -149,7 +149,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
         order_index: dict[str, int],
-        procedure_meta: Mapping[str, Mapping[str, str]] | None,
+        procedure_meta: Mapping[str, Mapping[str, object]] | None,
     ) -> ScenarioPlacement | None:
         procedure_meta = procedure_meta or {}
         component_frames = [
@@ -249,7 +249,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         component: set[str],
         procedure_map: Mapping[str, Procedure],
         frame_lookup: Mapping[str, FramePlacement],
-        procedure_meta: Mapping[str, Mapping[str, str]],
+        procedure_meta: Mapping[str, Mapping[str, object]],
     ) -> list[str]:
         service_entries: dict[tuple[str, str], list[tuple[float, str]]] = {}
         for proc_id in sorted(component):
@@ -259,10 +259,24 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             frame = frame_lookup.get(proc_id)
             x_pos = frame.origin.x if frame else 0.0
             meta = procedure_meta.get(proc_id, {})
-            team_name = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
-            service_name = str(meta.get("service_name") or "Unknown service")
             label = proc.procedure_name or proc.procedure_id
-            service_entries.setdefault((team_name, service_name), []).append((x_pos, label))
+            services = meta.get("services")
+            if isinstance(services, list) and services:
+                seen: set[tuple[str, str]] = set()
+                for service in services:
+                    if not isinstance(service, Mapping):
+                        continue
+                    team_name = str(service.get("team_name") or "Unknown team")
+                    service_name = str(service.get("service_name") or "Unknown service")
+                    key = (team_name, service_name)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    service_entries.setdefault(key, []).append((x_pos, label))
+            else:
+                team_name = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
+                service_name = str(meta.get("service_name") or "Unknown service")
+                service_entries.setdefault((team_name, service_name), []).append((x_pos, label))
 
         if not service_entries:
             return []

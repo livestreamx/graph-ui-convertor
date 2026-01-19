@@ -305,6 +305,33 @@ def test_unidraw_converter_curves_non_horizontal_edges() -> None:
         assert abs(end_normal.get("y", 0.0)) < 0.01
 
 
+def test_unidraw_edges_render_behind_shapes() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene = cast(
+        dict[str, Any],
+        MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup).to_dict(),
+    )
+    elements = cast(list[dict[str, Any]], scene["elements"])
+    edges = [element for element in elements if element.get("cjm", {}).get("role") == "edge"]
+    non_edges = [element for element in elements if element.get("cjm", {}).get("role") != "edge"]
+    assert edges
+    assert non_edges
+    assert max(edge.get("zIndex", 0) for edge in edges) < min(
+        element.get("zIndex", 0) for element in non_edges
+    )
+
+
 def test_unidraw_converter_frame_title_font_size() -> None:
     payload = {
         "markup_type": "service",

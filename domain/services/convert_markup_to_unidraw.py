@@ -81,6 +81,17 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_unidraw_links(elements, self.link_templates)
+        edges: list[Element] = []
+        rest: list[Element] = []
+        for element in elements:
+            if element.get("cjm", {}).get("role") == "edge":
+                edges.append(element)
+            else:
+                rest.append(element)
+        if edges:
+            elements[:] = edges + rest
+            for idx, element in enumerate(elements, start=1):
+                element["zIndex"] = idx
 
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
         position = element.get("position")
@@ -122,6 +133,10 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         metadata: Metadata,
         name: str | None = None,
     ) -> Element:
+        style = self._frame_style()
+        background = metadata.get("procedure_color")
+        if isinstance(background, str) and background:
+            style["fc"] = background
         return self._base_element(
             element_id=element_id,
             type_name="frame",
@@ -133,7 +148,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 "isExposed": True,
                 "children": [],
             },
-            style=self._frame_style(),
+            style=style,
             z_index=-1,
         )
 

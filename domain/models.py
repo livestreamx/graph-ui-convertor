@@ -161,7 +161,7 @@ class MarkupDocument(BaseModel):
     team_name: str | None = None
     procedures: list[Procedure] = Field(default_factory=list)
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
-    procedure_meta: dict[str, dict[str, str]] = Field(default_factory=dict)
+    procedure_meta: dict[str, dict[str, object]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

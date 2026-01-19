@@ -27,7 +27,9 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             for proc in document.procedures
             if proc.procedure_name
         }
-        frame_ids = self._build_frames(plan.frames, registry, base_metadata, proc_name_lookup)
+        frame_ids = self._build_procedure_frames(
+            document, plan.frames, registry, base_metadata, proc_name_lookup
+        )
         self._build_procedure_stats(document, plan.frames, frame_ids, registry, base_metadata)
         self._build_separators(plan.separators, registry, base_metadata)
         self._build_scenarios(plan.scenarios, registry, base_metadata)
@@ -38,8 +40,48 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         app_state = self._build_app_state(registry.elements)
         return self._build_document(registry.elements, app_state)
 
+    def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
+        return 1.0
+
     def _format_procedure_label(self, procedure_name: str | None, procedure_id: str) -> str:
         return procedure_name or procedure_id
+
+    def _build_procedure_frames(
+        self,
+        document: MarkupDocument,
+        frames: list[FramePlacement],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+        proc_name_lookup: dict[str, str],
+    ) -> dict[str, str]:
+        frame_ids: dict[str, str] = {}
+        procedure_meta = document.procedure_meta or {}
+        for frame in frames:
+            frame_id = self._stable_id("frame", frame.procedure_id)
+            frame_ids[frame.procedure_id] = frame_id
+            procedure_name = proc_name_lookup.get(frame.procedure_id)
+            label = self._format_procedure_label(procedure_name, frame.procedure_id)
+            frame_meta: dict[str, object] = {
+                "procedure_id": frame.procedure_id,
+                "role": "frame",
+            }
+            if procedure_name:
+                frame_meta["procedure_name"] = procedure_name
+            meta = procedure_meta.get(frame.procedure_id, {})
+            color = meta.get("procedure_color")
+            if isinstance(color, str) and color:
+                frame_meta["procedure_color"] = color
+            if meta.get("is_intersection") is True:
+                frame_meta["is_intersection"] = True
+            registry.add(
+                self._frame_element(
+                    element_id=frame_id,
+                    frame=frame,
+                    metadata=self._with_base_metadata(frame_meta, base_metadata),
+                    name=label,
+                )
+            )
+        return frame_ids
 
     def _build_procedure_stats(
         self,

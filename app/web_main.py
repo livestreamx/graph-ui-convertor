@@ -106,7 +106,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     )
     procedure_graph_layout = ProcedureGraphLayoutEngine(
         LayoutConfig(
-            block_size=Size(320.0, 180.0),
+            block_size=Size(320.0, 120.0),
             gap_y=120.0,
             lane_gap=240.0,
         )
@@ -217,9 +217,19 @@ def create_app(settings: AppSettings) -> FastAPI:
         _, team_options = build_filter_options(index_data.items, index_data.unknown_value)
         team_lookup = dict(team_options)
         team_ids = normalize_team_ids(team_ids)
+        team_counts: dict[str, int] = {}
+        for item in index_data.items:
+            team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
         selected_teams = [
-            {"id": team_id, "label": team_lookup.get(team_id, team_id)} for team_id in team_ids
+            {
+                "id": team_id,
+                "label": team_lookup.get(team_id, team_id),
+                "markup_count": team_counts.get(team_id, 0),
+            }
+            for team_id in team_ids
         ]
+        selected_team_count = len(team_ids)
+        selected_markups_count = sum(team_counts.get(team_id, 0) for team_id in team_ids)
 
         diagram_ready = False
         diagram_open_url = None
@@ -266,6 +276,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_options": team_options,
                 "team_ids": team_ids,
                 "selected_teams": selected_teams,
+                "selected_team_count": selected_team_count,
+                "selected_markups_count": selected_markups_count,
                 "team_query": team_query,
                 "error_message": error_message,
             },

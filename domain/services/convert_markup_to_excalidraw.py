@@ -41,6 +41,16 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_excalidraw_links(elements, self.link_templates)
+        edges: list[Element] = []
+        rest: list[Element] = []
+        for element in elements:
+            meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {}).get("role")
+            if element.get("type") == "arrow" or meta == "edge":
+                edges.append(element)
+            else:
+                rest.append(element)
+        if edges:
+            elements[:] = edges + rest
 
     def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         arrow_id = arrow.get("id")
@@ -68,6 +78,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         metadata: Metadata,
         name: str | None = None,
     ) -> Element:
+        background = metadata.get("procedure_color")
+        background_color = background if isinstance(background, str) else "transparent"
         return self._base_shape(
             element_id=element_id,
             type_name="frame",
@@ -77,7 +89,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             extra={
                 "name": name or frame.procedure_id,
                 "strokeColor": "#1e1e1e",
-                "backgroundColor": "transparent",
+                "backgroundColor": background_color,
                 "fillStyle": "solid",
                 "seed": self._rand_seed(),
                 "version": 1,

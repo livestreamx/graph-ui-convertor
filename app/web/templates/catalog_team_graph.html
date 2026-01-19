@@ -11,7 +11,53 @@
 
   <section class="team-graph-page">
     <div class="detail-card team-graph-card">
-      <h3>Build graphs</h3>
+      <div class="team-graph-header">
+        <div>
+          <h3>Build graphs</h3>
+          <p class="team-graph-subtitle">
+            Select teams to merge their <code>procedure_graph</code> into a single overview.
+          </p>
+        </div>
+        <div class="team-graph-header-actions">
+          <button class="primary-button" type="submit" form="team-graph-form">Build graphs</button>
+          <div class="team-graph-help">
+            <button class="team-graph-help-button" type="button" aria-label="Teams in graph">?</button>
+            <div class="team-graph-help-popover">
+              <div class="team-graph-help-title">Teams in graph</div>
+              {% if selected_teams %}
+                <div class="team-graph-summary">
+                  <div class="team-graph-summary-item">
+                    <span class="team-graph-summary-value">{{ selected_team_count }}</span>
+                    <span class="team-graph-summary-label">teams</span>
+                  </div>
+                  <div class="team-graph-summary-item">
+                    <span class="team-graph-summary-value">{{ selected_markups_count }}</span>
+                    <span class="team-graph-summary-label">markups merged</span>
+                  </div>
+                </div>
+              {% endif %}
+              <div class="team-chip-grid team-chip-grid-compact">
+                {% if selected_teams %}
+                  {% for team in selected_teams %}
+                    <div class="team-chip">
+                      <div class="team-chip-name">{{ team.label }}</div>
+                      <div class="team-chip-id">{{ team.id }}</div>
+                      <div class="team-chip-count">
+                        {{ team.markup_count }} markup{% if team.markup_count != 1 %}s{% endif %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                {% else %}
+                  <div class="team-chip-empty">Select teams to build a combined graph.</div>
+                {% endif %}
+              </div>
+              <div class="team-graph-help-hint">
+                Builds a procedure-level graph using <code>procedure_graph</code> across selected teams.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <form class="team-graph-form" id="team-graph-form" action="/catalog/teams/graph" method="get">
         <label class="filter-control">
           <span>Select teams</span>
@@ -29,37 +75,53 @@
           name="team_ids"
           value="{{ team_ids | join(',') }}"
         />
-        <div class="team-graph-actions">
-          <button class="primary-button" type="submit">Build graphs</button>
-        </div>
       </form>
-      <div class="team-graph-selected">
-        <div class="team-graph-selected-title">Teams in graph</div>
-        <div class="team-chip-grid">
-          {% if selected_teams %}
-            {% for team in selected_teams %}
-              <div class="team-chip">
-                <div class="team-chip-name">{{ team.label }}</div>
-                <div class="team-chip-id">{{ team.id }}</div>
-              </div>
-            {% endfor %}
-          {% else %}
-            <div class="team-chip-empty">Select teams to build a combined graph.</div>
-          {% endif %}
-        </div>
-      </div>
-      <div class="team-graph-hint">
-        Builds a procedure-level graph using <code>procedure_graph</code> across selected teams.
-      </div>
     </div>
 
-    <div class="detail-card">
+    <div class="detail-card team-graph-result-card">
       <h3>Open the diagram</h3>
+      <div class="team-graph-result">
+        {% if diagram_ready %}
+          <div class="team-graph-result-header">
+            <span class="team-graph-result-status team-graph-result-ready">Merge ready</span>
+            {% if selected_team_count %}
+              <span class="team-graph-result-meta">
+                {{ selected_team_count }} teams · {{ selected_markups_count }} markups merged
+              </span>
+            {% endif %}
+          </div>
+          <div class="team-graph-result-body">
+            Open the team graph in {{ diagram_label }} or download the file for manual import and
+            editing.
+          </div>
+          {% if open_mode == "manual" %}
+            <div class="team-graph-result-note">
+              Scene is too large for URL sharing. Use Download + Import.
+            </div>
+          {% elif open_mode == "local_storage" %}
+            <div class="team-graph-result-note">
+              Scene is injected via local storage for same-origin {{ diagram_label }}.
+            </div>
+          {% else %}
+            <div class="team-graph-result-note">
+              If the scene does not load, import the downloaded file manually.
+            </div>
+          {% endif %}
+        {% elif error_message %}
+          <div class="team-graph-result-header">
+            <span class="team-graph-result-status team-graph-result-error">Merge blocked</span>
+          </div>
+          <div class="team-graph-result-body">{{ error_message }}</div>
+        {% else %}
+          <div class="team-graph-result-header">
+            <span class="team-graph-result-status team-graph-result-idle">Waiting for input</span>
+          </div>
+          <div class="team-graph-result-body">
+            Select teams and click Build graphs to generate a diagram.
+          </div>
+        {% endif %}
+      </div>
       {% if diagram_ready %}
-        <p>
-          Open the team graph in {{ diagram_label }} or download the file for manual import and
-          editing.
-        </p>
         <div class="button-row">
           <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">
             Open {{ diagram_label }}
@@ -68,17 +130,6 @@
             Download {{ diagram_ext }}
           </a>
         </div>
-        {% if open_mode == "manual" %}
-          <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
-        {% elif open_mode == "local_storage" %}
-          <p class="note">Scene is injected via local storage for same-origin {{ diagram_label }}.</p>
-        {% else %}
-          <p class="note">If the scene does not load, import the downloaded file manually.</p>
-        {% endif %}
-      {% else %}
-        <p class="note">
-          {{ error_message or "Select teams and click Build graphs to generate a diagram." }}
-        </p>
       {% endif %}
     </div>
   </section>

@@ -222,7 +222,9 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 1. Загрузите markup в S3 (локально: `make s3-seed`).
 2. Откройте каталог: `cjm catalog serve` и перейдите на `/catalog`.
 3. Используйте фильтры по критичности и команде (отображается `team_name`).
-4. Перейдите на `/catalog/teams/graph`, выберите команды и нажмите Build graphs для общего графа процедур на основе `procedure_graph`.
+4. В каталоге есть отдельный раздел для кросс-командных графов (кнопка Open builder): перейдите на
+   `/catalog/teams/graph`, выберите команды и нажмите Build graphs для общего графа процедур на
+   основе `procedure_graph`.
 5. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
 6. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
 7. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.

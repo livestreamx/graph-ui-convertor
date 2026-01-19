@@ -144,6 +144,9 @@ class MarkupToDiagramConverter(ABC):
     def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         return
 
+    def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
+        return 2 if is_cycle else None
+
     @abstractmethod
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
         raise NotImplementedError
@@ -849,7 +852,7 @@ class MarkupToDiagramConverter(ABC):
                 smoothing=0.1,
                 stroke_style="dashed" if is_cycle else None,
                 stroke_color="#d32f2f" if is_cycle else None,
-                stroke_width=2 if is_cycle else None,
+                stroke_width=self._procedure_edge_stroke_width(is_cycle),
                 curve_offset=100.0 if is_cycle else None,
                 curve_direction=curve_direction if is_cycle else None,
                 end_arrowhead="arrow" if is_cycle else None,
