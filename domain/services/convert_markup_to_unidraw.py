@@ -37,6 +37,7 @@ _UNIDRAW_LINE_END = 0
 _UNIDRAW_LINE_END_BLOCK_ARROW = 2
 _UNIDRAW_LINE_END_PROCEDURE_ARROW = 14
 _UNIDRAW_LINE_CAP = 1
+_UNIDRAW_PROCEDURE_EDGE_STROKE_WIDTH = 2.0
 _SHAPE_RECTANGLE = "1"
 _SHAPE_ELLIPSE = "5"
 _FRAME_FONT_SIZE = 20
@@ -80,6 +81,17 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_unidraw_links(elements, self.link_templates)
+        edges: list[Element] = []
+        rest: list[Element] = []
+        for element in elements:
+            if element.get("cjm", {}).get("role") == "edge":
+                edges.append(element)
+            else:
+                rest.append(element)
+        if edges:
+            elements[:] = edges + rest
+            for idx, element in enumerate(elements, start=1):
+                element["zIndex"] = idx
 
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
         position = element.get("position")
@@ -121,6 +133,10 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         metadata: Metadata,
         name: str | None = None,
     ) -> Element:
+        style = self._frame_style()
+        background = metadata.get("procedure_color")
+        if isinstance(background, str) and background:
+            style["fc"] = background
         return self._base_element(
             element_id=element_id,
             type_name="frame",
@@ -132,7 +148,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 "isExposed": True,
                 "children": [],
             },
-            style=self._frame_style(),
+            style=style,
             z_index=-1,
         )
 
@@ -191,6 +207,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         size: Size,
         metadata: Metadata,
         group_ids: list[str],
+        background_color: str | None = None,
+        stroke_color: str | None = None,
     ) -> Element:
         return self._base_element(
             element_id=element_id,
@@ -201,8 +219,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             group_ids=group_ids,
             extra={"shape": _SHAPE_RECTANGLE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
-                stroke_color="#7a8aa8",
-                background_color="#e9f0fb",
+                stroke_color=stroke_color or "#7a8aa8",
+                background_color=background_color or "#e9f0fb",
                 stroke_width=1.0,
             ),
         )
@@ -497,9 +515,16 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         dy = end_point.y - start_point.y
         position, size = self._line_bounds(start_point, end_point)
         direction = self._unit_vector(dx, dy)
+        start_normal, end_normal = self._connector_normals(
+            dx,
+            dy,
+            direction,
+            start_binding=start_binding,
+            end_binding=end_binding,
+        )
         tip_points = {
-            "start": self._bound_tip_point(start_point, start_binding, direction),
-            "end": self._bound_tip_point(end_point, end_binding, (-direction[0], -direction[1])),
+            "start": self._bound_tip_point(start_point, start_binding, start_normal),
+            "end": self._bound_tip_point(end_point, end_binding, end_normal),
         }
         return self._base_element(
             element_id=arrow_id,
@@ -513,7 +538,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             },
             style=self._line_style(
                 stroke_color=stroke_color or "#1e1e1e",
-                stroke_width=stroke_width if stroke_width is not None else 1.0,
+                stroke_width=self._arrow_stroke_width(stroke_width, metadata),
                 stroke_style=stroke_style or "solid",
                 line_type=_UNIDRAW_LINE_TYPE_CONNECTOR,
                 line_end=self._arrow_line_end(metadata),
@@ -724,6 +749,29 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             return _UNIDRAW_LINE_END_PROCEDURE_ARROW
         return _UNIDRAW_LINE_END_BLOCK_ARROW
 
+    def _arrow_stroke_width(self, stroke_width: float | None, metadata: Metadata) -> float:
+        if stroke_width is not None:
+            return stroke_width
+        edge_type = metadata.get("edge_type") if metadata else None
+        if edge_type in {"procedure_flow", "procedure_cycle"}:
+            return _UNIDRAW_PROCEDURE_EDGE_STROKE_WIDTH
+        return 1.0
+
+    def _connector_normals(
+        self,
+        dx: float,
+        dy: float,
+        direction: tuple[float, float],
+        start_binding: str | None,
+        end_binding: str | None,
+    ) -> tuple[tuple[float, float], tuple[float, float]]:
+        if not start_binding or not end_binding:
+            return direction, (-direction[0], -direction[1])
+        if abs(dy) <= 1.0:
+            return direction, (-direction[0], -direction[1])
+        curve_dir = 1.0 if dx >= 0 else -1.0
+        return (curve_dir, 0.0), (-curve_dir, 0.0)
+
     def _procedure_cycle_points(
         self,
         start: Point,
@@ -742,11 +790,11 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             return start, end
         start_origin, start_size = start_bounds
         end_origin, end_size = end_bounds
-        if start_origin.x < end_origin.x:
+        if start_origin.x <= end_origin.x:
             return start, end
         start_point = Point(
             x=start_origin.x + start_size.width / 2,
-            y=start_origin.y,
+            y=start_origin.y + start_size.height,
         )
         end_point = Point(
             x=end_origin.x,

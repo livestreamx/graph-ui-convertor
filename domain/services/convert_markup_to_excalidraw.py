@@ -41,6 +41,16 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_excalidraw_links(elements, self.link_templates)
+        edges: list[Element] = []
+        rest: list[Element] = []
+        for element in elements:
+            meta = element.get("customData", {}).get(CUSTOM_DATA_KEY, {}).get("role")
+            if element.get("type") == "arrow" or meta == "edge":
+                edges.append(element)
+            else:
+                rest.append(element)
+        if edges:
+            elements[:] = edges + rest
 
     def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         arrow_id = arrow.get("id")
@@ -68,6 +78,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         metadata: Metadata,
         name: str | None = None,
     ) -> Element:
+        background = metadata.get("procedure_color")
+        background_color = background if isinstance(background, str) else "transparent"
         return self._base_shape(
             element_id=element_id,
             type_name="frame",
@@ -77,7 +89,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             extra={
                 "name": name or frame.procedure_id,
                 "strokeColor": "#1e1e1e",
-                "backgroundColor": "transparent",
+                "backgroundColor": background_color,
                 "fillStyle": "solid",
                 "seed": self._rand_seed(),
                 "version": 1,
@@ -152,6 +164,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         size: Size,
         metadata: Metadata,
         group_ids: list[str],
+        background_color: str | None = None,
+        stroke_color: str | None = None,
     ) -> Element:
         return self._base_shape(
             element_id=element_id,
@@ -161,8 +175,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=size.height,
             group_ids=group_ids,
             extra={
-                "strokeColor": "#7a8aa8",
-                "backgroundColor": "#e9f0fb",
+                "strokeColor": stroke_color or "#7a8aa8",
+                "backgroundColor": background_color or "#e9f0fb",
                 "fillStyle": "solid",
                 "roughness": 0,
                 "seed": self._rand_seed(),

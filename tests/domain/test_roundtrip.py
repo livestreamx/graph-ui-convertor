@@ -283,3 +283,29 @@ def test_arrow_bindings_attach_to_elements() -> None:
             assert target is not None
             bound = {item.get("id") for item in target.get("boundElements", [])}
             assert arrow.get("id") in bound
+
+
+def test_excalidraw_edges_render_behind_shapes() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    edge_indices = [
+        idx for idx, element in enumerate(excal.elements) if element.get("type") == "arrow"
+    ]
+    non_edge_indices = [
+        idx for idx, element in enumerate(excal.elements) if element.get("type") != "arrow"
+    ]
+    assert edge_indices
+    assert non_edge_indices
+    assert max(edge_indices) < min(non_edge_indices)

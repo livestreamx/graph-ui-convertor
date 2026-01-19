@@ -107,6 +107,13 @@ catalog:
 ## Catalog UI
 
 - Detail view includes downloads for `.excalidraw`/`.unidraw` and the original `markup.json`.
+- The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
+  open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
+  `/api/teams/graph`, `team_ids` supports comma-separated values).
+- The cross-team builder keeps selection details under the help tooltip next to Build graphs and
+  colors procedures by service; shared procedures are highlighted in light red.
+- Cross-team graph downloads append the selected `team_ids` to the filename (for example
+  `team-graph_alpha_beta.excalidraw`).
 
 ## Dot-path resolution
 

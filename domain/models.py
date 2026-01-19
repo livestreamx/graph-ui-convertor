@@ -161,6 +161,7 @@ class MarkupDocument(BaseModel):
     team_name: str | None = None
     procedures: list[Procedure] = Field(default_factory=list)
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
+    procedure_meta: dict[str, dict[str, object]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -301,6 +302,18 @@ class ScenarioPlacement:
     procedures_text: str
     procedures_font_size: float
     procedures_padding: float
+    procedures_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
+    procedures_block_padding: float | None = None
+
+
+@dataclass(frozen=True)
+class ScenarioProceduresBlock:
+    kind: str
+    text: str
+    height: float
+    color: str | None = None
+    font_size: float | None = None
+    underline: bool = False
 
 
 @dataclass(frozen=True)
