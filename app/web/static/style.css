@@ -569,6 +569,8 @@ main {
   align-items: center;
   justify-content: center;
   cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    transform 0.2s ease;
 }
 
 .primary-button {
@@ -577,10 +579,23 @@ main {
   font-weight: 600;
 }
 
+.primary-button:hover {
+  background: var(--accent);
+  color: #1c0f05;
+  transform: translateY(-1px);
+}
+
 .ghost-button {
   background: transparent;
   border-color: rgba(255, 255, 255, 0.2);
   color: var(--text);
+}
+
+.ghost-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  transform: translateY(-1px);
 }
 
 .detail-header {

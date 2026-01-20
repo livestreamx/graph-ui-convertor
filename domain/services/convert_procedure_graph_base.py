@@ -175,6 +175,9 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 ("branch", branch_count),
                 ("end", end_count),
             ]
+            stats = [(stat_key, value) for stat_key, value in stats if value > 0]
+            if not stats:
+                continue
             total_width = stat_size.width * len(stats) + stat_gap * (len(stats) - 1)
             start_x = frame.origin.x + (frame.size.width - total_width) / 2
             stat_y = frame.origin.y + frame.size.height - stat_size.height - bottom_padding
