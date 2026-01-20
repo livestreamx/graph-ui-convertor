@@ -1,5 +1,11 @@
 {
   "markup_type": "service",
+  "finedog_unit_meta": {
+    "service_name": "Branch Links Flow",
+    "criticality_level": "C1",
+    "team_id": "team-beta",
+    "team_name": "Risk Ops"
+  },
   "procedures": [
     {
       "procedure_id": "proc_links_start",

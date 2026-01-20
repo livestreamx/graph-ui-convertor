@@ -1,5 +1,11 @@
 {
   "markup_type": "service",
+  "finedog_unit_meta": {
+    "service_name": "Multi Chain Demo",
+    "criticality_level": "B1",
+    "team_id": "team-gamma",
+    "team_name": "Support Ops"
+  },
   "procedures": [
     {
       "procedure_id": "proc_chain_one",

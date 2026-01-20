@@ -3,7 +3,10 @@ from __future__ import annotations
 from adapters.layout.grid import LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from domain.models import MarkupDocument, Size
-from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
+from domain.services.build_team_procedure_graph import (
+    _SERVICE_COLORS,
+    BuildTeamProcedureGraph,
+)
 from domain.services.convert_procedure_graph_to_excalidraw import (
     ProcedureGraphToExcalidrawConverter,
 )
@@ -189,15 +192,91 @@ def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted
 
     services = merged.procedure_meta["shared"]["services"]
     assert isinstance(services, list)
-    alpha_colors = {
-        service.get("service_color") for service in services if service.get("team_name") == "Alpha"
+    colors = {service.get("service_color") for service in services}
+    assert colors == set(_SERVICE_COLORS)
+
+
+def test_procedure_graph_panel_colors_match_graph() -> None:
+    payload_alpha = {
+        "markup_type": "service",
+        "service_name": "Payments",
+        "team_name": "Alpha",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Authorize",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p1": []},
     }
-    beta_colors = {
-        service.get("service_color") for service in services if service.get("team_name") == "Beta"
+    payload_beta = {
+        "markup_type": "service",
+        "service_name": "Refunds",
+        "team_name": "Beta",
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
     }
-    assert len(alpha_colors) == 1
-    assert len(beta_colors) == 1
-    assert alpha_colors != beta_colors
+    document = BuildTeamProcedureGraph().build(
+        [
+            MarkupDocument.model_validate(payload_alpha),
+            MarkupDocument.model_validate(payload_beta),
+        ]
+    )
+
+    service_colors: dict[str, str] = {}
+    for meta in document.procedure_meta.values():
+        services = meta.get("services")
+        if not isinstance(services, list):
+            continue
+        if len(services) == 1 and isinstance(services[0], dict):
+            color = services[0].get("service_color")
+            if isinstance(color, str):
+                assert meta.get("procedure_color") == color
+        for service in services:
+            if not isinstance(service, dict):
+                continue
+            service_name = service.get("service_name")
+            color = service.get("service_color")
+            if isinstance(service_name, str) and isinstance(color, str):
+                service_colors[service_name] = color
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    service_blocks = []
+    for scenario in plan.scenarios:
+        service_blocks.extend(
+            [block for block in (scenario.procedures_blocks or ()) if block.kind == "service"]
+        )
+    block_colors = {block.text: block.color for block in service_blocks}
+    for service_name, color in service_colors.items():
+        assert block_colors.get(service_name) == color
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    for element in excal.elements:
+        meta = element.get("customData", {}).get("cjm", {})
+        if element.get("type") != "frame":
+            continue
+        proc_id = meta.get("procedure_id")
+        if not isinstance(proc_id, str):
+            continue
+        proc_meta = document.procedure_meta.get(proc_id, {})
+        services = proc_meta.get("services")
+        if not isinstance(services, list) or len(services) != 1:
+            continue
+        service_color = services[0].get("service_color")
+        if isinstance(service_color, str):
+            assert element.get("backgroundColor") == service_color
 
 
 def test_procedure_graph_layout_lists_services_per_component() -> None:
@@ -420,6 +499,32 @@ def test_procedure_graph_converter_adds_stats_and_label() -> None:
     assert "2 starts" in stat_texts
     assert "3 branches" in stat_texts
     assert "1 end" in stat_texts
+
+
+def test_procedure_graph_converter_skips_zero_stats() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "proc_zero",
+                "proc_name": "Zero Stats",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload)
+    layout = ProcedureGraphLayoutEngine(LayoutConfig(block_size=Size(260.0, 140.0)))
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    stats = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "procedure_stat"
+    ]
+    assert not stats
 
 
 def test_procedure_graph_converter_uses_procedure_color() -> None:
