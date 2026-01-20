@@ -1,0 +1,63 @@
+{
+  "markup_type": "service",
+  "finedog_unit_meta": {
+    "service_name": "Fraud Screening",
+    "criticality_level": "BC",
+    "team_id": "team-beta",
+    "team_name": "Risk Ops"
+  },
+  "procedures": [
+    {
+      "procedure_id": "fraud_score",
+      "procedure_name": "Fraud Score",
+      "start_block_ids": ["fs_start"],
+      "end_block_ids": ["fs_done::end"],
+      "branches": {
+        "fs_start": ["fs_model"],
+        "fs_model": ["fs_done"]
+      },
+      "block_id_to_block_name": {
+        "fs_start": "Collect signals",
+        "fs_model": "Run model",
+        "fs_done": "Score stored"
+      }
+    },
+    {
+      "procedure_id": "kyc_check",
+      "procedure_name": "KYC Check",
+      "start_block_ids": ["rk_start"],
+      "end_block_ids": ["rk_done::intermediate"],
+      "branches": {
+        "rk_start": ["rk_doc", "rk_manual"],
+        "rk_doc": ["rk_done"],
+        "rk_manual": ["rk_done"]
+      },
+      "block_id_to_block_name": {
+        "rk_start": "Request docs",
+        "rk_doc": "Verify files",
+        "rk_manual": "Manual confirmation",
+        "rk_done": "KYC reviewed"
+      }
+    },
+    {
+      "procedure_id": "manual_review",
+      "procedure_name": "Manual Review",
+      "start_block_ids": ["mr_start"],
+      "end_block_ids": ["mr_close::postpone"],
+      "branches": {
+        "mr_start": ["mr_investigate"],
+        "mr_investigate": ["mr_close"]
+      },
+      "block_id_to_block_name": {
+        "mr_start": "Queue case",
+        "mr_investigate": "Investigate",
+        "mr_close": "Decision pending"
+      }
+    }
+  ],
+  "procedure_graph": {
+    "fraud_score": ["kyc_check"],
+    "kyc_check": ["manual_review"],
+    "manual_review": []
+  }
+}

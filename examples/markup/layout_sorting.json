@@ -1,5 +1,11 @@
 {
   "markup_type": "service",
+  "finedog_unit_meta": {
+    "service_name": "Layout Sorting Suite",
+    "criticality_level": "B1",
+    "team_id": "team-alpha",
+    "team_name": "Core Payments"
+  },
   "procedures": [
     {
       "procedure_id": "proc_end_markers",

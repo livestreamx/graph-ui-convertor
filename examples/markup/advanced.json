@@ -1,5 +1,11 @@
 {
-  "markup_type": "system_task_processor",
+  "markup_type": "service",
+  "finedog_unit_meta": {
+    "service_name": "Parallel Merge Flow",
+    "criticality_level": "C2",
+    "team_id": "team-beta",
+    "team_name": "Risk Ops"
+  },
   "procedures": [
     {
       "procedure_id": "proc_alpha",
