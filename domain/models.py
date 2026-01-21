@@ -27,6 +27,16 @@ def normalize_end_type(value: str | None) -> str | None:
     return candidate if candidate in END_TYPE_VALUES else None
 
 
+def normalize_finedog_unit_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    return str(value)
+
+
 def split_end_block_id(raw: str) -> tuple[str, str]:
     base = str(raw)
     if END_BLOCK_SEPARATOR in base:
@@ -164,6 +174,11 @@ class MarkupDocument(BaseModel):
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
     block_graph: dict[str, list[str]] = Field(default_factory=dict)
     procedure_meta: dict[str, dict[str, object]] = Field(default_factory=dict)
+
+    @field_validator("finedog_unit_id", mode="before")
+    @classmethod
+    def normalize_finedog_unit_id_field(cls, value: Any) -> str | None:
+        return normalize_finedog_unit_id(value)
 
     @model_validator(mode="before")
     @classmethod

@@ -32,7 +32,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - `::postpone`: issue is postponed (handoff between bot/agents/support lines).
 - `branches` – adjacency: key = source block, values = target blocks.
 - `finedog_unit_meta.service_name` – markup display name.
-- `finedog_unit_id` – external unit identifier for service links.
+- `finedog_unit_id` – external unit identifier for service links (string or integer; integers are coerced to strings).
 - `procedure_graph` – adjacency between procedures.
 - `block_graph` – adjacency between block ids; when provided for service diagrams, graph edges are
   drawn between blocks instead of frames.

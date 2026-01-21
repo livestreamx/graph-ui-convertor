@@ -57,7 +57,7 @@ def test_links_applied_to_procedure_and_block_elements() -> None:
 def test_links_applied_to_service_title() -> None:
     payload = {
         "markup_type": "service",
-        "finedog_unit_id": "unit-42",
+        "finedog_unit_id": 42,
         "finedog_unit_meta": {"service_name": "Billing Flow"},
         "procedures": [
             {
@@ -79,7 +79,7 @@ def test_links_applied_to_service_title() -> None:
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title_panel"
     )
-    assert title_panel.get("link") == "https://example.com/units?unit_id=unit-42"
+    assert title_panel.get("link") == "https://example.com/units?unit_id=42"
 
 
 def test_links_applied_to_procedure_graph_service_and_team_panels() -> None:
@@ -108,7 +108,7 @@ def test_links_applied_to_procedure_graph_service_and_team_panels() -> None:
                         "team_name": "Team Alpha",
                         "team_id": "team-alpha",
                         "service_name": "Checkout",
-                        "finedog_unit_id": "unit-99",
+                        "finedog_unit_id": 99,
                         "service_color": "#d9f5ff",
                     }
                 ],
@@ -135,5 +135,5 @@ def test_links_applied_to_procedure_graph_service_and_team_panels() -> None:
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_procedures_team"
     )
-    assert service_panel.get("link") == "https://example.com/units?unit_id=unit-99"
+    assert service_panel.get("link") == "https://example.com/units?unit_id=99"
     assert team_text.get("link") == "https://example.com/teams?team_id=team-alpha"

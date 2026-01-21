@@ -13,6 +13,7 @@ from domain.models import (
     ScenarioProceduresBlock,
     SeparatorPlacement,
     Size,
+    normalize_finedog_unit_id,
 )
 
 
@@ -441,6 +442,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     service_name = str(service.get("service_name") or "Unknown service")
                     color = service.get("service_color")
                     finedog_unit_id = service.get("finedog_unit_id")
+                    normalized_unit_id = normalize_finedog_unit_id(finedog_unit_id)
                     if not isinstance(color, str):
                         color = meta.get("procedure_color")
                     team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
@@ -448,16 +450,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     if service_name not in service_entry:
                         service_entry[service_name] = {
                             "color": color if isinstance(color, str) else "#e9f0fb",
-                            "finedog_unit_id": (
-                                str(finedog_unit_id) if isinstance(finedog_unit_id, str) else None
-                            ),
+                            "finedog_unit_id": normalized_unit_id,
                         }
                     else:
                         existing = service_entry[service_name]
-                        if existing.get("finedog_unit_id") is None and isinstance(
-                            finedog_unit_id, str
-                        ):
-                            existing["finedog_unit_id"] = str(finedog_unit_id)
+                        if existing.get("finedog_unit_id") is None and normalized_unit_id is not None:
+                            existing["finedog_unit_id"] = normalized_unit_id
             else:
                 team_id = meta.get("team_id")
                 team_name = str(meta.get("team_name") or team_id or "Unknown team")
@@ -466,13 +464,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
                 service_entry = team_services.setdefault(team_key, {})
                 if service_name not in service_entry:
+                    normalized_unit_id = normalize_finedog_unit_id(meta.get("finedog_unit_id"))
                     service_entry[service_name] = {
                         "color": color if isinstance(color, str) else "#e9f0fb",
-                        "finedog_unit_id": (
-                            str(meta.get("finedog_unit_id"))
-                            if isinstance(meta.get("finedog_unit_id"), str)
-                            else None
-                        ),
+                        "finedog_unit_id": normalized_unit_id,
                     }
 
         if not team_services:
@@ -490,7 +485,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     (
                         service_name,
                         color if isinstance(color, str) else "#e9f0fb",
-                        unit_id if isinstance(unit_id, str) else None,
+                        normalize_finedog_unit_id(unit_id),
                     )
                 )
             groups.append((team_name, team_id, sorted_services))
