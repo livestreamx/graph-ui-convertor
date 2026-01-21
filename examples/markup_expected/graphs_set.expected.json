@@ -1,0 +1,29 @@
+{
+  "counts": {
+    "procedures": 9,
+    "blocks": 40,
+    "starts": 13,
+    "ends": 9
+  },
+  "edges": {
+    "start": 13,
+    "end": 9,
+    "branch": 35,
+    "branch_cycle": 0,
+    "block_graph": 0,
+    "block_graph_cycle": 0
+  },
+  "block_graph": {
+    "edges": 0,
+    "cycle_edges": 0,
+    "cross_procedure_edges": 0,
+    "cycle_pairs": []
+  },
+  "end_types": {
+    "end": 9,
+    "exit": 0,
+    "all": 0,
+    "intermediate": 0,
+    "postpone": 0
+  }
+}

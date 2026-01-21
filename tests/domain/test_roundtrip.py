@@ -52,7 +52,7 @@ def test_roundtrip_preserves_structure() -> None:
 
 
 def test_branch_metadata_persists() -> None:
-    markup = load_markup_fixture("advanced.json")
+    markup = load_markup_fixture("complex-graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     excal = forward.convert(markup)
@@ -179,8 +179,8 @@ def test_service_name_title_skipped_without_name() -> None:
     assert not title_elements
 
 
-def test_roundtrip_from_example_json_fixture() -> None:
-    markup = load_markup_fixture("yet_another.json")
+def test_roundtrip_complex_graph_fixture() -> None:
+    markup = load_markup_fixture("complex-graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()
@@ -191,8 +191,8 @@ def test_roundtrip_from_example_json_fixture() -> None:
     assert normalize(reconstructed) == normalize(markup)
 
 
-def test_roundtrip_with_links_fixture() -> None:
-    markup = load_markup_fixture("with_links.json")
+def test_roundtrip_graphs_set_fixture() -> None:
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()

@@ -1,0 +1,139 @@
+{
+  "markup_type": "service",
+  "finedog_unit_id": "svc-complex-merge",
+  "finedog_unit_meta": {
+    "service_name": "Complex Cross Procedure Graph",
+    "criticality_level": "B2",
+    "team_id": "team-delta",
+    "team_name": "Operations"
+  },
+  "procedures": [
+    {
+      "proc_id": "proc_alpha",
+      "proc_name": "Alpha Entry",
+      "start_block_ids": ["alpha_start"],
+      "end_block_ids": [],
+      "branches": {
+        "alpha_start": ["alpha_collect"],
+        "alpha_collect": ["alpha_router"]
+      },
+      "block_id_to_block_name": {
+        "alpha_start": "Alpha start",
+        "alpha_collect": "Alpha collect",
+        "alpha_router": "Alpha router"
+      }
+    },
+    {
+      "proc_id": "proc_beta",
+      "proc_name": "Beta Flow",
+      "start_block_ids": [],
+      "end_block_ids": ["beta_end::end"],
+      "branches": {
+        "beta_process": ["beta_check"],
+        "beta_check": ["beta_branch"],
+        "beta_branch": ["beta_end"]
+      },
+      "block_id_to_block_name": {
+        "beta_process": "Beta process",
+        "beta_check": "Beta check",
+        "beta_branch": "Beta branch",
+        "beta_end": "Beta end"
+      }
+    },
+    {
+      "proc_id": "proc_gamma",
+      "proc_name": "Gamma Review",
+      "start_block_ids": [],
+      "end_block_ids": ["gamma_exit::exit"],
+      "branches": {
+        "gamma_triage": ["gamma_assess"],
+        "gamma_assess": ["gamma_branch"],
+        "gamma_branch": ["gamma_exit"]
+      },
+      "block_id_to_block_name": {
+        "gamma_triage": "Gamma triage",
+        "gamma_assess": "Gamma assess",
+        "gamma_branch": "Gamma branch",
+        "gamma_exit": "Gamma exit"
+      }
+    },
+    {
+      "proc_id": "proc_delta",
+      "proc_name": "Delta Merge",
+      "start_block_ids": ["delta_start"],
+      "end_block_ids": ["delta_all::all"],
+      "branches": {
+        "delta_start": ["delta_prepare"],
+        "delta_prepare": ["delta_router"],
+        "delta_router": ["delta_merge"],
+        "delta_merge": ["delta_all"]
+      },
+      "block_id_to_block_name": {
+        "delta_start": "Delta start",
+        "delta_prepare": "Delta prepare",
+        "delta_router": "Delta router",
+        "delta_merge": "Delta merge",
+        "delta_all": "Delta all"
+      }
+    },
+    {
+      "proc_id": "proc_epsilon",
+      "proc_name": "Epsilon Pipeline",
+      "start_block_ids": [],
+      "end_block_ids": ["epsilon_intermediate::intermediate"],
+      "branches": {
+        "epsilon_review": ["epsilon_intermediate"],
+        "epsilon_intermediate": ["epsilon_pack"]
+      },
+      "block_id_to_block_name": {
+        "epsilon_review": "Epsilon review",
+        "epsilon_intermediate": "Epsilon checkpoint",
+        "epsilon_pack": "Epsilon pack"
+      }
+    },
+    {
+      "proc_id": "proc_zeta",
+      "proc_name": "Zeta Completion",
+      "start_block_ids": ["zeta_start"],
+      "end_block_ids": ["zeta_postpone::postpone"],
+      "branches": {
+        "zeta_start": ["zeta_intake"],
+        "zeta_intake": ["zeta_router"],
+        "zeta_router": ["zeta_finalize"],
+        "zeta_finalize": ["zeta_postpone"]
+      },
+      "block_id_to_block_name": {
+        "zeta_start": "Zeta start",
+        "zeta_intake": "Zeta intake",
+        "zeta_router": "Zeta router",
+        "zeta_finalize": "Zeta finalize",
+        "zeta_postpone": "Zeta postpone"
+      }
+    }
+  ],
+  "procedure_graph": {
+    "proc_alpha": ["proc_beta"],
+    "proc_beta": ["proc_alpha"]
+  },
+  "block_graph": {
+    "alpha_start": ["alpha_collect"],
+    "alpha_collect": ["alpha_router"],
+    "alpha_router": ["beta_process", "delta_merge"],
+    "delta_start": ["delta_prepare"],
+    "delta_prepare": ["delta_router"],
+    "delta_router": ["beta_process", "gamma_triage"],
+    "zeta_start": ["zeta_intake"],
+    "zeta_intake": ["zeta_router"],
+    "zeta_router": ["epsilon_review", "beta_process"],
+    "beta_process": ["beta_check"],
+    "beta_check": ["beta_branch"],
+    "beta_branch": ["gamma_triage", "epsilon_review", "beta_end"],
+    "gamma_triage": ["gamma_assess"],
+    "gamma_assess": ["gamma_branch"],
+    "gamma_branch": ["delta_merge", "zeta_finalize", "gamma_exit"],
+    "epsilon_review": ["epsilon_intermediate"],
+    "epsilon_intermediate": ["epsilon_pack", "zeta_finalize"],
+    "delta_merge": ["delta_all"],
+    "zeta_finalize": ["zeta_postpone"]
+  }
+}

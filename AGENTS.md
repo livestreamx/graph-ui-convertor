@@ -16,7 +16,7 @@ MVP: round-trip конвертер CJM разметки ↔ Excalidraw. Python 3
 - `app/cli.py` — Typer CLI (`cjm convert to-excalidraw|from-excalidraw|validate`).
 - `domain/` — модели, порты, use-cases; `convert_markup_to_excalidraw.py`, `convert_excalidraw_to_markup.py`.
 - `adapters/` — `filesystem` (IO), `excalidraw` (scene), `layout/grid.py` (детерминированный лейаут).
-- `examples/markup/` — `basic.json`, `advanced.json`, `with_links.json`, `yet_another.json`.
+- `examples/markup/` — `basic.json`, `complex-graph.json`, `graphs_set.json`.
 - `data/` — runtime IO (markup/excalidraw_in/excalidraw_out/roundtrip).
 - `tests/` — pytest round-trip и метаданные.
 - `makefile` — bootstrap/install/test/lint/fmt/convert/demo; Poetry ставится в `.venv`.

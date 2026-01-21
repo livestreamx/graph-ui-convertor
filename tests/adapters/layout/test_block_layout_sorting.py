@@ -74,7 +74,7 @@ def test_end_markers_follow_block_order() -> None:
 
 
 def test_end_markers_align_with_blocks_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
@@ -102,7 +102,7 @@ def test_end_markers_align_with_blocks_in_large_procedure() -> None:
 
 
 def test_primary_branch_aligns_rows_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_primary_chain"
@@ -119,7 +119,7 @@ def test_primary_branch_aligns_rows_in_large_procedure() -> None:
 
 
 def test_large_procedure_orders_source_blocks() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_source_order"
@@ -142,7 +142,7 @@ def test_large_procedure_orders_source_blocks() -> None:
 
 
 def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
@@ -175,7 +175,7 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
 
 
 def test_shared_child_blocks_group_in_shared_children_fixture() -> None:
-    markup = load_markup_fixture("layout_grouping.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_shared_children"

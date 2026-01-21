@@ -1155,9 +1155,7 @@ class MarkupToDiagramConverter(ABC):
         for (proc_id, block_id), placement in blocks.items():
             block_by_id.setdefault(block_id, []).append((proc_id, placement))
 
-        edges_by_source: dict[
-            str, list[tuple[str, str, str, BlockPlacement, BlockPlacement]]
-        ] = {}
+        edges_by_source: dict[str, list[tuple[str, str, str, BlockPlacement, BlockPlacement]]] = {}
         for source_block_id, targets in document.block_graph.items():
             source_candidates = block_by_id.get(source_block_id, [])
             if len(source_candidates) != 1:

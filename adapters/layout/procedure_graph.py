@@ -454,7 +454,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         }
                     else:
                         existing = service_entry[service_name]
-                        if existing.get("finedog_unit_id") is None and normalized_unit_id is not None:
+                        if (
+                            existing.get("finedog_unit_id") is None
+                            and normalized_unit_id is not None
+                        ):
                             existing["finedog_unit_id"] = normalized_unit_id
             else:
                 team_id = meta.get("team_id")

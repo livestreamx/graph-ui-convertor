@@ -81,8 +81,7 @@ def test_block_graph_cycle_edges_are_marked() -> None:
         element
         for element in excal.elements
         if element.get("type") == "arrow"
-        and element.get("customData", {}).get("cjm", {}).get("edge_type")
-        == "block_graph_cycle"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "block_graph_cycle"
     ]
     flow_edges = [
         element
@@ -128,8 +127,7 @@ def test_block_graph_skips_ambiguous_nodes_in_cycle_detection() -> None:
         element
         for element in excal.elements
         if element.get("type") == "arrow"
-        and element.get("customData", {}).get("cjm", {}).get("edge_type")
-        == "block_graph_cycle"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "block_graph_cycle"
     ]
     flow_edges = [
         element

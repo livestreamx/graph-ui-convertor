@@ -172,10 +172,10 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
 
 
 def test_example_procedure_graph_has_cycle() -> None:
-    example_path = _repo_root() / "examples" / "markup" / "team_alpha_payments.json"
+    example_path = _repo_root() / "examples" / "markup" / "complex-graph.json"
     payload = json.loads(example_path.read_text(encoding="utf-8"))
     graph = payload.get("procedure_graph", {})
-    assert "pay_intake" in graph
-    assert "kyc_check" in graph
-    assert "kyc_check" in graph.get("pay_intake", [])
-    assert "pay_intake" in graph.get("kyc_check", [])
+    assert "proc_alpha" in graph
+    assert "proc_beta" in graph
+    assert "proc_beta" in graph.get("proc_alpha", [])
+    assert "proc_alpha" in graph.get("proc_beta", [])
