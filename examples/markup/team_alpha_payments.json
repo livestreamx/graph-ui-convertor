@@ -57,7 +57,7 @@
   ],
   "procedure_graph": {
     "pay_intake": ["kyc_check"],
-    "kyc_check": ["capture_funds"],
+    "kyc_check": ["capture_funds", "pay_intake"],
     "capture_funds": []
   }
 }

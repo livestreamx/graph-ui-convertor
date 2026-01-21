@@ -108,7 +108,9 @@ class MarkupToDiagramConverter(ABC):
             end_block_type_lookup,
         )
         self._build_branch_edges(document, blocks, registry, base_metadata)
-        self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
+        self._build_procedure_flow_edges(
+            document, plan.frames, frame_ids, registry, base_metadata, blocks
+        )
         self._build_service_title(plan, registry, base_metadata, document.service_name)
         self._center_on_first_frame(plan, registry.elements)
         self._post_process_elements(registry.elements)
@@ -120,6 +122,8 @@ class MarkupToDiagramConverter(ABC):
             "schema_version": METADATA_SCHEMA_VERSION,
             "markup_type": document.markup_type,
         }
+        if document.finedog_unit_id:
+            base_metadata["finedog_unit_id"] = document.finedog_unit_id
         if document.service_name:
             base_metadata["service_name"] = document.service_name
         if document.criticality_level:
@@ -519,7 +523,59 @@ class MarkupToDiagramConverter(ABC):
                         if block.font_size is not None
                         else scenario.procedures_font_size
                     )
+                    if kind == "team":
+                        text_origin = Point(content_x, current_y)
+                        team_meta = {"role": "scenario_procedures_team", "scenario_index": idx}
+                        if block.team_id is not None:
+                            team_meta["team_id"] = block.team_id
+                        registry.add(
+                            self._text_block_element(
+                                element_id=self._stable_id(
+                                    "scenario-procedures-team",
+                                    str(idx),
+                                    str(block_idx),
+                                ),
+                                text=block.text,
+                                origin=text_origin,
+                                width=content_width,
+                                height=block.height,
+                                metadata=self._with_base_metadata(team_meta, base_metadata),
+                                group_ids=[procedures_group],
+                                font_size=block_font_size,
+                            )
+                        )
+                        if block.underline:
+                            line_y = current_y + block.height - max(2.0, block_font_size * 0.15)
+                            registry.add(
+                                self._line_element(
+                                    element_id=self._stable_id(
+                                        "scenario-procedures-team-underline",
+                                        str(idx),
+                                        str(block_idx),
+                                    ),
+                                    start=Point(content_x, line_y),
+                                    end=Point(content_x + content_width, line_y),
+                                    metadata=self._with_base_metadata(
+                                        {
+                                            "role": "scenario_procedures_underline",
+                                            "scenario_index": idx,
+                                        },
+                                        base_metadata,
+                                    ),
+                                    stroke_color="#1e1e1e",
+                                    stroke_width=2.0,
+                                    group_ids=[procedures_group],
+                                )
+                            )
+                        current_y += block.height
+                        continue
                     if kind == "service":
+                        service_meta = {
+                            "role": "scenario_procedures_service_panel",
+                            "scenario_index": idx,
+                        }
+                        if block.finedog_unit_id:
+                            service_meta["finedog_unit_id"] = block.finedog_unit_id
                         panel_id = self._stable_id(
                             "scenario-procedures-service-panel",
                             str(idx),
@@ -532,10 +588,7 @@ class MarkupToDiagramConverter(ABC):
                                 origin=Point(content_x, current_y),
                                 size=Size(content_width, block.height),
                                 metadata=self._with_base_metadata(
-                                    {
-                                        "role": "scenario_procedures_service_panel",
-                                        "scenario_index": idx,
-                                    },
+                                    service_meta,
                                     base_metadata,
                                 ),
                                 group_ids=[procedures_group],
@@ -547,6 +600,12 @@ class MarkupToDiagramConverter(ABC):
                             y=current_y + block_padding,
                         )
                         text_height = max(0.0, block.height - block_padding * 2)
+                        service_text_meta = {
+                            "role": "scenario_procedures_service",
+                            "scenario_index": idx,
+                        }
+                        if block.finedog_unit_id:
+                            service_text_meta["finedog_unit_id"] = block.finedog_unit_id
                         registry.add(
                             self._text_block_element(
                                 element_id=self._stable_id(
@@ -559,10 +618,7 @@ class MarkupToDiagramConverter(ABC):
                                 width=max(0.0, content_width - block_padding * 2),
                                 height=text_height,
                                 metadata=self._with_base_metadata(
-                                    {
-                                        "role": "scenario_procedures_service",
-                                        "scenario_index": idx,
-                                    },
+                                    service_text_meta,
                                     base_metadata,
                                 ),
                                 group_ids=[procedures_group],
@@ -970,7 +1026,11 @@ class MarkupToDiagramConverter(ABC):
         frame_ids: dict[str, str],
         registry: ElementRegistry,
         base_metadata: Metadata,
+        blocks: dict[tuple[str, str], BlockPlacement] | None = None,
     ) -> None:
+        if document.markup_type == "service" and document.block_graph and blocks:
+            self._build_block_graph_edges(document, blocks, registry, base_metadata)
+            return
         frames_list = list(frames)
         if len(frames_list) <= 1:
             return
@@ -1083,6 +1143,80 @@ class MarkupToDiagramConverter(ABC):
             )
             registry.add(arrow)
             self._register_edge_bindings(arrow, registry)
+
+    def _build_block_graph_edges(
+        self,
+        document: MarkupDocument,
+        blocks: dict[tuple[str, str], BlockPlacement],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+    ) -> None:
+        block_by_id: dict[str, list[tuple[str, BlockPlacement]]] = {}
+        for (proc_id, block_id), placement in blocks.items():
+            block_by_id.setdefault(block_id, []).append((proc_id, placement))
+
+        adjacency = {key: list(value) for key, value in document.block_graph.items()}
+        if not adjacency:
+            return
+        cycle_edges = self._edges_in_cycles(adjacency)
+        edge_offsets: dict[str, list[float]] = {}
+        for source_block_id, targets in document.block_graph.items():
+            count = max(1, len(targets))
+            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
+        edge_index: dict[str, int] = {}
+
+        for source_block_id, targets in document.block_graph.items():
+            source_candidates = block_by_id.get(source_block_id, [])
+            if len(source_candidates) != 1:
+                continue
+            source_proc, source_block = source_candidates[0]
+            for target_block_id in targets:
+                target_candidates = block_by_id.get(target_block_id, [])
+                if len(target_candidates) != 1:
+                    continue
+                target_proc, target_block = target_candidates[0]
+                offset_idx = edge_index.get(source_block_id, 0)
+                edge_index[source_block_id] = offset_idx + 1
+                offsets = edge_offsets.get(source_block_id, [0.0])
+                dy = offsets[min(offset_idx, len(offsets) - 1)]
+                is_cycle = (source_block_id, target_block_id) in cycle_edges
+                if is_cycle:
+                    start_center = self._block_anchor(source_block, side="top")
+                    end_center = self._block_anchor(target_block, side="top")
+                    points = self._elbow_points(start_center, end_center, 80.0)
+                else:
+                    start_center = self._block_anchor(source_block, side="right", y_offset=dy)
+                    end_center = self._block_anchor(target_block, side="left", y_offset=dy)
+                    points = None
+                edge_type = "block_graph_cycle" if is_cycle else "block_graph"
+                label = "ЦИКЛ" if is_cycle else "graph"
+                arrow = self._arrow_element(
+                    start=start_center,
+                    end=end_center,
+                    label=label,
+                    metadata=self._with_base_metadata(
+                        {
+                            "procedure_id": source_proc,
+                            "target_procedure_id": target_proc,
+                            "role": "edge",
+                            "edge_type": edge_type,
+                            "is_cycle": is_cycle,
+                            "source_block_id": source_block_id,
+                            "target_block_id": target_block_id,
+                        },
+                        base_metadata,
+                    ),
+                    start_binding=self._stable_id("block", source_proc, source_block_id),
+                    end_binding=self._stable_id("block", target_proc, target_block_id),
+                    smoothing=0.15,
+                    stroke_style="dashed" if is_cycle else None,
+                    stroke_color="#d32f2f" if is_cycle else None,
+                    stroke_width=1 if is_cycle else None,
+                    points=points,
+                    end_arrowhead="arrow" if is_cycle else None,
+                )
+                registry.add(arrow)
+                self._register_edge_bindings(arrow, registry)
 
     def _format_procedure_label(self, procedure_name: str | None, procedure_id: str) -> str:
         if procedure_name:

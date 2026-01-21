@@ -25,8 +25,10 @@ class BuildTeamProcedureGraph:
         procedure_order: list[str] = []
         procedure_graph: dict[str, list[str]] = {}
         procedure_meta: dict[str, dict[str, object]] = {}
-        procedure_services: dict[str, dict[str, dict[str, str]]] = {}
+        procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         team_labels: set[str] = set()
+        team_ids: set[str | int] = set()
+        team_names: set[str] = set()
         service_keys: set[str] = set()
 
         for document in documents:
@@ -35,6 +37,10 @@ class BuildTeamProcedureGraph:
             service_key = self._service_key(team_label, service_label)
             if team_label:
                 team_labels.add(team_label)
+            if document.team_id is not None:
+                team_ids.add(document.team_id)
+            if document.team_name:
+                team_names.add(str(document.team_name))
             service_keys.add(service_key)
 
             for proc in document.procedures:
@@ -49,6 +55,8 @@ class BuildTeamProcedureGraph:
                 procedure_services.setdefault(proc_id, {})[service_key] = {
                     "team_name": team_label,
                     "service_name": service_label,
+                    "team_id": document.team_id,
+                    "finedog_unit_id": document.finedog_unit_id,
                 }
 
             for parent, children in document.procedure_graph.items():
@@ -75,8 +83,8 @@ class BuildTeamProcedureGraph:
             services = sorted(
                 service_map.values(),
                 key=lambda item: (
-                    item.get("team_name", "").lower(),
-                    item.get("service_name", "").lower(),
+                    str(item.get("team_name", "") or "").lower(),
+                    str(item.get("service_name", "") or "").lower(),
                 ),
             )
             service_key_list = sorted(service_map.keys())
@@ -91,6 +99,8 @@ class BuildTeamProcedureGraph:
                 procedure_meta[proc_id] = {
                     "team_name": primary.get("team_name", "Unknown team"),
                     "service_name": primary.get("service_name", "Unknown service"),
+                    "team_id": primary.get("team_id"),
+                    "finedog_unit_id": primary.get("finedog_unit_id"),
                     "procedure_color": color,
                     "is_intersection": is_intersection,
                     "services": services,
@@ -99,6 +109,8 @@ class BuildTeamProcedureGraph:
                 procedure_meta[proc_id] = {
                     "team_name": "Unknown team",
                     "service_name": "Unknown service",
+                    "team_id": None,
+                    "finedog_unit_id": None,
                     "procedure_color": _SERVICE_COLORS[0],
                     "is_intersection": False,
                     "services": [],
@@ -109,10 +121,20 @@ class BuildTeamProcedureGraph:
 
         team_list = sorted(team_labels, key=lambda name: name.lower())
         title = self._format_team_title(team_list)
+        team_id: str | int | None = None
+        team_name: str | None = None
+        if len(team_ids) == 1:
+            team_id = next(iter(team_ids))
+        if len(team_names) == 1:
+            team_name = next(iter(team_names))
+        if team_name is None and team_id is not None:
+            team_name = str(team_id)
 
         return MarkupDocument(
             markup_type="procedure_graph",
             service_name=title,
+            team_id=team_id,
+            team_name=team_name,
             procedures=procedures,
             procedure_graph=procedure_graph,
             procedure_meta=procedure_meta,

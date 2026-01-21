@@ -155,12 +155,14 @@ class MarkupDocument(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     markup_type: str
+    finedog_unit_id: str | None = None
     service_name: str | None = None
     criticality_level: str | None = None
     team_id: int | str | None = None
     team_name: str | None = None
     procedures: list[Procedure] = Field(default_factory=list)
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
+    block_graph: dict[str, list[str]] = Field(default_factory=dict)
     procedure_meta: dict[str, dict[str, object]] = Field(default_factory=dict)
 
     @model_validator(mode="before")
@@ -172,13 +174,22 @@ class MarkupDocument(BaseModel):
         if not isinstance(meta, dict):
             return data
         updated: dict[str, Any] | None = None
-        for field_name in ("service_name", "criticality_level", "team_id", "team_name"):
+        field_meta_keys = {
+            "service_name": ("service_name",),
+            "criticality_level": ("criticality_level",),
+            "team_id": ("team_id",),
+            "team_name": ("team_name",),
+            "finedog_unit_id": ("unit_id", "finedog_unit_id"),
+        }
+        for field_name, keys in field_meta_keys.items():
             if data.get(field_name) is not None:
                 continue
-            if field_name in meta and meta.get(field_name) is not None:
-                if updated is None:
-                    updated = dict(data)
-                updated[field_name] = meta.get(field_name)
+            for key in keys:
+                if key in meta and meta.get(key) is not None:
+                    if updated is None:
+                        updated = dict(data)
+                    updated[field_name] = meta.get(key)
+                    break
         return updated or data
 
     @field_validator("procedures", mode="after")
@@ -197,6 +208,8 @@ class MarkupDocument(BaseModel):
             "markup_type": self.markup_type,
             "procedures": [proc.to_markup_dict() for proc in self.procedures],
         }
+        if self.finedog_unit_id:
+            payload["finedog_unit_id"] = self.finedog_unit_id
         meta: dict[str, object] = {}
         if self.service_name:
             meta["service_name"] = self.service_name
@@ -210,6 +223,8 @@ class MarkupDocument(BaseModel):
             payload["finedog_unit_meta"] = meta
         if self.procedure_graph:
             payload["procedure_graph"] = dict(self.procedure_graph)
+        if self.block_graph:
+            payload["block_graph"] = _sorted_branches(self.block_graph)
         return payload
 
 
@@ -321,6 +336,8 @@ class ScenarioProceduresBlock:
     color: str | None = None
     font_size: float | None = None
     underline: bool = False
+    team_id: str | int | None = None
+    finedog_unit_id: str | None = None
 
 
 @dataclass(frozen=True)

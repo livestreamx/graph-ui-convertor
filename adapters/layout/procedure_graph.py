@@ -308,7 +308,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             lines.append(empty_text)
             return blocks, "\n".join(lines), service_padding
 
-        for team_idx, (team_name, services) in enumerate(groups):
+        for team_idx, (team_name, team_id, services) in enumerate(groups):
             team_lines = self._wrap_lines([team_name], content_width, team_font_size)
             blocks.append(
                 ScenarioProceduresBlock(
@@ -317,11 +317,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     height=len(team_lines) * team_line_height,
                     font_size=team_font_size,
                     underline=True,
+                    team_id=team_id,
                 )
             )
             blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=service_gap))
             lines.append(team_name)
-            for service_idx, (service_name, service_color) in enumerate(services):
+            for service_idx, (service_name, service_color, finedog_unit_id) in enumerate(services):
                 wrapped = self._wrap_lines(
                     [service_name],
                     content_width - service_padding * 2,
@@ -334,6 +335,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         height=len(wrapped) * line_height + service_padding * 2,
                         color=service_color,
                         font_size=font_size,
+                        finedog_unit_id=finedog_unit_id,
                     )
                 )
                 lines.append(f"- {service_name}")
@@ -425,8 +427,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         self,
         component: set[str],
         procedure_meta: Mapping[str, Mapping[str, object]],
-    ) -> tuple[list[tuple[str, list[tuple[str, str]]]], str | None]:
-        team_services: dict[str, dict[str, str]] = {}
+    ) -> tuple[list[tuple[str, str | int | None, list[tuple[str, str, str | None]]]], str | None]:
+        team_services: dict[tuple[str, str | int | None], dict[str, dict[str, object]]] = {}
         for proc_id in sorted(component):
             meta = procedure_meta.get(proc_id, {})
             services = meta.get("services")
@@ -435,33 +437,61 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     if not isinstance(service, Mapping):
                         continue
                     team_name = str(service.get("team_name") or "Unknown team")
+                    team_id = service.get("team_id")
                     service_name = str(service.get("service_name") or "Unknown service")
                     color = service.get("service_color")
+                    finedog_unit_id = service.get("finedog_unit_id")
                     if not isinstance(color, str):
                         color = meta.get("procedure_color")
-                    team_services.setdefault(team_name, {})[service_name] = (
-                        color if isinstance(color, str) else "#e9f0fb"
-                    )
+                    team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
+                    service_entry = team_services.setdefault(team_key, {})
+                    if service_name not in service_entry:
+                        service_entry[service_name] = {
+                            "color": color if isinstance(color, str) else "#e9f0fb",
+                            "finedog_unit_id": (
+                                str(finedog_unit_id) if isinstance(finedog_unit_id, str) else None
+                            ),
+                        }
+                    else:
+                        existing = service_entry[service_name]
+                        if existing.get("finedog_unit_id") is None and isinstance(
+                            finedog_unit_id, str
+                        ):
+                            existing["finedog_unit_id"] = str(finedog_unit_id)
             else:
-                team_name = str(meta.get("team_name") or meta.get("team_id") or "Unknown team")
+                team_id = meta.get("team_id")
+                team_name = str(meta.get("team_name") or team_id or "Unknown team")
                 service_name = str(meta.get("service_name") or "Unknown service")
                 color = meta.get("procedure_color")
-                team_services.setdefault(team_name, {})[service_name] = (
-                    color if isinstance(color, str) else "#e9f0fb"
-                )
+                team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
+                service_entry = team_services.setdefault(team_key, {})
+                if service_name not in service_entry:
+                    service_entry[service_name] = {
+                        "color": color if isinstance(color, str) else "#e9f0fb",
+                        "finedog_unit_id": (
+                            str(meta.get("finedog_unit_id"))
+                            if isinstance(meta.get("finedog_unit_id"), str)
+                            else None
+                        ),
+                    }
 
         if not team_services:
             return [], None
 
-        teams_sorted = sorted(team_services.keys(), key=lambda name: name.lower())
-        groups = [
-            (
-                team_name,
-                sorted(
-                    team_services[team_name].items(),
-                    key=lambda item: item[0].lower(),
-                ),
-            )
-            for team_name in teams_sorted
-        ]
+        teams_sorted = sorted(team_services.keys(), key=lambda item: item[0].lower())
+        groups: list[tuple[str, str | int | None, list[tuple[str, str, str | None]]]] = []
+        for team_name, team_id in teams_sorted:
+            services = team_services[(team_name, team_id)]
+            sorted_services: list[tuple[str, str, str | None]] = []
+            for service_name, payload in sorted(services.items(), key=lambda item: item[0].lower()):
+                color = payload.get("color")
+                unit_id = payload.get("finedog_unit_id")
+                sorted_services.append(
+                    (
+                        service_name,
+                        color if isinstance(color, str) else "#e9f0fb",
+                        unit_id if isinstance(unit_id, str) else None,
+                    )
+                )
+            groups.append((team_name, team_id, sorted_services))
         return groups, None

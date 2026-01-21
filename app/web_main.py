@@ -103,6 +103,8 @@ def create_app(settings: AppSettings) -> FastAPI:
     link_templates = build_link_templates(
         settings.catalog.procedure_link_path,
         settings.catalog.block_link_path,
+        settings.catalog.service_link_path,
+        settings.catalog.team_link_path,
     )
     procedure_graph_layout = ProcedureGraphLayoutEngine(
         LayoutConfig(
