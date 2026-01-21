@@ -28,6 +28,8 @@ Markup JSON в Kubernetes берется из S3. Настройте `catalog.s3
 - Опциональные env-переопределения (пример шаблонов ссылок):
   - `CJM_CATALOG__PROCEDURE_LINK_PATH`
   - `CJM_CATALOG__BLOCK_LINK_PATH`
+  - `CJM_CATALOG__SERVICE_LINK_PATH`
+  - `CJM_CATALOG__TEAM_LINK_PATH`
 
 ## Сервис Excalidraw
 

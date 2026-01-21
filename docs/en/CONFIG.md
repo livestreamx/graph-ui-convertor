@@ -54,6 +54,8 @@ catalog:
   rebuild_token: ""
   procedure_link_path: ""
   block_link_path: ""
+  service_link_path: ""
+  team_link_path: ""
 ```
 
 ## Field notes
@@ -84,6 +86,10 @@ catalog:
 - `procedure_link_path`: URL template for procedure links in Excalidraw/Unidraw (use `{procedure_id}`).
 - `block_link_path`: URL template for block links in Excalidraw/Unidraw (use `{block_id}` or
   `{procedure_id}` + `{block_id}`).
+- `service_link_path`: Base URL for service links in Excalidraw/Unidraw; `unit_id` is appended using
+  `finedog_unit_id`.
+- `team_link_path`: Base URL for team links in Excalidraw/Unidraw; `team_id` is appended using
+  `finedog_unit_meta.team_id`.
 - `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
   Catalog, the app can inject scenes via local storage (recommended for large diagrams). Otherwise
   it falls back to URL fragments when short enough.

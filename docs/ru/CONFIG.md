@@ -54,6 +54,8 @@ catalog:
   rebuild_token: ""
   procedure_link_path: ""
   block_link_path: ""
+  service_link_path: ""
+  team_link_path: ""
 ```
 
 ## Примечания к полям
@@ -82,6 +84,10 @@ catalog:
 - `procedure_link_path`: шаблон URL для ссылок на процедуры в Excalidraw/Unidraw (используйте `{procedure_id}`).
 - `block_link_path`: шаблон URL для ссылок на блоки в Excalidraw/Unidraw (используйте `{block_id}` либо
   `{procedure_id}` + `{block_id}`).
+- `service_link_path`: базовый URL для ссылок на сервисы в Excalidraw/Unidraw; параметр `unit_id`
+  добавляется из `finedog_unit_id`.
+- `team_link_path`: базовый URL для ссылок на команды в Excalidraw/Unidraw; параметр `team_id`
+  добавляется из `finedog_unit_meta.team_id`.
 - `excalidraw_base_url`: URL или путь Excalidraw UI (например `/excalidraw`). При same-origin с Catalog
   сцена может быть внедрена через localStorage (рекомендуется для больших диаграмм). В противном случае
   используется `#json`, если URL достаточно короткий.

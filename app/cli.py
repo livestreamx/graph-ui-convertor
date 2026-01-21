@@ -215,6 +215,8 @@ def pipeline_build_all(
     link_templates = build_link_templates(
         settings.catalog.procedure_link_path,
         settings.catalog.block_link_path,
+        settings.catalog.service_link_path,
+        settings.catalog.team_link_path,
     )
     _run_convert_to_excalidraw(
         markup_dir,

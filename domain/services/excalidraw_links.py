@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from string import Formatter
 from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from domain.models import CUSTOM_DATA_KEY
 
@@ -15,9 +16,16 @@ _FORMATTER = Formatter()
 class ExcalidrawLinkTemplates:
     procedure: str | None = None
     block: str | None = None
+    service: str | None = None
+    team: str | None = None
 
     def has_any(self) -> bool:
-        return bool(_normalize_template(self.procedure) or _normalize_template(self.block))
+        return bool(
+            _normalize_template(self.procedure)
+            or _normalize_template(self.block)
+            or _normalize_template(self.service)
+            or _normalize_template(self.team)
+        )
 
     def procedure_link(self, procedure_id: str) -> str | None:
         return _format_template(self.procedure, procedure_id=procedure_id)
@@ -25,12 +33,25 @@ class ExcalidrawLinkTemplates:
     def block_link(self, block_id: str, procedure_id: str | None = None) -> str | None:
         return _format_template(self.block, block_id=block_id, procedure_id=procedure_id)
 
+    def service_link(self, unit_id: str) -> str | None:
+        return _format_query_template(self.service, "unit_id", unit_id)
+
+    def team_link(self, team_id: str | int) -> str | None:
+        return _format_query_template(self.team, "team_id", str(team_id))
+
 
 def build_link_templates(
     procedure_path: str | None,
     block_path: str | None,
+    service_path: str | None = None,
+    team_path: str | None = None,
 ) -> ExcalidrawLinkTemplates | None:
-    templates = ExcalidrawLinkTemplates(procedure_path, block_path)
+    templates = ExcalidrawLinkTemplates(
+        procedure=procedure_path,
+        block=block_path,
+        service=service_path,
+        team=team_path,
+    )
     return templates if templates.has_any() else None
 
 
@@ -59,6 +80,32 @@ def ensure_excalidraw_links(
                 )
                 if link:
                     element["link"] = link
+        elif role in {
+            "diagram_title",
+            "diagram_title_panel",
+            "diagram_title_rule",
+            "scenario_procedures_service",
+            "scenario_procedures_service_panel",
+        }:
+            unit_id = meta.get("finedog_unit_id")
+            if (
+                role in {"diagram_title", "diagram_title_panel", "diagram_title_rule"}
+                and meta.get("markup_type") != "service"
+            ):
+                unit_id = None
+            if isinstance(unit_id, str) and unit_id:
+                link = templates.service_link(unit_id)
+                if link:
+                    element["link"] = link
+        elif role in {"scenario_procedures_team"} or (
+            role in {"diagram_title", "diagram_title_panel", "diagram_title_rule"}
+            and meta.get("markup_type") == "procedure_graph"
+        ):
+            team_id = meta.get("team_id")
+            if isinstance(team_id, str | int) and str(team_id):
+                link = templates.team_link(team_id)
+                if link:
+                    element["link"] = link
 
 
 def ensure_unidraw_links(
@@ -84,6 +131,32 @@ def ensure_unidraw_links(
                     block_id,
                     procedure_id if isinstance(procedure_id, str) else None,
                 )
+                if link:
+                    element["link"] = link
+        elif role in {
+            "diagram_title",
+            "diagram_title_panel",
+            "diagram_title_rule",
+            "scenario_procedures_service",
+            "scenario_procedures_service_panel",
+        }:
+            unit_id = meta.get("finedog_unit_id")
+            if (
+                role in {"diagram_title", "diagram_title_panel", "diagram_title_rule"}
+                and meta.get("markup_type") != "service"
+            ):
+                unit_id = None
+            if isinstance(unit_id, str) and unit_id:
+                link = templates.service_link(unit_id)
+                if link:
+                    element["link"] = link
+        elif role in {"scenario_procedures_team"} or (
+            role in {"diagram_title", "diagram_title_panel", "diagram_title_rule"}
+            and meta.get("markup_type") == "procedure_graph"
+        ):
+            team_id = meta.get("team_id")
+            if isinstance(team_id, str | int) and str(team_id):
+                link = templates.team_link(team_id)
                 if link:
                     element["link"] = link
 
@@ -133,3 +206,32 @@ def _format_template(template: str | None, **kwargs: str | None) -> str | None:
         return normalized.format(**values)
     except (KeyError, ValueError):
         return normalized
+
+
+def _format_query_template(template: str | None, param: str, value: str) -> str | None:
+    normalized = _normalize_template(template)
+    if not normalized:
+        return None
+    formatted: str | None = normalized
+    fields = _template_fields(normalized)
+    if fields:
+        if param not in fields:
+            return None
+        formatted = _format_template(normalized, **{param: value})
+        if not formatted:
+            return None
+    if not formatted:
+        return None
+    parsed = urlparse(formatted)
+    query = parse_qsl(parsed.query, keep_blank_values=True)
+    updated = []
+    replaced = False
+    for key, existing in query:
+        if key == param:
+            updated.append((key, value))
+            replaced = True
+        else:
+            updated.append((key, existing))
+    if not replaced:
+        updated.append((param, value))
+    return urlunparse(parsed._replace(query=urlencode(updated)))

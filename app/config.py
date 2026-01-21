@@ -86,6 +86,19 @@ class CatalogSettings(BaseModel):
         default=None,
         validation_alias=AliasChoices("block_link_path", "block_link_template"),
     )
+    service_link_path: LinkPath | None = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "service_link_path",
+            "service_link_template",
+            "unit_link_path",
+            "unit_link_template",
+        ),
+    )
+    team_link_path: LinkPath | None = Field(
+        default=None,
+        validation_alias=AliasChoices("team_link_path", "team_link_template"),
+    )
 
     @field_validator("sort_order", mode="before")
     @classmethod

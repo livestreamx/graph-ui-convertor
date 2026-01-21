@@ -26,6 +26,7 @@ FOCUS_PADDING = 140.0
 _BASE_META_KEYS = {
     "schema_version",
     "markup_type",
+    "finedog_unit_id",
     "service_name",
     "criticality_level",
     "team_id",

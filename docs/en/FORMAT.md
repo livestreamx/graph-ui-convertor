@@ -7,6 +7,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 ```json
 {
   "markup_type": "service",
+  "finedog_unit_id": "fd-01",
   "finedog_unit_meta": {
     "service_name": "Support Flow"
   },
@@ -31,6 +32,10 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - `::postpone`: issue is postponed (handoff between bot/agents/support lines).
 - `branches` – adjacency: key = source block, values = target blocks.
 - `finedog_unit_meta.service_name` – markup display name.
+- `finedog_unit_id` – external unit identifier for service links.
+- `procedure_graph` – adjacency between procedures.
+- `block_graph` – adjacency between block ids; when provided for service diagrams, graph edges are
+  drawn between blocks instead of frames.
 
 ## Excalidraw (output)
 
@@ -44,8 +49,10 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - START -> block (label `start`, `edge_type=start`)
   - block -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
   - `all`/`intermediate` in markup render a single END marker labeled `END & EXIT`.
-- `postpone` in markup renders an END marker labeled `POSTPONE`.
-- branch arrows block -> block (label `branch`, `edge_type=branch`)
+  - `postpone` in markup renders an END marker labeled `POSTPONE`.
+  - branch arrows block -> block (label `branch`, `edge_type=branch`)
+  - block graph arrows block -> block (label `graph`, `edge_type=block_graph`)
+  - block graph cycles use `edge_type=block_graph_cycle` (dashed red)
 - Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 
@@ -64,8 +71,8 @@ hex values are shown for exact matching.
 - Blocks: default block fill is light blue `#cce5ff` with a dark outline; blocks with
   `end_block_type=intermediate` use warm orange `#ffb347` to stand out.
 - Arrows: default stroke is near-black `#1e1e1e` (solid); cycle arrows (`branch_cycle`,
-  `procedure_cycle`) are dashed red `#d32f2f` to emphasize loops (block cycles use width 1, procedure
-  cycles use width 2).
+  `procedure_cycle`, `block_graph_cycle`) are dashed red `#d32f2f` to emphasize loops (block cycles use
+  width 1, procedure cycles use width 2).
 
 ## Unidraw (output)
 
@@ -85,6 +92,7 @@ Stored on every shape/arrow/text:
 
 - `schema_version`: `"1.0"`
 - `markup_type`
+- `finedog_unit_id` (if present)
 - `service_name` (if present)
 - `criticality_level` (if present)
 - `team_id` (if present)
@@ -93,7 +101,7 @@ Stored on every shape/arrow/text:
 - `block_id` (when applicable)
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
 - `role` (title header): `diagram_title_panel|diagram_title|diagram_title_rule`
-- `edge_type`: `start|end|branch` (edges only)
+- `edge_type`: `start|end|branch|block_graph|block_graph_cycle` (edges only)
 - `end_type`: `end|exit|all|intermediate|postpone` (end markers and end edges)
 - `end_block_type`: `end|exit|all|intermediate|postpone` (original markup type for the block)
 

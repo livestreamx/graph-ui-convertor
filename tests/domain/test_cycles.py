@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from itertools import pairwise
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -9,6 +11,13 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "examples" / "markup").exists():
+            return parent
+    raise RuntimeError("Repository root not found")
 
 
 def _arrow_endpoint(arrow: dict[str, Any], index: int) -> tuple[float, float]:
@@ -160,3 +169,13 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
     graph = reconstructed.procedure_graph
     assert set(graph.get("p1", [])) == {"p2"}
     assert set(graph.get("p2", [])) == {"p1"}
+
+
+def test_example_procedure_graph_has_cycle() -> None:
+    example_path = _repo_root() / "examples" / "markup" / "team_alpha_payments.json"
+    payload = json.loads(example_path.read_text(encoding="utf-8"))
+    graph = payload.get("procedure_graph", {})
+    assert "pay_intake" in graph
+    assert "kyc_check" in graph
+    assert "kyc_check" in graph.get("pay_intake", [])
+    assert "pay_intake" in graph.get("kyc_check", [])

@@ -58,6 +58,32 @@ def test_build_team_procedure_graph_merges_documents() -> None:
     assert merged.procedure_graph["p2"] == []
 
 
+def test_build_team_procedure_graph_sets_team_id_for_single_team() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "p1",
+                    "proc_name": "Authorize",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"p1": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document])
+
+    assert merged.team_id == "team-alpha"
+    assert merged.team_name == "Alpha"
+
+
 def test_build_team_procedure_graph_title_limits_team_names() -> None:
     documents = []
     for idx, team_name in enumerate(["Alpha", "Beta", "Gamma", "Zeta"], start=1):

@@ -434,7 +434,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             "arrow", metadata.get("procedure_id", ""), label, str(start), str(end)
         )
         edge_type = metadata.get("edge_type")
-        show_text = edge_type in {"branch", "branch_cycle", "procedure_cycle"}
+        show_text = edge_type in {"branch", "branch_cycle", "procedure_cycle", "block_graph_cycle"}
         if points is None:
             points = [[0.0, 0.0], [dx, dy]]
             if curve_offset is not None:

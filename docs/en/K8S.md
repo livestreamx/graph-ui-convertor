@@ -28,6 +28,8 @@ directly from S3 markup when a scene is requested (no pre-generation step requir
 - Optional env overrides (example link templates):
   - `CJM_CATALOG__PROCEDURE_LINK_PATH`
   - `CJM_CATALOG__BLOCK_LINK_PATH`
+  - `CJM_CATALOG__SERVICE_LINK_PATH`
+  - `CJM_CATALOG__TEAM_LINK_PATH`
 
 ## Excalidraw service
 

@@ -110,14 +110,19 @@ class ExcalidrawToMarkupConverter:
             blocks, start_map, end_map, branch_map, frames, block_names, proc_names
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
+        block_graph = self._collect_block_graph(elements, blocks)
+        if block_graph and not any(procedure_graph.values()):
+            procedure_graph = self._infer_procedure_graph_from_block_graph(block_graph, procedures)
         return MarkupDocument(
             markup_type=globals_meta["markup_type"],
+            finedog_unit_id=globals_meta.get("finedog_unit_id"),
             service_name=globals_meta.get("service_name"),
             criticality_level=globals_meta.get("criticality_level"),
             team_id=globals_meta.get("team_id"),
             team_name=globals_meta.get("team_name"),
             procedures=procedures,
             procedure_graph=procedure_graph,
+            block_graph=block_graph,
         )
 
     def _collect_frames(self, elements: Iterable[Element]) -> tuple[dict[str, str], dict[str, str]]:
@@ -299,6 +304,78 @@ class ExcalidrawToMarkupConverter:
                 graph[source].append(target)
         return graph
 
+    def _collect_block_graph(
+        self,
+        elements: Iterable[Element],
+        blocks: dict[str, BlockCandidate],
+    ) -> dict[str, list[str]]:
+        graph: dict[str, list[str]] = {}
+        for element in elements:
+            if not self._is_arrow(element):
+                continue
+            meta = self._metadata(element)
+            if meta.get("edge_type") not in {"block_graph", "block_graph_cycle"}:
+                continue
+            source = meta.get("source_block_id")
+            target = meta.get("target_block_id")
+            if not isinstance(source, str) or not isinstance(target, str):
+                raw_start_binding = element.get("startBinding")
+                raw_end_binding = element.get("endBinding")
+                start_binding = raw_start_binding if isinstance(raw_start_binding, dict) else {}
+                end_binding = raw_end_binding if isinstance(raw_end_binding, dict) else {}
+                source = (
+                    source
+                    if isinstance(source, str)
+                    else self._block_from_binding(start_binding, blocks)
+                )
+                target = (
+                    target
+                    if isinstance(target, str)
+                    else self._block_from_binding(end_binding, blocks)
+                )
+            if not source or not target:
+                continue
+            graph.setdefault(source, [])
+            if target not in graph[source]:
+                graph[source].append(target)
+            graph.setdefault(target, [])
+        return graph
+
+    def _infer_procedure_graph_from_block_graph(
+        self,
+        block_graph: Mapping[str, list[str]],
+        procedures: Iterable[Procedure],
+    ) -> dict[str, list[str]]:
+        proc_for_block: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for procedure in procedures:
+            for block_id in procedure.block_ids():
+                if block_id in proc_for_block:
+                    duplicates.add(block_id)
+                else:
+                    proc_for_block[block_id] = procedure.procedure_id
+
+        adjacency: dict[str, list[str]] = {}
+        for source_block, targets in block_graph.items():
+            if source_block in duplicates:
+                continue
+            source_proc = proc_for_block.get(source_block)
+            if not source_proc:
+                continue
+            for target_block in targets:
+                if target_block in duplicates:
+                    continue
+                target_proc = proc_for_block.get(target_block)
+                if not target_proc or target_proc == source_proc:
+                    continue
+                adjacency.setdefault(source_proc, [])
+                if target_proc not in adjacency[source_proc]:
+                    adjacency[source_proc].append(target_proc)
+
+        for procedure in procedures:
+            adjacency.setdefault(procedure.procedure_id, [])
+        return adjacency
+
     def _metadata(self, element: Element) -> Metadata:
         custom = element.get("customData")
         if not isinstance(custom, dict):
@@ -387,6 +464,7 @@ class ExcalidrawToMarkupConverter:
             if markup_type:
                 return {
                     "markup_type": str(markup_type),
+                    "finedog_unit_id": self._normalize_meta_str(meta.get("finedog_unit_id")),
                     "service_name": self._normalize_meta_str(meta.get("service_name")),
                     "criticality_level": self._normalize_meta_str(meta.get("criticality_level")),
                     "team_id": self._normalize_team_id(meta.get("team_id")),
@@ -394,6 +472,7 @@ class ExcalidrawToMarkupConverter:
                 }
         return {
             "markup_type": "service",
+            "finedog_unit_id": None,
             "service_name": None,
             "criticality_level": None,
             "team_id": None,
