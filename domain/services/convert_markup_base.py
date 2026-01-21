@@ -1155,16 +1155,9 @@ class MarkupToDiagramConverter(ABC):
         for (proc_id, block_id), placement in blocks.items():
             block_by_id.setdefault(block_id, []).append((proc_id, placement))
 
-        adjacency = {key: list(value) for key, value in document.block_graph.items()}
-        if not adjacency:
-            return
-        cycle_edges = self._edges_in_cycles(adjacency)
-        edge_offsets: dict[str, list[float]] = {}
-        for source_block_id, targets in document.block_graph.items():
-            count = max(1, len(targets))
-            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
-        edge_index: dict[str, int] = {}
-
+        edges_by_source: dict[
+            str, list[tuple[str, str, str, BlockPlacement, BlockPlacement]]
+        ] = {}
         for source_block_id, targets in document.block_graph.items():
             source_candidates = block_by_id.get(source_block_id, [])
             if len(source_candidates) != 1:
@@ -1175,9 +1168,32 @@ class MarkupToDiagramConverter(ABC):
                 if len(target_candidates) != 1:
                     continue
                 target_proc, target_block = target_candidates[0]
-                offset_idx = edge_index.get(source_block_id, 0)
-                edge_index[source_block_id] = offset_idx + 1
-                offsets = edge_offsets.get(source_block_id, [0.0])
+                edges_by_source.setdefault(source_block_id, []).append(
+                    (target_block_id, source_proc, target_proc, source_block, target_block)
+                )
+
+        if not edges_by_source:
+            return
+
+        adjacency = {
+            source_block_id: [edge[0] for edge in edges]
+            for source_block_id, edges in edges_by_source.items()
+        }
+        cycle_edges = self._edges_in_cycles(adjacency)
+        edge_offsets: dict[str, list[float]] = {}
+        for source_block_id, edges in edges_by_source.items():
+            count = max(1, len(edges))
+            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
+
+        for source_block_id, edges in edges_by_source.items():
+            offsets = edge_offsets.get(source_block_id, [0.0])
+            for offset_idx, (
+                target_block_id,
+                source_proc,
+                target_proc,
+                source_block,
+                target_block,
+            ) in enumerate(edges):
                 dy = offsets[min(offset_idx, len(offsets) - 1)]
                 is_cycle = (source_block_id, target_block_id) in cycle_edges
                 if is_cycle:

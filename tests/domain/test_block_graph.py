@@ -53,3 +53,92 @@ def test_block_graph_edges_render_between_blocks() -> None:
     assert reconstructed.block_graph.get("a_end") == ["b_start"]
     assert "b_start" in reconstructed.block_graph
     assert reconstructed.procedure_graph.get("p1") == ["p2"]
+
+
+def test_block_graph_cycle_edges_are_marked() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "block_graph": {"b": ["c"], "c": ["b"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    cycle_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        == "block_graph_cycle"
+    ]
+    flow_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "block_graph"
+    ]
+    assert cycle_edges
+    assert not flow_edges
+    assert all(edge.get("text") == "ЦИКЛ" for edge in cycle_edges)
+    assert all(edge.get("strokeColor") == "#d32f2f" for edge in cycle_edges)
+    assert all(edge.get("strokeStyle") == "dashed" for edge in cycle_edges)
+    assert all(edge.get("strokeWidth") == 1 for edge in cycle_edges)
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    graph = {key: sorted(values) for key, values in reconstructed.block_graph.items()}
+    assert graph == {"b": ["c"], "c": ["b"]}
+
+
+def test_block_graph_skips_ambiguous_nodes_in_cycle_detection() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["c::end"],
+                "branches": {"a": ["c"]},
+            },
+        ],
+        "block_graph": {"a": ["b"], "b": ["c"], "c": ["a"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    cycle_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        == "block_graph_cycle"
+    ]
+    flow_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "block_graph"
+    ]
+    assert not cycle_edges
+    assert len(flow_edges) == 1
+    meta = flow_edges[0].get("customData", {}).get("cjm", {})
+    assert meta.get("source_block_id") == "b"
+    assert meta.get("target_block_id") == "c"
