@@ -10,6 +10,7 @@ from typing import Any
 from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
+    END_TYPE_TURN_OUT,
     INTERMEDIATE_BLOCK_COLOR,
     METADATA_SCHEMA_VERSION,
     BlockPlacement,
@@ -65,11 +66,12 @@ class MarkupToDiagramConverter(ABC):
             if proc.procedure_id in included_procs
             for block_id in proc.end_block_ids
         }
+        block_ids_in_plan = {(block.procedure_id, block.block_id) for block in plan.blocks}
         block_name_lookup = {
             (proc.procedure_id, block_id): name
             for proc in document.procedures
             for block_id, name in proc.block_id_to_block_name.items()
-            if name and block_id in proc.block_ids()
+            if name and (proc.procedure_id, block_id) in block_ids_in_plan
         }
         blocks = self._build_blocks(
             plan.blocks,
@@ -107,8 +109,7 @@ class MarkupToDiagramConverter(ABC):
             base_metadata,
             end_block_type_lookup,
         )
-        if not document.block_graph:
-            self._build_branch_edges(document, blocks, registry, base_metadata)
+        self._build_branch_edges(document, blocks, registry, base_metadata)
         self._build_procedure_flow_edges(
             document, plan.frames, frame_ids, registry, base_metadata, blocks
         )
@@ -803,14 +804,17 @@ class MarkupToDiagramConverter(ABC):
             end_type = None
             block_end_type = None
             background_color = None
+            stroke_style = None
             if marker.role == "end_marker":
                 end_type = marker.end_type or END_TYPE_DEFAULT
-                block_end_type = end_block_type_lookup.get(
-                    (marker.procedure_id, marker.block_id), END_TYPE_DEFAULT
-                )
+                block_end_type = end_block_type_lookup.get((marker.procedure_id, marker.block_id))
+                if block_end_type is None:
+                    block_end_type = end_type
                 marker_meta["end_block_type"] = block_end_type
                 marker_meta["end_type"] = end_type
                 background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
+                if end_type == "intermediate":
+                    stroke_style = "dashed"
             registry.add(
                 self._ellipse_element(
                     element_id=element_id,
@@ -819,6 +823,7 @@ class MarkupToDiagramConverter(ABC):
                     frame_id=frame_ids.get(marker.procedure_id),
                     metadata=self._with_base_metadata(marker_meta, base_metadata),
                     background_color=background_color,
+                    stroke_style=stroke_style,
                 )
             )
             label_id = self._stable_id(
@@ -835,6 +840,8 @@ class MarkupToDiagramConverter(ABC):
             elif marker.role == "end_marker":
                 if end_type == "postpone":
                     label_text = "POSTPONE"
+                elif end_type == END_TYPE_TURN_OUT:
+                    label_text = "TURN OUT"
                 elif end_type in {"all", "intermediate"}:
                     label_text = "END & EXIT"
                 else:
@@ -940,6 +947,8 @@ class MarkupToDiagramConverter(ABC):
         registry: ElementRegistry,
         base_metadata: Metadata,
     ) -> None:
+        if document.block_graph:
+            return
         cycle_edges_by_proc: dict[str, set[tuple[str, str]]] = {
             procedure.procedure_id: self._edges_in_cycles(procedure.branches)
             for procedure in document.procedures
@@ -1195,9 +1204,7 @@ class MarkupToDiagramConverter(ABC):
             ) in enumerate(edges):
                 dy = offsets[min(offset_idx, len(offsets) - 1)]
                 is_cycle = (source_block_id, target_block_id) in cycle_edges
-                cycle_marker = is_cycle and self._is_reverse_block_edge(
-                    source_block, target_block
-                )
+                cycle_marker = is_cycle and self._is_reverse_block_edge(source_block, target_block)
                 if cycle_marker:
                     start_center = self._block_anchor(source_block, side="bottom")
                     end_center = self._block_anchor(target_block, side="left")

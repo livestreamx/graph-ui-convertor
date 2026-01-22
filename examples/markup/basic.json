@@ -16,7 +16,8 @@
       "branches": {
         "intake_start": ["intake_collect"],
         "intake_collect": ["intake_validate"],
-        "intake_validate": ["intake_route"]
+        "intake_validate": ["intake_route"],
+        "intake_route": ["route_review"]
       },
       "block_id_to_block_name": {
         "intake_start": "Start intake",
@@ -48,8 +49,7 @@
       "start_block_ids": [],
       "end_block_ids": [],
       "branches": {
-        "resolve_auto": ["resolve_merge"],
-        "resolve_manual": ["resolve_merge"]
+        "resolve_merge": ["final_pack"]
       },
       "block_id_to_block_name": {
         "resolve_auto": "Auto resolve",

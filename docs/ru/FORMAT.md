@@ -30,12 +30,14 @@
   - `::all`: end + exit.
   - `::intermediate`: как `all`, но блок может продолжать ветвление.
   - `::postpone`: проблема отложена (передача между ботом/линиями поддержки).
+  - `::turn_out`: незапланированный выход (обычно выводится из ключей `branches`).
 - `branches` – граф смежности: ключ = исходный блок, значения = целевые блоки.
 - `finedog_unit_meta.service_name` – отображаемое имя сервиса.
 - `finedog_unit_id` – внешний идентификатор услуги для ссылок (строка или число; числа приводятся к строкам).
 - `procedure_graph` – связи между процедурами.
-- `block_graph` – связи между block_id; при наличии для диаграмм услуг граф рисуется между блоками,
-  а не между фреймами процедур, и `branches` не визуализируются.
+- `block_graph` – связи между block_id; при наличии он становится основным источником переходов
+  между блоками, а ветки `branches` не рисуются.
+  - `branches` используется только для добавления implicit END с `turn_out` по ключам словаря.
 
 ## Excalidraw (выход)
 
@@ -44,15 +46,17 @@
 - Блоки с `end_block_type=intermediate` имеют оранжевую заливку.
 - Эллипсы для маркеров START/END.
 - Маркеры END размещаются как отдельные узлы в grid (как цели ветвлений).
-- Заливка END различается по `end_type` (`postpone` — серый).
+- Заливка END различается по `end_type` (`postpone` — серый); `intermediate` END имеет пунктирную
+  обводку.
 - Стрелки:
   - START -> блок (label `start`, `edge_type=start`)
-  - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone`)
+  - блок -> END (label `end`, `edge_type=end`, `end_type=end|exit|all|intermediate|postpone|turn_out`)
   - `all`/`intermediate` в markup рисуют один END с подписью `END & EXIT`.
-- `postpone` в markup рисует END с подписью `POSTPONE`.
-- ветки блок -> блок (label `branch`, `edge_type=branch`)
-- блок-граф block -> block (label `graph`, `edge_type=block_graph`)
-- циклы блок-графа используют `edge_type=block_graph_cycle` (красный пунктир, обратная стрелка)
+  - `postpone` в markup рисует END с подписью `POSTPONE`.
+  - `turn_out` рисуется END с подписью `TURN OUT`.
+  - ветки блок -> блок (label `branch`, `edge_type=branch`, используются при отсутствии `block_graph`)
+  - блок-граф block -> block (label `graph`, `edge_type=block_graph`)
+  - циклы блок-графа используют `edge_type=block_graph_cycle` (красный пунктир, обратная стрелка)
 - `service_name` выводится как композитный заголовок над графом.
 - Детерминированный лейаут: grid по процедурам, слева направо, сверху вниз.
 
@@ -60,14 +64,15 @@
 
 Цвета одинаковы для Excalidraw и Unidraw. Сначала описание для человека, затем точные hex.
 
-- Теги (типы завершения): теги вида `#end`, `#exit`, `#all`, `#intermediate`, `#postpone`
-  (также принимаются как `::end`, `::exit` и т.д.) задают заливку END‑маркеров и используются при
-  best‑effort импорте.
-  - `end` -> светлый песочный `#ffe4b5`
-  - `exit` -> мягкий красный `#ffb3b3`
-  - `all` -> бледно‑желтый `#fff3b0`
-  - `intermediate` -> светло‑синий `#cfe3ff`
+- Теги (типы завершения): теги вида `#end`, `#exit`, `#all`, `#intermediate`, `#postpone`,
+  `#turn_out` (также принимаются как `::end`, `::exit` и т.д.) задают заливку END‑маркеров и
+  используются при best‑effort импорте.
+  - `end` -> красный `#ff6b6b`
+  - `exit` -> желтый `#ffe08a`
+  - `all` -> рыжий `#ffb347`
+  - `intermediate` -> рыжий `#ffb347` (пунктирная обводка)
   - `postpone` -> нейтральный серый `#d9d9d9`
+  - `turn_out` -> бледно‑синий `#cfe3ff`
 - Блоки: базовая заливка блока — светло‑синяя `#cce5ff` с темным контуром; блоки с
   `end_block_type=intermediate` подсвечены теплым оранжевым `#ffb347`.
 - Стрелки: базовый цвет — почти черный `#1e1e1e` (сплошной); циклы (`branch_cycle`,
@@ -102,8 +107,8 @@
 - `role`: `frame|block|block_label|start_marker|end_marker|edge`
 - `role` (заголовок): `diagram_title_panel|diagram_title|diagram_title_rule`
 - `edge_type`: `start|end|branch|block_graph|block_graph_cycle` (только для ребер)
-- `end_type`: `end|exit|all|intermediate|postpone` (end-маркеры и end-стрелки)
-- `end_block_type`: `end|exit|all|intermediate|postpone` (исходный тип блока в markup)
+- `end_type`: `end|exit|all|intermediate|postpone|turn_out` (end-маркеры и end-стрелки)
+- `end_block_type`: `end|exit|all|intermediate|postpone|turn_out` (исходный тип блока в markup)
 
 Эти метаданные обеспечивают round-trip даже при перемещении элементов в UI.
 

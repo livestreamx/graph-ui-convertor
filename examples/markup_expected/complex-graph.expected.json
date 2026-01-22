@@ -3,11 +3,11 @@
     "procedures": 6,
     "blocks": 24,
     "starts": 3,
-    "ends": 5
+    "ends": 23
   },
   "edges": {
     "start": 3,
-    "end": 5,
+    "end": 23,
     "branch": 0,
     "branch_cycle": 0,
     "block_graph": 27,
@@ -24,7 +24,8 @@
     "exit": 1,
     "all": 1,
     "intermediate": 1,
-    "postpone": 1
+    "postpone": 1,
+    "turn_out": 18
   },
   "procedure_graph": {
     "edges": 2

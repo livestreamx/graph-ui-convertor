@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import MarkupDocument
+from domain.models import END_TYPE_DEFAULT, MarkerPlacement, MarkupDocument
 
 
 def repo_root() -> Path:
@@ -70,6 +70,20 @@ def test_block_graph_infers_procedure_order_for_layout() -> None:
     assert set(frames.keys()) == {"p1", "p2"}
     assert frames["p1"].origin.x < frames["p2"].origin.x
     assert not plan.separators
+
+
+def test_basic_procedure_frames_use_uniform_gap() -> None:
+    markup = load_markup_fixture("basic.json")
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+
+    frames = sorted(plan.frames, key=lambda frame: frame.origin.x)
+    gaps = [
+        frames[idx + 1].origin.x - (frames[idx].origin.x + frames[idx].size.width)
+        for idx in range(len(frames) - 1)
+    ]
+    assert gaps
+    assert max(gaps) - min(gaps) < 1e-6
 
 
 def test_end_markers_follow_block_order() -> None:
@@ -175,21 +189,31 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
 
     proc_id = "proc_marker_shift"
     blocks = {block.block_id: block for block in plan.blocks if block.procedure_id == proc_id}
-    markers = {
-        marker.block_id: marker
+    markers = [
+        marker
         for marker in plan.markers
         if marker.procedure_id == proc_id and marker.role == "end_marker"
-    }
+    ]
     offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
     row_step = layout.config.block_size.height + layout.config.gap_y
 
     aligned_block = "aligned"
-    aligned_marker = markers.get(aligned_block)
+
+    def marker_for(block_id: str, end_type: str | None = None) -> MarkerPlacement | None:
+        candidates = [marker for marker in markers if marker.block_id == block_id]
+        if end_type is None:
+            return candidates[0] if candidates else None
+        for marker in candidates:
+            if marker.end_type == end_type:
+                return marker
+        return None
+
+    aligned_marker = marker_for(aligned_block, END_TYPE_DEFAULT)
     assert aligned_marker is not None
     assert abs(aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)) < 1e-6
 
     shifted_block = "shifted"
-    shifted_marker = markers.get(shifted_block)
+    shifted_marker = marker_for(shifted_block, END_TYPE_DEFAULT)
     assert shifted_marker is not None
     assert (
         abs(shifted_marker.position.y - (blocks[shifted_block].position.y + row_step + offset_y))

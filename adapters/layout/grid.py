@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from domain.models import (
     END_TYPE_DEFAULT,
+    END_TYPE_TURN_OUT,
     BlockPlacement,
     FramePlacement,
     LayoutPlan,
@@ -68,7 +69,11 @@ class GridLayoutEngine(LayoutEngine):
         separator_ys: list[float] = []
         scenarios: list[ScenarioPlacement] = []
 
-        procedures = [proc for proc in document.procedures if proc.block_ids()]
+        block_graph_nodes = self._block_graph_nodes(document) if document.block_graph else set()
+        owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
+        procedures = [
+            proc for proc in document.procedures if owned_blocks_by_proc.get(proc.procedure_id)
+        ]
         if not procedures:
             return LayoutPlan(
                 frames=frames, blocks=blocks, markers=markers, separators=[], scenarios=[]
@@ -76,7 +81,7 @@ class GridLayoutEngine(LayoutEngine):
         procedure_graph = document.procedure_graph
         if document.block_graph and not any(procedure_graph.values()):
             procedure_graph = self._infer_procedure_graph_from_block_graph(
-                document.block_graph, procedures
+                document.block_graph, procedures, owned_blocks_by_proc
             )
 
         proc_ids = [proc.procedure_id for proc in procedures]
@@ -84,10 +89,18 @@ class GridLayoutEngine(LayoutEngine):
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
         adjacency = self._normalize_procedure_graph(proc_ids, procedure_graph)
         sizing: dict[str, Size] = {}
+        layout_edges_by_proc = self._layout_edges_by_proc(
+            document, procedures, owned_blocks_by_proc
+        )
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
-            _, max_level, row_counts, _, _, _ = self._compute_block_levels(procedure)
+            _, max_level, row_counts, _, _, _ = self._compute_block_levels(
+                procedure,
+                owned_blocks_by_proc.get(procedure.procedure_id),
+                layout_edges_by_proc.get(procedure.procedure_id),
+                set(procedure.branches.keys()),
+            )
             cols = max_level + 1
             rows = max(row_counts.values() or [1])
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
@@ -107,7 +120,6 @@ class GridLayoutEngine(LayoutEngine):
                 frame_height + self.config.padding * 0.25,
             )
 
-        lane_span = max((size.width for size in sizing.values()), default=0) + self.config.lane_gap
         components = self._procedure_components(proc_ids, adjacency)
         components.sort(
             key=lambda component: min(order_index.get(proc_id, 0) for proc_id in component)
@@ -137,6 +149,16 @@ class GridLayoutEngine(LayoutEngine):
             for nodes in level_nodes.values():
                 nodes.sort(key=lambda proc_id: order_index.get(proc_id, 0))
 
+            level_widths: dict[int, float] = {}
+            for lvl, nodes in level_nodes.items():
+                level_widths[lvl] = max((sizing[node].width for node in nodes), default=0.0)
+
+            level_offsets: dict[int, float] = {}
+            offset_x = origin_x
+            for lvl in range(max_level + 1):
+                level_offsets[lvl] = offset_x
+                offset_x += level_widths.get(lvl, 0.0) + self.config.lane_gap
+
             level_heights: dict[int, float] = {}
             for lvl, nodes in level_nodes.items():
                 if not nodes:
@@ -153,7 +175,7 @@ class GridLayoutEngine(LayoutEngine):
                     frame_size = sizing[proc_id]
                     frame = FramePlacement(
                         procedure_id=proc_id,
-                        origin=Point(origin_x + lvl * lane_span, y),
+                        origin=Point(level_offsets.get(lvl, origin_x), y),
                         size=frame_size,
                     )
                     frames.append(frame)
@@ -172,7 +194,10 @@ class GridLayoutEngine(LayoutEngine):
                 continue
             placement_by_block: dict[str, BlockPlacement] = {}
             node_levels, max_level, _, order, row_positions, node_info = self._compute_block_levels(
-                frame_proc
+                frame_proc,
+                owned_blocks_by_proc.get(frame_proc.procedure_id),
+                layout_edges_by_proc.get(frame_proc.procedure_id),
+                set(frame_proc.branches.keys()),
             )
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
             level_rows: dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
@@ -250,7 +275,12 @@ class GridLayoutEngine(LayoutEngine):
 
         if frames:
             scenarios = self._build_scenarios(
-                components, frames, procedure_map, procedure_graph, order_index
+                components,
+                frames,
+                procedure_map,
+                procedure_graph,
+                layout_edges_by_proc,
+                order_index,
             )
 
         return LayoutPlan(
@@ -267,6 +297,7 @@ class GridLayoutEngine(LayoutEngine):
         frames: list[FramePlacement],
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
+        layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
         order_index: dict[str, int],
     ) -> list[ScenarioPlacement]:
         scenarios: list[ScenarioPlacement] = []
@@ -283,7 +314,7 @@ class GridLayoutEngine(LayoutEngine):
             title = "Граф" if component_count == 1 else f"Граф {idx}"
             labels = self._component_procedure_labels(component, procedure_map, frame_lookup)
             starts, ends, variants = self._component_stats(
-                component, procedure_map, procedure_graph
+                component, procedure_map, procedure_graph, layout_edges_by_proc
             )
             properties, cycle_text = self._component_graph_properties(
                 component, procedure_graph, order_index
@@ -435,6 +466,7 @@ class GridLayoutEngine(LayoutEngine):
         component: set[str],
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
+        layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
     ) -> tuple[int, int, int]:
         start_blocks: set[str] = set()
         end_blocks: set[str] = set()
@@ -448,8 +480,8 @@ class GridLayoutEngine(LayoutEngine):
                 start_blocks.add(start_id)
             for end_id in proc.end_block_ids:
                 end_blocks.add(end_id)
-            branches = proc.branches
-            for source, targets in branches.items():
+            edges = layout_edges_by_proc.get(proc_id, {})
+            for source, targets in edges.items():
                 if targets:
                     branch_edges += len(targets)
                 branch_adjacency.setdefault(str(source), []).extend(
@@ -635,15 +667,104 @@ class GridLayoutEngine(LayoutEngine):
                 adjacency[parent].extend(cleaned)
         return adjacency
 
+    def _block_graph_nodes(self, document: MarkupDocument) -> set[str]:
+        nodes: set[str] = set()
+        for source, targets in document.block_graph.items():
+            nodes.add(source)
+            nodes.update(targets)
+        return nodes
+
+    def _layout_edges_by_proc(
+        self,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> dict[str, dict[str, list[str]]]:
+        if not document.block_graph:
+            return {proc.procedure_id: dict(proc.branches) for proc in procedures}
+
+        owner_by_block: dict[str, str] = {}
+        ambiguous: set[str] = set()
+        for proc_id, blocks in owned_blocks_by_proc.items():
+            for block_id in blocks:
+                existing = owner_by_block.get(block_id)
+                if existing and existing != proc_id:
+                    ambiguous.add(block_id)
+                else:
+                    owner_by_block[block_id] = proc_id
+
+        edges_by_proc: dict[str, dict[str, list[str]]] = {
+            proc.procedure_id: {} for proc in procedures
+        }
+        for source, targets in document.block_graph.items():
+            if source in ambiguous:
+                continue
+            source_proc = owner_by_block.get(source)
+            if not source_proc:
+                continue
+            for target in targets:
+                if target in ambiguous:
+                    continue
+                target_proc = owner_by_block.get(target)
+                if not target_proc or target_proc != source_proc:
+                    continue
+                edges = edges_by_proc.setdefault(source_proc, {}).setdefault(source, [])
+                if target not in edges:
+                    edges.append(target)
+
+        return edges_by_proc
+
+    def _resolve_owned_blocks(
+        self,
+        document: MarkupDocument,
+        block_graph_nodes: set[str] | None = None,
+    ) -> dict[str, set[str]]:
+        explicit_owners: dict[str, set[str]] = {}
+        for procedure in document.procedures:
+            proc_id = procedure.procedure_id
+            explicit_blocks = (
+                set(procedure.start_block_ids)
+                | set(procedure.end_block_ids)
+                | set(procedure.branches.keys())
+            )
+            if block_graph_nodes:
+                explicit_blocks.update(
+                    set(procedure.block_id_to_block_name.keys()) & block_graph_nodes
+                )
+            for block_id in explicit_blocks:
+                explicit_owners.setdefault(block_id, set()).add(proc_id)
+
+        owned_by_proc: dict[str, set[str]] = {}
+        for procedure in document.procedures:
+            proc_id = procedure.procedure_id
+            owned: set[str] = set()
+            for block_id, owners in explicit_owners.items():
+                if proc_id in owners:
+                    owned.add(block_id)
+            for targets in procedure.branches.values():
+                for target in targets:
+                    if target not in explicit_owners:
+                        owned.add(target)
+            owned_by_proc[proc_id] = owned
+        return owned_by_proc
+
     def _infer_procedure_graph_from_block_graph(
         self,
         block_graph: Mapping[str, list[str]],
         procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]] | None = None,
     ) -> dict[str, list[str]]:
         proc_for_block: dict[str, str] = {}
         duplicates: set[str] = set()
         for procedure in procedures:
-            for block_id in procedure.block_ids():
+            block_ids = (
+                owned_blocks_by_proc.get(procedure.procedure_id)
+                if owned_blocks_by_proc is not None
+                else procedure.block_ids()
+            )
+            if block_ids is None:
+                block_ids = procedure.block_ids()
+            for block_id in block_ids:
                 if block_id in proc_for_block:
                     duplicates.add(block_id)
                 else:
@@ -754,7 +875,11 @@ class GridLayoutEngine(LayoutEngine):
         return cycle_edges
 
     def _compute_block_levels(
-        self, procedure: Procedure
+        self,
+        procedure: Procedure,
+        owned_blocks: set[str] | None = None,
+        layout_edges: Mapping[str, list[str]] | None = None,
+        turn_out_blocks: set[str] | None = None,
     ) -> tuple[
         dict[str, int],
         int,
@@ -763,16 +888,33 @@ class GridLayoutEngine(LayoutEngine):
         dict[str, float],
         dict[str, NodeInfo],
     ]:
-        branches = procedure.branches
+        edges_for_layout = layout_edges if layout_edges is not None else procedure.branches
         start_blocks = list(procedure.start_block_ids)
         end_blocks = list(procedure.end_block_ids)
         end_block_types = procedure.end_block_types
+        allowed_blocks: set[str] | None = set(owned_blocks) if owned_blocks is not None else None
+        if allowed_blocks is not None:
+            allowed_blocks.update(start_blocks)
+            allowed_blocks.update(end_blocks)
+            allowed_blocks.update(edges_for_layout.keys())
+        turn_out_sources = turn_out_blocks or set(procedure.branches.keys())
+        turn_out_block_list = sorted(
+            {
+                block
+                for block in turn_out_sources
+                if allowed_blocks is None or block in allowed_blocks
+            }
+        )
 
         branches_for_layout: dict[str, list[str]] = {}
-        for source, targets in branches.items():
+        for source, targets in edges_for_layout.items():
+            if allowed_blocks is not None and source not in allowed_blocks:
+                continue
             seen: set[str] = set()
             cleaned: list[str] = []
             for target in targets:
+                if allowed_blocks is not None and target not in allowed_blocks:
+                    continue
                 if target in seen:
                     continue
                 seen.add(target)
@@ -787,19 +929,37 @@ class GridLayoutEngine(LayoutEngine):
                 ]
 
         node_info: dict[str, NodeInfo] = {}
-        all_blocks = set(start_blocks) | set(end_blocks)
-        for src, targets in branches.items():
-            all_blocks.add(src)
-            all_blocks.update(targets)
+        if allowed_blocks is None:
+            all_blocks = set(start_blocks) | set(end_blocks)
+            for src, targets in edges_for_layout.items():
+                all_blocks.add(src)
+                all_blocks.update(targets)
+        else:
+            all_blocks = set(allowed_blocks)
+            all_blocks.update(start_blocks)
+            all_blocks.update(end_blocks)
 
         for block_id in all_blocks:
             node_info.setdefault(block_id, NodeInfo(kind="block", block_id=block_id))
 
-        end_nodes: dict[str, NodeInfo] = {}
+        end_marker_types: dict[str, set[str]] = {}
         for block_id in end_blocks:
+            if block_id not in all_blocks:
+                continue
             base_type = normalize_end_type(end_block_types.get(block_id)) or END_TYPE_DEFAULT
-            node_id = f"__end_marker__{base_type}::{block_id}"
-            end_nodes[node_id] = NodeInfo(kind="end_marker", block_id=block_id, end_type=base_type)
+            end_marker_types.setdefault(block_id, set()).add(base_type)
+        for block_id in turn_out_block_list:
+            if block_id not in all_blocks:
+                continue
+            end_marker_types.setdefault(block_id, set()).add(END_TYPE_TURN_OUT)
+
+        end_nodes: dict[str, NodeInfo] = {}
+        for block_id, types in sorted(end_marker_types.items()):
+            for end_type in sorted(types):
+                node_id = f"__end_marker__{end_type}::{block_id}"
+                end_nodes[node_id] = NodeInfo(
+                    kind="end_marker", block_id=block_id, end_type=end_type
+                )
 
         node_info.update(end_nodes)
         all_nodes = set(node_info.keys())
@@ -867,9 +1027,11 @@ class GridLayoutEngine(LayoutEngine):
 
         max_level = max(levels.values() or [0])
 
-        branch_counts = {block: len(targets) for block, targets in branches_for_layout.items()}
-        end_blocks_set = set(end_blocks)
-
+        branch_counts = {
+            block: len(targets)
+            for block, targets in edges_for_layout.items()
+            if allowed_blocks is None or block in allowed_blocks
+        }
         level_buckets: dict[int, list[str]] = {lvl: [] for lvl in range(max_level + 1)}
         for node_id, lvl in levels.items():
             level_buckets.setdefault(lvl, []).append(node_id)
@@ -1069,8 +1231,6 @@ class GridLayoutEngine(LayoutEngine):
             info = node_info.get(node_id)
             if info and info.kind == "block":
                 branch_count = branch_counts.get(info.block_id, 0)
-                if info.block_id in end_blocks_set and branch_count > 0:
-                    branch_count += 1
                 return float(max(1, branch_count))
             return 1.0
 
