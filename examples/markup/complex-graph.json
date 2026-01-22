@@ -2,7 +2,7 @@
   "markup_type": "service",
   "finedog_unit_id": "svc-complex-merge",
   "finedog_unit_meta": {
-    "service_name": "Complex Cross Procedure Graph",
+    "service_name": "Complex graph",
     "criticality_level": "B2",
     "team_id": "team-delta",
     "team_name": "Operations"

@@ -2,7 +2,7 @@
   "markup_type": "service",
   "finedog_unit_id": "svc-basic-merge",
   "finedog_unit_meta": {
-    "service_name": "Unified Service Graph",
+    "service_name": "Basic graph",
     "criticality_level": "C1",
     "team_id": "team-alpha",
     "team_name": "Core Payments"

@@ -2,7 +2,7 @@
   "markup_type": "service",
   "finedog_unit_id": "svc-graph-set",
   "finedog_unit_meta": {
-    "service_name": "Graphs Set Playground",
+    "service_name": "Graphs Set",
     "criticality_level": "B1",
     "team_id": "team-beta",
     "team_name": "Risk Ops"
