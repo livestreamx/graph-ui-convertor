@@ -52,6 +52,7 @@ class ExcalidrawToMarkupConverter:
         start_map: dict[str, set[str]] = defaultdict(set)
         end_map: dict[str, dict[str, str]] = defaultdict(dict)
         branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        block_graph_edges: list[tuple[str, str]] = []
 
         marker_end_types = self._merge_marker_end_types(markers)
         for (procedure_id, block_id), end_type in marker_end_types.items():
@@ -102,15 +103,22 @@ class ExcalidrawToMarkupConverter:
                     branch_map[procedure_id][source_block].add(target_block)
                 continue
 
+            if edge_type == "block_graph":
+                if source_block and target_block:
+                    block_graph_edges.append((source_block, target_block))
+                continue
+
             text = arrow.get("text")
             if isinstance(text, str) and text.lower() == "branch" and source_block and target_block:
                 branch_map[procedure_id][source_block].add(target_block)
 
+        block_graph = self._collect_block_graph(elements, blocks)
+        if block_graph:
+            branch_map = self._branches_from_block_edges(block_graph_edges, blocks)
         procedures = self._build_procedures(
             blocks, start_map, end_map, branch_map, frames, block_names, proc_names
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
-        block_graph = self._collect_block_graph(elements, blocks)
         if block_graph and not any(procedure_graph.values()):
             procedure_graph = self._infer_procedure_graph_from_block_graph(block_graph, procedures)
         return MarkupDocument(
@@ -340,6 +348,31 @@ class ExcalidrawToMarkupConverter:
                 graph[source].append(target)
             graph.setdefault(target, [])
         return graph
+
+    def _branches_from_block_edges(
+        self,
+        edges: Iterable[tuple[str, str]],
+        blocks: Mapping[str, BlockCandidate],
+    ) -> dict[str, dict[str, set[str]]]:
+        proc_for_block: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for block in blocks.values():
+            existing_proc = proc_for_block.get(block.block_id)
+            if existing_proc and existing_proc != block.procedure_id:
+                duplicates.add(block.block_id)
+            elif not existing_proc:
+                proc_for_block[block.block_id] = block.procedure_id
+
+        branches: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        for source, target in edges:
+            if source in duplicates or target in duplicates:
+                continue
+            source_proc = proc_for_block.get(source)
+            target_proc = proc_for_block.get(target)
+            if not source_proc or source_proc != target_proc:
+                continue
+            branches[source_proc][source].add(target)
+        return branches
 
     def _infer_procedure_graph_from_block_graph(
         self,

@@ -73,10 +73,16 @@ class GridLayoutEngine(LayoutEngine):
             return LayoutPlan(
                 frames=frames, blocks=blocks, markers=markers, separators=[], scenarios=[]
             )
+        procedure_graph = document.procedure_graph
+        if document.block_graph and not any(procedure_graph.values()):
+            procedure_graph = self._infer_procedure_graph_from_block_graph(
+                document.block_graph, procedures
+            )
+
         proc_ids = [proc.procedure_id for proc in procedures]
-        order_hint = self._procedure_order_hint(procedures, document.procedure_graph)
+        order_hint = self._procedure_order_hint(procedures, procedure_graph)
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
-        adjacency = self._normalize_procedure_graph(proc_ids, document.procedure_graph)
+        adjacency = self._normalize_procedure_graph(proc_ids, procedure_graph)
         sizing: dict[str, Size] = {}
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
@@ -244,7 +250,7 @@ class GridLayoutEngine(LayoutEngine):
 
         if frames:
             scenarios = self._build_scenarios(
-                components, frames, procedure_map, document.procedure_graph, order_index
+                components, frames, procedure_map, procedure_graph, order_index
             )
 
         return LayoutPlan(
@@ -627,6 +633,41 @@ class GridLayoutEngine(LayoutEngine):
                     seen.add(child)
             if cleaned:
                 adjacency[parent].extend(cleaned)
+        return adjacency
+
+    def _infer_procedure_graph_from_block_graph(
+        self,
+        block_graph: Mapping[str, list[str]],
+        procedures: Sequence[Procedure],
+    ) -> dict[str, list[str]]:
+        proc_for_block: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for procedure in procedures:
+            for block_id in procedure.block_ids():
+                if block_id in proc_for_block:
+                    duplicates.add(block_id)
+                else:
+                    proc_for_block[block_id] = procedure.procedure_id
+
+        adjacency: dict[str, list[str]] = {}
+        for source_block, targets in block_graph.items():
+            if source_block in duplicates:
+                continue
+            source_proc = proc_for_block.get(source_block)
+            if not source_proc:
+                continue
+            for target_block in targets:
+                if target_block in duplicates:
+                    continue
+                target_proc = proc_for_block.get(target_block)
+                if not target_proc or target_proc == source_proc:
+                    continue
+                adjacency.setdefault(source_proc, [])
+                if target_proc not in adjacency[source_proc]:
+                    adjacency[source_proc].append(target_proc)
+
+        for procedure in procedures:
+            adjacency.setdefault(procedure.procedure_id, [])
         return adjacency
 
     def _procedure_components(

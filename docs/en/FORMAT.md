@@ -35,7 +35,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 - `finedog_unit_id` – external unit identifier for service links (string or integer; integers are coerced to strings).
 - `procedure_graph` – adjacency between procedures.
 - `block_graph` – adjacency between block ids; when provided for service diagrams, graph edges are
-  drawn between blocks instead of frames.
+  drawn between blocks instead of frames, and `branches` are not rendered.
 
 ## Excalidraw (output)
 
@@ -52,7 +52,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - `postpone` in markup renders an END marker labeled `POSTPONE`.
   - branch arrows block -> block (label `branch`, `edge_type=branch`)
   - block graph arrows block -> block (label `graph`, `edge_type=block_graph`)
-  - block graph cycles use `edge_type=block_graph_cycle` (dashed red)
+  - block graph cycles use `edge_type=block_graph_cycle` (dashed red, reverse arrow)
 - Service name is rendered as a composite title header above the graph.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 

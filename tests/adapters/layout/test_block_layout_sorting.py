@@ -45,6 +45,33 @@ def test_layout_orders_targets_by_incoming_neighbors() -> None:
     assert closest_target("c") == "e"
 
 
+def test_block_graph_infers_procedure_order_for_layout() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": [],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "block_graph": {"b": ["c"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert set(frames.keys()) == {"p1", "p2"}
+    assert frames["p1"].origin.x < frames["p2"].origin.x
+    assert not plan.separators
+
+
 def test_end_markers_follow_block_order() -> None:
     payload = {
         "markup_type": "service",

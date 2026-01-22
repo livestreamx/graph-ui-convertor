@@ -8,7 +8,7 @@
   "edges": {
     "start": 3,
     "end": 5,
-    "branch": 18,
+    "branch": 0,
     "branch_cycle": 0,
     "block_graph": 27,
     "block_graph_cycle": 0

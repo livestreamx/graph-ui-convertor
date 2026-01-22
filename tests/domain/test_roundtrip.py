@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import defaultdict
 from pathlib import Path
 from typing import Any
 
@@ -22,15 +23,54 @@ def load_markup_fixture(name: str) -> MarkupDocument:
     return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
 
 
+def _branches_from_block_graph(document: MarkupDocument) -> dict[str, dict[str, list[str]]]:
+    proc_for_block: dict[str, str] = {}
+    duplicates: set[str] = set()
+    for procedure in document.procedures:
+        for block_id in procedure.block_ids():
+            existing_proc = proc_for_block.get(block_id)
+            if existing_proc and existing_proc != procedure.procedure_id:
+                duplicates.add(block_id)
+            elif not existing_proc:
+                proc_for_block[block_id] = procedure.procedure_id
+
+    branches: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+    for source, targets in document.block_graph.items():
+        if source in duplicates:
+            continue
+        source_proc = proc_for_block.get(source)
+        if not source_proc:
+            continue
+        for target in targets:
+            if target in duplicates:
+                continue
+            target_proc = proc_for_block.get(target)
+            if target_proc != source_proc:
+                continue
+            branches[source_proc][source].add(target)
+
+    return {
+        proc_id: {source: sorted(values) for source, values in sorted(proc_branches.items())}
+        for proc_id, proc_branches in branches.items()
+    }
+
+
 def normalize(document: MarkupDocument) -> dict[str, Any]:
+    derived_branches: dict[str, dict[str, list[str]]] | None = None
+    if document.block_graph:
+        derived_branches = _branches_from_block_graph(document)
     normalized_procedures: list[dict[str, Any]] = []
     for procedure in sorted(document.procedures, key=lambda p: p.procedure_id):
+        if derived_branches is None:
+            branches = {k: sorted(v) for k, v in sorted(procedure.branches.items())}
+        else:
+            branches = derived_branches.get(procedure.procedure_id, {})
         normalized_procedures.append(
             {
                 "procedure_id": procedure.procedure_id,
                 "start_block_ids": sorted(procedure.start_block_ids),
                 "end_block_ids": sorted(procedure.end_block_ids),
-                "branches": {k: sorted(v) for k, v in sorted(procedure.branches.items())},
+                "branches": branches or {},
             }
         )
     return {
@@ -51,19 +91,20 @@ def test_roundtrip_preserves_structure() -> None:
     assert normalize(reconstructed) == normalize(markup)
 
 
-def test_branch_metadata_persists() -> None:
+def test_block_graph_metadata_persists() -> None:
     markup = load_markup_fixture("complex-graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     excal = forward.convert(markup)
 
-    branch_edges = [
+    block_graph_edges = [
         element
         for element in excal.elements
         if element.get("type") == "arrow"
-        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        in {"block_graph", "block_graph_cycle"}
     ]
-    assert branch_edges, "Branch edges should be rendered with metadata"
+    assert block_graph_edges, "Block graph edges should be rendered with metadata"
 
 
 def test_branch_edges_match_markup() -> None:
