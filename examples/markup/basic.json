@@ -5,7 +5,7 @@
     "service_name": "Basic graph",
     "criticality_level": "C1",
     "team_id": "team-alpha",
-    "team_name": "Core Payments"
+    "team_name": "Basic graph team"
   },
   "procedures": [
     {
