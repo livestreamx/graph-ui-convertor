@@ -20,6 +20,7 @@ from domain.models import (
     normalize_end_type,
 )
 from domain.ports.layout import LayoutEngine
+from domain.services.graph_metrics import build_directed_graph, compute_graph_metrics
 
 
 @dataclass(frozen=True)
@@ -279,6 +280,7 @@ class GridLayoutEngine(LayoutEngine):
                 frames,
                 procedure_map,
                 procedure_graph,
+                document.block_graph or None,
                 layout_edges_by_proc,
                 order_index,
             )
@@ -297,6 +299,7 @@ class GridLayoutEngine(LayoutEngine):
         frames: list[FramePlacement],
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
+        block_graph: Mapping[str, list[str]] | None,
         layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
         order_index: dict[str, int],
     ) -> list[ScenarioPlacement]:
@@ -314,10 +317,14 @@ class GridLayoutEngine(LayoutEngine):
             title = "Граф" if component_count == 1 else f"Граф {idx}"
             labels = self._component_procedure_labels(component, procedure_map, frame_lookup)
             starts, ends, variants = self._component_stats(
-                component, procedure_map, procedure_graph, layout_edges_by_proc
+                component,
+                procedure_map,
+                procedure_graph,
+                layout_edges_by_proc,
+                block_graph,
             )
             properties, cycle_text = self._component_graph_properties(
-                component, procedure_graph, order_index
+                component, procedure_graph, order_index, block_graph
             )
             body_lines = [
                 *properties,
@@ -467,6 +474,7 @@ class GridLayoutEngine(LayoutEngine):
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
         layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
+        block_graph: Mapping[str, list[str]] | None = None,
     ) -> tuple[int, int, int]:
         start_blocks: set[str] = set()
         end_blocks: set[str] = set()
@@ -488,79 +496,58 @@ class GridLayoutEngine(LayoutEngine):
                     str(target) for target in targets
                 )
 
-        if branch_edges > 0:
-            combinations = self._count_paths(branch_adjacency, list(start_blocks))
-            if combinations <= 0 and component:
-                combinations = 1
+        if block_graph:
+            metrics = compute_graph_metrics(block_graph)
+            branch_count = len(metrics.branch_nodes)
         else:
-            combinations = self._procedure_graph_combinations(component, procedure_graph)
+            if branch_edges > 0:
+                combinations = self._count_paths(branch_adjacency, list(start_blocks))
+                if combinations <= 0 and component:
+                    combinations = 1
+            else:
+                combinations = self._procedure_graph_combinations(component, procedure_graph)
+            branch_count = combinations
 
-        return len(start_blocks), len(end_blocks), combinations
+        return len(start_blocks), len(end_blocks), branch_count
 
     def _component_graph_properties(
         self,
         component: set[str],
         procedure_graph: dict[str, list[str]],
         order_index: dict[str, int],
+        block_graph: Mapping[str, list[str]] | None = None,
     ) -> tuple[list[str], str | None]:
-        adjacency: dict[str, list[str]] = {node: [] for node in component}
-        edge_count = 0
-        for parent, children in procedure_graph.items():
-            if parent not in component:
-                continue
-            for child in children:
-                if child in component:
-                    adjacency[parent].append(child)
-                    edge_count += 1
-
-        indegree: dict[str, int] = {node: 0 for node in component}
-        outdegree: dict[str, int] = {node: len(adjacency.get(node, [])) for node in component}
-        for _parent, children in adjacency.items():
-            for child in children:
-                indegree[child] = indegree.get(child, 0) + 1
-
-        sources = [node for node, deg in indegree.items() if deg == 0]
-        sinks = [node for node, deg in outdegree.items() if deg == 0]
-        has_branching = any(deg > 1 for deg in outdegree.values())
-        has_merging = any(deg > 1 for deg in indegree.values())
-        cycle_edges = self._find_cycle_edges(adjacency, order_index)
-        cycle_count = len(cycle_edges)
-        is_cyclic = cycle_count > 0
-
-        undirected: dict[str, set[str]] = {node: set() for node in component}
-        for parent, children in adjacency.items():
-            for child in children:
-                undirected[parent].add(child)
-                undirected[child].add(parent)
-        connected = True
-        if component:
-            start = next(iter(component))
-            stack = [start]
-            visited: set[str] = set()
-            while stack:
-                node = stack.pop()
-                if node in visited:
+        if block_graph:
+            metrics = compute_graph_metrics(block_graph)
+            vertex_label = "вершин (блоков)"
+        else:
+            adjacency: dict[str, list[str]] = {node: [] for node in component}
+            for parent, children in procedure_graph.items():
+                if parent not in component:
                     continue
-                visited.add(node)
-                stack.extend(undirected.get(node, set()) - visited)
-            connected = visited == component
+                for child in children:
+                    if child in component:
+                        adjacency[parent].append(child)
+            metrics = compute_graph_metrics(adjacency)
+            vertex_label = "вершин"
 
         cycle_text = None
-        properties = []
-        if is_cyclic:
-            cycle_text = f"- цикличный, кол-во циклов: {cycle_count}"
-        else:
+        properties: list[str] = []
+        if metrics.is_acyclic:
             properties.append("- ацикличный")
+        else:
+            cycle_count = 1 if metrics.cycle_path else 0
+            cycle_text = f"- цикличный, кол-во циклов: {cycle_count}"
         properties.extend(
             [
                 "- ориентированный",
-                "- слабосвязный" if connected else "- несвязный",
-                f"- вершин: {len(component)}",
-                f"- ребер: {edge_count}",  # noqa: RUF001
-                f"- источники: {len(sources)}",
-                f"- стоки: {len(sinks)}",
-                "- разветвляющийся" if has_branching else "- без разветвлений",
-                "- слияния есть" if has_merging else "- без слияний",
+                "- слабосвязный" if metrics.weakly_connected else "- несвязный",
+                f"- {vertex_label}: {metrics.vertices}",
+                f"- ребер: {metrics.edges}",  # noqa: RUF001
+                f"- источники: {len(metrics.sources)}",
+                f"- стоки: {len(metrics.sinks)}",
+                "- разветвляющийся" if metrics.branch_nodes else "- без разветвлений",
+                "- слияния есть" if metrics.merge_nodes else "- без слияний",
             ]
         )
         return properties, cycle_text
@@ -668,11 +655,7 @@ class GridLayoutEngine(LayoutEngine):
         return adjacency
 
     def _block_graph_nodes(self, document: MarkupDocument) -> set[str]:
-        nodes: set[str] = set()
-        for source, targets in document.block_graph.items():
-            nodes.add(source)
-            nodes.update(targets)
-        return nodes
+        return build_directed_graph(document.block_graph).vertices
 
     def _layout_edges_by_proc(
         self,
