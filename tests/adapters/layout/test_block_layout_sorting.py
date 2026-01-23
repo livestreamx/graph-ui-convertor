@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import MarkupDocument
+from domain.models import END_TYPE_DEFAULT, END_TYPE_TURN_OUT, MarkerPlacement, MarkupDocument
 
 
 def repo_root() -> Path:
@@ -45,6 +45,47 @@ def test_layout_orders_targets_by_incoming_neighbors() -> None:
     assert closest_target("c") == "e"
 
 
+def test_block_graph_infers_procedure_order_for_layout() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": [],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "block_graph": {"b": ["c"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert set(frames.keys()) == {"p1", "p2"}
+    assert frames["p1"].origin.x < frames["p2"].origin.x
+    assert not plan.separators
+
+
+def test_basic_procedure_frames_use_uniform_gap() -> None:
+    markup = load_markup_fixture("basic.json")
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+
+    frames = sorted(plan.frames, key=lambda frame: frame.origin.x)
+    gaps = [
+        frames[idx + 1].origin.x - (frames[idx].origin.x + frames[idx].size.width)
+        for idx in range(len(frames) - 1)
+    ]
+    assert gaps
+    assert max(gaps) - min(gaps) < 1e-6
+
+
 def test_end_markers_follow_block_order() -> None:
     payload = {
         "markup_type": "service",
@@ -74,7 +115,7 @@ def test_end_markers_follow_block_order() -> None:
 
 
 def test_end_markers_align_with_blocks_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
@@ -102,7 +143,7 @@ def test_end_markers_align_with_blocks_in_large_procedure() -> None:
 
 
 def test_primary_branch_aligns_rows_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_primary_chain"
@@ -119,7 +160,7 @@ def test_primary_branch_aligns_rows_in_large_procedure() -> None:
 
 
 def test_large_procedure_orders_source_blocks() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_source_order"
@@ -142,27 +183,37 @@ def test_large_procedure_orders_source_blocks() -> None:
 
 
 def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
-    markup = load_markup_fixture("layout_sorting.json")
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     plan = layout.build_plan(markup)
 
     proc_id = "proc_marker_shift"
     blocks = {block.block_id: block for block in plan.blocks if block.procedure_id == proc_id}
-    markers = {
-        marker.block_id: marker
+    markers = [
+        marker
         for marker in plan.markers
         if marker.procedure_id == proc_id and marker.role == "end_marker"
-    }
+    ]
     offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
     row_step = layout.config.block_size.height + layout.config.gap_y
 
     aligned_block = "aligned"
-    aligned_marker = markers.get(aligned_block)
+
+    def marker_for(block_id: str, end_type: str | None = None) -> MarkerPlacement | None:
+        candidates = [marker for marker in markers if marker.block_id == block_id]
+        if end_type is None:
+            return candidates[0] if candidates else None
+        for marker in candidates:
+            if marker.end_type == end_type:
+                return marker
+        return None
+
+    aligned_marker = marker_for(aligned_block, END_TYPE_DEFAULT)
     assert aligned_marker is not None
     assert abs(aligned_marker.position.y - (blocks[aligned_block].position.y + offset_y)) < 1e-6
 
     shifted_block = "shifted"
-    shifted_marker = markers.get(shifted_block)
+    shifted_marker = marker_for(shifted_block, END_TYPE_DEFAULT)
     assert shifted_marker is not None
     assert (
         abs(shifted_marker.position.y - (blocks[shifted_block].position.y + row_step + offset_y))
@@ -174,8 +225,64 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     assert abs(blocks[parent_block].position.y - blocks[child_block].position.y) < 1e-6
 
 
+def test_turn_out_markers_shift_diagonally_in_next_column() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+
+    blocks = {block.block_id: block for block in plan.blocks}
+    marker = next(
+        marker
+        for marker in plan.markers
+        if marker.role == "end_marker"
+        and marker.block_id == "a"
+        and marker.end_type == END_TYPE_TURN_OUT
+    )
+    offset_x = (layout.config.block_size.width - layout.config.marker_size.width) / 2
+    offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
+    expected_x = (
+        blocks["a"].position.x + layout.config.block_size.width + layout.config.gap_x + offset_x
+    )
+    expected_y = (
+        blocks["a"].position.y + layout.config.block_size.height + layout.config.gap_y + offset_y
+    )
+    assert abs(marker.position.x - expected_x) < 1e-6
+    assert abs(marker.position.y - expected_y) < 1e-6
+
+
+def test_block_graph_cycle_preserves_forward_order_in_layout() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["review"],
+                "end_block_ids": [],
+                "branches": {"review": ["recheck"]},
+            }
+        ],
+        "block_graph": {"review": ["recheck"], "recheck": ["review"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+
+    blocks = {block.block_id: block for block in plan.blocks}
+    assert blocks["review"].position.x < blocks["recheck"].position.x
+
+
 def test_shared_child_blocks_group_in_shared_children_fixture() -> None:
-    markup = load_markup_fixture("layout_grouping.json")
+    markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
     proc_id = "proc_shared_children"

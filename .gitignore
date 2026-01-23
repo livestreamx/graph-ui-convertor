@@ -1,5 +1,6 @@
 .idea/*
 __pycache__/
+__init__.pyc
 data/excalidraw_in/*
 data/excalidraw_out/*
 data/unidraw_in/*

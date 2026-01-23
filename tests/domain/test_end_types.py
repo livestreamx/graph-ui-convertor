@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, cast
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import END_TYPE_COLORS, MarkupDocument
+from domain.models import END_TYPE_COLORS, END_TYPE_TURN_OUT, MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 
@@ -90,3 +90,62 @@ def test_skip_empty_procedures_in_excalidraw() -> None:
     }
     assert "empty" not in frame_procs
     assert "with_blocks" in frame_procs
+
+
+def test_turn_out_end_markers_are_implicit_from_branches() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["c"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    turn_out_markers = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == END_TYPE_TURN_OUT
+    ]
+    turn_out_blocks = {
+        marker.get("customData", {}).get("cjm", {}).get("block_id") for marker in turn_out_markers
+    }
+    assert turn_out_blocks == {"a", "b"}
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    reconstructed_proc = reconstructed.procedures[0]
+    assert "a" not in reconstructed_proc.end_block_ids
+    assert "b" not in reconstructed_proc.end_block_ids
+
+
+def test_default_end_marker_color_is_applied() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    end_markers = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == "end"
+    ]
+    assert end_markers
+    assert all(element.get("backgroundColor") == END_TYPE_COLORS["end"] for element in end_markers)

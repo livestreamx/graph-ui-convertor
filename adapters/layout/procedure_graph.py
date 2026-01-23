@@ -51,6 +51,11 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separator_ys: list[float] = []
         frame_lookup: dict[str, FramePlacement] = {}
         procedure_map = {proc.procedure_id: proc for proc in procedures}
+        block_graph_nodes = self._block_graph_nodes(document) if document.block_graph else set()
+        owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
+        layout_edges_by_proc = self._layout_edges_by_proc(
+            document, procedures, owned_blocks_by_proc
+        )
 
         for idx, component in enumerate(components):
             component_adjacency = {
@@ -103,6 +108,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     frame_lookup=frame_lookup,
                     procedure_map=procedure_map,
                     procedure_graph=document.procedure_graph,
+                    layout_edges_by_proc=layout_edges_by_proc,
                     order_index=order_index,
                     procedure_meta=document.procedure_meta,
                 )
@@ -150,6 +156,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         frame_lookup: Mapping[str, FramePlacement],
         procedure_map: Mapping[str, Procedure],
         procedure_graph: dict[str, list[str]],
+        layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
         order_index: dict[str, int],
         procedure_meta: Mapping[str, Mapping[str, object]] | None,
     ) -> ScenarioPlacement | None:
@@ -162,7 +169,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         min_x = min(frame.origin.x for frame in component_frames)
         min_y = min(frame.origin.y for frame in component_frames)
         title = "Граф" if component_count == 1 else f"Граф {component_index}"
-        starts, ends, variants = self._component_stats(component, procedure_map, procedure_graph)
+        starts, ends, variants = self._component_stats(
+            component, procedure_map, procedure_graph, layout_edges_by_proc
+        )
         properties, cycle_text = self._component_graph_properties(
             component, procedure_graph, order_index
         )
@@ -454,7 +463,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         }
                     else:
                         existing = service_entry[service_name]
-                        if existing.get("finedog_unit_id") is None and normalized_unit_id is not None:
+                        if (
+                            existing.get("finedog_unit_id") is None
+                            and normalized_unit_id is not None
+                        ):
                             existing["finedog_unit_id"] = normalized_unit_id
             else:
                 team_id = meta.get("team_id")

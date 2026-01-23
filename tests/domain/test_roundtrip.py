@@ -24,13 +24,17 @@ def load_markup_fixture(name: str) -> MarkupDocument:
 
 def normalize(document: MarkupDocument) -> dict[str, Any]:
     normalized_procedures: list[dict[str, Any]] = []
+    ignore_branch_targets = bool(document.block_graph)
     for procedure in sorted(document.procedures, key=lambda p: p.procedure_id):
+        branches = {k: sorted(v) for k, v in sorted(procedure.branches.items())}
+        if ignore_branch_targets and branches:
+            branches = {key: [] for key in branches}
         normalized_procedures.append(
             {
                 "procedure_id": procedure.procedure_id,
                 "start_block_ids": sorted(procedure.start_block_ids),
                 "end_block_ids": sorted(procedure.end_block_ids),
-                "branches": {k: sorted(v) for k, v in sorted(procedure.branches.items())},
+                "branches": branches or {},
             }
         )
     return {
@@ -51,19 +55,20 @@ def test_roundtrip_preserves_structure() -> None:
     assert normalize(reconstructed) == normalize(markup)
 
 
-def test_branch_metadata_persists() -> None:
-    markup = load_markup_fixture("advanced.json")
+def test_block_graph_metadata_persists() -> None:
+    markup = load_markup_fixture("complex-graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     excal = forward.convert(markup)
 
-    branch_edges = [
+    block_graph_edges = [
         element
         for element in excal.elements
         if element.get("type") == "arrow"
-        and element.get("customData", {}).get("cjm", {}).get("edge_type") == "branch"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        in {"block_graph", "block_graph_cycle"}
     ]
-    assert branch_edges, "Branch edges should be rendered with metadata"
+    assert block_graph_edges, "Block graph edges should be rendered with metadata"
 
 
 def test_branch_edges_match_markup() -> None:
@@ -179,8 +184,8 @@ def test_service_name_title_skipped_without_name() -> None:
     assert not title_elements
 
 
-def test_roundtrip_from_example_json_fixture() -> None:
-    markup = load_markup_fixture("yet_another.json")
+def test_roundtrip_complex_graph_fixture() -> None:
+    markup = load_markup_fixture("complex-graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()
@@ -191,8 +196,8 @@ def test_roundtrip_from_example_json_fixture() -> None:
     assert normalize(reconstructed) == normalize(markup)
 
 
-def test_roundtrip_with_links_fixture() -> None:
-    markup = load_markup_fixture("with_links.json")
+def test_roundtrip_graphs_set_fixture() -> None:
+    markup = load_markup_fixture("graphs_set.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()

@@ -10,6 +10,7 @@ from typing import Any
 from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
+    END_TYPE_TURN_OUT,
     INTERMEDIATE_BLOCK_COLOR,
     METADATA_SCHEMA_VERSION,
     BlockPlacement,
@@ -65,11 +66,12 @@ class MarkupToDiagramConverter(ABC):
             if proc.procedure_id in included_procs
             for block_id in proc.end_block_ids
         }
+        block_ids_in_plan = {(block.procedure_id, block.block_id) for block in plan.blocks}
         block_name_lookup = {
             (proc.procedure_id, block_id): name
             for proc in document.procedures
             for block_id, name in proc.block_id_to_block_name.items()
-            if name and block_id in proc.block_ids()
+            if name and (proc.procedure_id, block_id) in block_ids_in_plan
         }
         blocks = self._build_blocks(
             plan.blocks,
@@ -802,14 +804,17 @@ class MarkupToDiagramConverter(ABC):
             end_type = None
             block_end_type = None
             background_color = None
+            stroke_style = None
             if marker.role == "end_marker":
                 end_type = marker.end_type or END_TYPE_DEFAULT
-                block_end_type = end_block_type_lookup.get(
-                    (marker.procedure_id, marker.block_id), END_TYPE_DEFAULT
-                )
+                block_end_type = end_block_type_lookup.get((marker.procedure_id, marker.block_id))
+                if block_end_type is None:
+                    block_end_type = end_type
                 marker_meta["end_block_type"] = block_end_type
                 marker_meta["end_type"] = end_type
                 background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
+                if end_type == "intermediate":
+                    stroke_style = "dashed"
             registry.add(
                 self._ellipse_element(
                     element_id=element_id,
@@ -818,6 +823,7 @@ class MarkupToDiagramConverter(ABC):
                     frame_id=frame_ids.get(marker.procedure_id),
                     metadata=self._with_base_metadata(marker_meta, base_metadata),
                     background_color=background_color,
+                    stroke_style=stroke_style,
                 )
             )
             label_id = self._stable_id(
@@ -834,6 +840,8 @@ class MarkupToDiagramConverter(ABC):
             elif marker.role == "end_marker":
                 if end_type == "postpone":
                     label_text = "POSTPONE"
+                elif end_type == END_TYPE_TURN_OUT:
+                    label_text = "TURN OUT"
                 elif end_type in {"all", "intermediate"}:
                     label_text = "END & EXIT"
                 else:
@@ -939,6 +947,8 @@ class MarkupToDiagramConverter(ABC):
         registry: ElementRegistry,
         base_metadata: Metadata,
     ) -> None:
+        if document.block_graph:
+            return
         cycle_edges_by_proc: dict[str, set[tuple[str, str]]] = {
             procedure.procedure_id: self._edges_in_cycles(procedure.branches)
             for procedure in document.procedures
@@ -1028,7 +1038,7 @@ class MarkupToDiagramConverter(ABC):
         base_metadata: Metadata,
         blocks: dict[tuple[str, str], BlockPlacement] | None = None,
     ) -> None:
-        if document.markup_type == "service" and document.block_graph and blocks:
+        if document.block_graph and blocks:
             self._build_block_graph_edges(document, blocks, registry, base_metadata)
             return
         frames_list = list(frames)
@@ -1155,16 +1165,7 @@ class MarkupToDiagramConverter(ABC):
         for (proc_id, block_id), placement in blocks.items():
             block_by_id.setdefault(block_id, []).append((proc_id, placement))
 
-        adjacency = {key: list(value) for key, value in document.block_graph.items()}
-        if not adjacency:
-            return
-        cycle_edges = self._edges_in_cycles(adjacency)
-        edge_offsets: dict[str, list[float]] = {}
-        for source_block_id, targets in document.block_graph.items():
-            count = max(1, len(targets))
-            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
-        edge_index: dict[str, int] = {}
-
+        edges_by_source: dict[str, list[tuple[str, str, str, BlockPlacement, BlockPlacement]]] = {}
         for source_block_id, targets in document.block_graph.items():
             source_candidates = block_by_id.get(source_block_id, [])
             if len(source_candidates) != 1:
@@ -1175,21 +1176,45 @@ class MarkupToDiagramConverter(ABC):
                 if len(target_candidates) != 1:
                     continue
                 target_proc, target_block = target_candidates[0]
-                offset_idx = edge_index.get(source_block_id, 0)
-                edge_index[source_block_id] = offset_idx + 1
-                offsets = edge_offsets.get(source_block_id, [0.0])
+                edges_by_source.setdefault(source_block_id, []).append(
+                    (target_block_id, source_proc, target_proc, source_block, target_block)
+                )
+
+        if not edges_by_source:
+            return
+
+        adjacency = {
+            source_block_id: [edge[0] for edge in edges]
+            for source_block_id, edges in edges_by_source.items()
+        }
+        cycle_edges = self._edges_in_cycles(adjacency)
+        edge_offsets: dict[str, list[float]] = {}
+        for source_block_id, edges in edges_by_source.items():
+            count = max(1, len(edges))
+            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
+
+        for source_block_id, edges in edges_by_source.items():
+            offsets = edge_offsets.get(source_block_id, [0.0])
+            for offset_idx, (
+                target_block_id,
+                source_proc,
+                target_proc,
+                source_block,
+                target_block,
+            ) in enumerate(edges):
                 dy = offsets[min(offset_idx, len(offsets) - 1)]
                 is_cycle = (source_block_id, target_block_id) in cycle_edges
-                if is_cycle:
-                    start_center = self._block_anchor(source_block, side="top")
-                    end_center = self._block_anchor(target_block, side="top")
+                cycle_marker = is_cycle and self._is_reverse_block_edge(source_block, target_block)
+                if cycle_marker:
+                    start_center = self._block_anchor(source_block, side="bottom")
+                    end_center = self._block_anchor(target_block, side="left")
                     points = self._elbow_points(start_center, end_center, 80.0)
                 else:
                     start_center = self._block_anchor(source_block, side="right", y_offset=dy)
                     end_center = self._block_anchor(target_block, side="left", y_offset=dy)
                     points = None
-                edge_type = "block_graph_cycle" if is_cycle else "block_graph"
-                label = "ЦИКЛ" if is_cycle else "graph"
+                edge_type = "block_graph_cycle" if cycle_marker else "block_graph"
+                label = "ЦИКЛ" if cycle_marker else "graph"
                 arrow = self._arrow_element(
                     start=start_center,
                     end=end_center,
@@ -1209,11 +1234,11 @@ class MarkupToDiagramConverter(ABC):
                     start_binding=self._stable_id("block", source_proc, source_block_id),
                     end_binding=self._stable_id("block", target_proc, target_block_id),
                     smoothing=0.15,
-                    stroke_style="dashed" if is_cycle else None,
-                    stroke_color="#d32f2f" if is_cycle else None,
-                    stroke_width=1 if is_cycle else None,
+                    stroke_style="dashed" if cycle_marker else None,
+                    stroke_color="#d32f2f" if cycle_marker else None,
+                    stroke_width=1 if cycle_marker else None,
                     points=points,
-                    end_arrowhead="arrow" if is_cycle else None,
+                    end_arrowhead="arrow" if cycle_marker else None,
                 )
                 registry.add(arrow)
                 self._register_edge_bindings(arrow, registry)
@@ -1358,10 +1383,22 @@ class MarkupToDiagramConverter(ABC):
                 x=block.position.x + block.size.width / 2 + x_offset,
                 y=block.position.y + y_offset,
             )
+        if side == "bottom":
+            return Point(
+                x=block.position.x + block.size.width / 2 + x_offset,
+                y=block.position.y + block.size.height + y_offset,
+            )
         return Point(
             x=block.position.x + block.size.width + x_offset,
             y=block.position.y + block.size.height / 2 + y_offset,
         )
+
+    def _is_reverse_block_edge(self, source: BlockPlacement, target: BlockPlacement) -> bool:
+        source_center = self._center(source.position, source.size.width, source.size.height)
+        target_center = self._center(target.position, target.size.width, target.size.height)
+        if abs(source_center.x - target_center.x) < 1e-6:
+            return source_center.y > target_center.y
+        return source_center.x > target_center.x
 
     def _marker_anchor(self, marker: MarkerPlacement, side: str) -> Point:
         if side == "left":

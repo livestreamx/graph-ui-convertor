@@ -10,6 +10,7 @@ from domain.models import (
     CUSTOM_DATA_KEY,
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
+    END_TYPE_TURN_OUT,
     METADATA_SCHEMA_VERSION,
     MarkupDocument,
     Procedure,
@@ -18,7 +19,9 @@ from domain.models import (
 )
 
 _TAG_SPLIT_RE = re.compile(r"[,\\s]+")
-_INLINE_TAG_RE = re.compile(r"(?:#|::)(end|exit|all|intermediate|postpone)\\b", re.IGNORECASE)
+_INLINE_TAG_RE = re.compile(
+    r"(?:#|::)(end|exit|all|intermediate|postpone|turn_out)\\b", re.IGNORECASE
+)
 
 Metadata = dict[str, Any]
 Element = Mapping[str, Any]
@@ -52,12 +55,19 @@ class ExcalidrawToMarkupConverter:
         start_map: dict[str, set[str]] = defaultdict(set)
         end_map: dict[str, dict[str, str]] = defaultdict(dict)
         branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        turn_out_sources: dict[str, set[str]] = defaultdict(set)
 
         marker_end_types = self._merge_marker_end_types(markers)
         for (procedure_id, block_id), end_type in marker_end_types.items():
             end_map[procedure_id][block_id] = merge_end_types(
                 end_map[procedure_id].get(block_id), end_type
             )
+        for marker in markers.values():
+            if marker.role != "end_marker":
+                continue
+            if marker.end_type != END_TYPE_TURN_OUT:
+                continue
+            turn_out_sources[marker.procedure_id].add(marker.block_id)
 
         for arrow in filter(self._is_arrow, elements):
             meta = self._metadata(arrow)
@@ -92,6 +102,8 @@ class ExcalidrawToMarkupConverter:
                     end_type = self._infer_end_type_from_arrow(
                         arrow, meta, marker_end_types, procedure_id, source_block, markers
                     )
+                    if end_type == END_TYPE_TURN_OUT:
+                        continue
                     end_map[procedure_id][source_block] = merge_end_types(
                         end_map[procedure_id].get(source_block), end_type
                     )
@@ -102,15 +114,27 @@ class ExcalidrawToMarkupConverter:
                     branch_map[procedure_id][source_block].add(target_block)
                 continue
 
+            if edge_type in {"block_graph", "block_graph_cycle"}:
+                continue
+
             text = arrow.get("text")
             if isinstance(text, str) and text.lower() == "branch" and source_block and target_block:
                 branch_map[procedure_id][source_block].add(target_block)
 
+        block_graph = self._collect_block_graph(elements, blocks)
+        if block_graph and turn_out_sources:
+            inferred_branches = self._branches_from_block_graph(block_graph, blocks)
+            for proc_id, sources in turn_out_sources.items():
+                for source in sources:
+                    if branch_map[proc_id].get(source):
+                        continue
+                    targets = inferred_branches.get(proc_id, {}).get(source, set())
+                    if targets:
+                        branch_map[proc_id][source].update(targets)
         procedures = self._build_procedures(
             blocks, start_map, end_map, branch_map, frames, block_names, proc_names
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
-        block_graph = self._collect_block_graph(elements, blocks)
         if block_graph and not any(procedure_graph.values()):
             procedure_graph = self._infer_procedure_graph_from_block_graph(block_graph, procedures)
         return MarkupDocument(
@@ -341,6 +365,43 @@ class ExcalidrawToMarkupConverter:
             graph.setdefault(target, [])
         return graph
 
+    def _branches_from_block_graph(
+        self,
+        block_graph: Mapping[str, list[str]],
+        blocks: Mapping[str, BlockCandidate],
+    ) -> dict[str, dict[str, set[str]]]:
+        edges = [(source, target) for source, targets in block_graph.items() for target in targets]
+        return self._branches_from_block_edges(edges, blocks, require_same_proc=False)
+
+    def _branches_from_block_edges(
+        self,
+        edges: Iterable[tuple[str, str]],
+        blocks: Mapping[str, BlockCandidate],
+        require_same_proc: bool = True,
+    ) -> dict[str, dict[str, set[str]]]:
+        proc_for_block: dict[str, str] = {}
+        duplicates: set[str] = set()
+        for block in blocks.values():
+            existing_proc = proc_for_block.get(block.block_id)
+            if existing_proc and existing_proc != block.procedure_id:
+                duplicates.add(block.block_id)
+            elif not existing_proc:
+                proc_for_block[block.block_id] = block.procedure_id
+
+        branches: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        for source, target in edges:
+            if source in duplicates or target in duplicates:
+                continue
+            source_proc = proc_for_block.get(source)
+            if not source_proc:
+                continue
+            if require_same_proc:
+                target_proc = proc_for_block.get(target)
+                if source_proc != target_proc:
+                    continue
+            branches[source_proc][source].add(target)
+        return branches
+
     def _infer_procedure_graph_from_block_graph(
         self,
         block_graph: Mapping[str, list[str]],
@@ -504,6 +565,8 @@ class ExcalidrawToMarkupConverter:
             if marker.role != "end_marker":
                 continue
             end_type = marker.end_type or END_TYPE_DEFAULT
+            if end_type == END_TYPE_TURN_OUT:
+                continue
             key = (marker.procedure_id, marker.block_id)
             end_types[key] = merge_end_types(end_types.get(key), end_type)
         return end_types
@@ -541,10 +604,10 @@ class ExcalidrawToMarkupConverter:
         tagged = self._end_type_from_tags(element, meta)
         if tagged:
             return tagged
-        end_type = normalize_end_type(meta.get("end_block_type"))
+        end_type = normalize_end_type(meta.get("end_type"))
         if end_type:
             return end_type
-        end_type = normalize_end_type(meta.get("end_type"))
+        end_type = normalize_end_type(meta.get("end_block_type"))
         if end_type:
             return end_type
         return self._end_type_from_color(element.get("backgroundColor"))

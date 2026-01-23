@@ -1,20 +1,91 @@
 {
   "markup_type": "service",
+  "finedog_unit_id": "svc-basic-merge",
   "finedog_unit_meta": {
-    "service_name": "Getting Started Flow",
+    "service_name": "Basic graph",
     "criticality_level": "C1",
     "team_id": "team-alpha",
-    "team_name": "Core Payments"
+    "team_name": "Basic graph team"
   },
   "procedures": [
     {
-      "procedure_id": "proc_basic",
-      "start_block_ids": ["blk_a"],
-      "end_block_ids": ["blk_c"],
+      "proc_id": "proc_shared_intake",
+      "proc_name": "Intake",
+      "start_block_ids": ["intake_start"],
+      "end_block_ids": [],
       "branches": {
-        "blk_a": ["blk_b"],
-        "blk_b": ["blk_c"]
+        "intake_start": ["intake_collect"],
+        "intake_collect": ["intake_validate"],
+        "intake_validate": ["intake_route"],
+        "intake_route": ["route_review"]
+      },
+      "block_id_to_block_name": {
+        "intake_start": "Start intake",
+        "intake_collect": "Collect context",
+        "intake_validate": "Validate input",
+        "intake_route": "Route case"
+      }
+    },
+    {
+      "proc_id": "proc_shared_routing",
+      "proc_name": "Routing",
+      "start_block_ids": [],
+      "end_block_ids": [],
+      "branches": {
+        "route_review": ["route_recheck"],
+        "route_recheck": ["route_score"],
+        "route_score": ["route_branch"]
+      },
+      "block_id_to_block_name": {
+        "route_review": "Review signal",
+        "route_recheck": "Recheck signal",
+        "route_score": "Score path",
+        "route_branch": "Split decision"
+      }
+    },
+    {
+      "proc_id": "proc_resolution",
+      "proc_name": "Resolution",
+      "start_block_ids": [],
+      "end_block_ids": [],
+      "branches": {
+        "resolve_merge": ["final_pack"]
+      },
+      "block_id_to_block_name": {
+        "resolve_auto": "Auto resolve",
+        "resolve_manual": "Manual resolve",
+        "resolve_merge": "Merge outcome"
+      }
+    },
+    {
+      "proc_id": "proc_finalize",
+      "proc_name": "Finalize",
+      "start_block_ids": [],
+      "end_block_ids": ["final_end::end"],
+      "branches": {
+        "final_pack": ["final_notify"],
+        "final_notify": ["final_end"]
+      },
+      "block_id_to_block_name": {
+        "final_pack": "Package result",
+        "final_notify": "Notify client",
+        "final_end": "Complete"
       }
     }
-  ]
+  ],
+  "block_graph": {
+    "intake_start": ["intake_collect"],
+    "intake_collect": ["intake_validate"],
+    "intake_validate": ["intake_route"],
+    "intake_route": ["route_review"],
+    "route_review": ["route_recheck"],
+    "route_recheck": ["route_review", "route_score"],
+    "route_score": ["route_branch"],
+    "route_branch": ["resolve_auto", "resolve_manual"],
+    "resolve_auto": ["resolve_merge"],
+    "resolve_manual": ["resolve_merge"],
+    "resolve_merge": ["final_pack"],
+    "final_pack": ["final_notify"],
+    "final_notify": ["final_end"]
+  }
 }
