@@ -123,3 +123,29 @@ def test_turn_out_end_markers_are_implicit_from_branches() -> None:
     reconstructed_proc = reconstructed.procedures[0]
     assert "a" not in reconstructed_proc.end_block_ids
     assert "b" not in reconstructed_proc.end_block_ids
+
+
+def test_default_end_marker_color_is_applied() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    end_markers = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == "end"
+    ]
+    assert end_markers
+    assert all(element.get("backgroundColor") == END_TYPE_COLORS["end"] for element in end_markers)

@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import END_TYPE_DEFAULT, MarkerPlacement, MarkupDocument
+from domain.models import END_TYPE_DEFAULT, END_TYPE_TURN_OUT, MarkerPlacement, MarkupDocument
 
 
 def repo_root() -> Path:
@@ -223,6 +223,62 @@ def test_end_markers_use_nearest_free_row_in_large_procedure() -> None:
     parent_block = "shifted"
     child_block = "blocker"
     assert abs(blocks[parent_block].position.y - blocks[child_block].position.y) < 1e-6
+
+
+def test_turn_out_markers_shift_diagonally_in_next_column() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+
+    blocks = {block.block_id: block for block in plan.blocks}
+    marker = next(
+        marker
+        for marker in plan.markers
+        if marker.role == "end_marker"
+        and marker.block_id == "a"
+        and marker.end_type == END_TYPE_TURN_OUT
+    )
+    offset_x = (layout.config.block_size.width - layout.config.marker_size.width) / 2
+    offset_y = (layout.config.block_size.height - layout.config.marker_size.height) / 2
+    expected_x = (
+        blocks["a"].position.x + layout.config.block_size.width + layout.config.gap_x + offset_x
+    )
+    expected_y = (
+        blocks["a"].position.y + layout.config.block_size.height + layout.config.gap_y + offset_y
+    )
+    assert abs(marker.position.x - expected_x) < 1e-6
+    assert abs(marker.position.y - expected_y) < 1e-6
+
+
+def test_block_graph_cycle_preserves_forward_order_in_layout() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["review"],
+                "end_block_ids": [],
+                "branches": {"review": ["recheck"]},
+            }
+        ],
+        "block_graph": {"review": ["recheck"], "recheck": ["review"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+
+    blocks = {block.block_id: block for block in plan.blocks}
+    assert blocks["review"].position.x < blocks["recheck"].position.x
 
 
 def test_shared_child_blocks_group_in_shared_children_fixture() -> None:

@@ -12,7 +12,7 @@ END_TYPE_DEFAULT = "end"
 END_TYPE_TURN_OUT = "turn_out"
 END_TYPE_VALUES = {"end", "exit", "all", "intermediate", "postpone", END_TYPE_TURN_OUT}
 END_TYPE_COLORS = {
-    "end": "#ff6b6b",
+    "end": "#8fdc8f",
     "exit": "#ffe08a",
     "all": "#ffb347",
     "intermediate": "#ffb347",

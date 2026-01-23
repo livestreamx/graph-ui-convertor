@@ -921,7 +921,26 @@ class GridLayoutEngine(LayoutEngine):
                 cleaned.append(target)
             branches_for_layout[source] = cleaned
 
-        cycle_edges = self._find_cycle_edges(branches_for_layout)
+        order_hint: list[str] = []
+        seen_nodes: set[str] = set()
+
+        def track(node_id: str) -> None:
+            if node_id in seen_nodes:
+                return
+            seen_nodes.add(node_id)
+            order_hint.append(node_id)
+
+        for block_id in start_blocks:
+            track(block_id)
+        for source, targets in branches_for_layout.items():
+            track(source)
+            for target in targets:
+                track(target)
+        for block_id in end_blocks:
+            track(block_id)
+
+        order_index = {node_id: idx for idx, node_id in enumerate(order_hint)}
+        cycle_edges = self._find_cycle_edges(branches_for_layout, order_index)
         if cycle_edges:
             for source, target in cycle_edges:
                 branches_for_layout[source] = [
@@ -1324,6 +1343,8 @@ class GridLayoutEngine(LayoutEngine):
             info = node_info[node_id]
             level = levels.get(node_id, 0)
             target_row = row_positions.get(info.block_id, row_positions.get(node_id, 0.0))
+            if info.end_type == END_TYPE_TURN_OUT:
+                target_row += 1.0
             row = target_row
             while row_taken(level, row):
                 row += 1.0

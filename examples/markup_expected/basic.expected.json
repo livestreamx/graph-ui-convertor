@@ -18,7 +18,7 @@
     "cycle_edges": 1,
     "cross_procedure_edges": 4,
     "cycle_pairs": [
-      ["route_review", "route_recheck"]
+      ["route_recheck", "route_review"]
     ]
   },
   "end_types": {
