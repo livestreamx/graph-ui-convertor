@@ -3,11 +3,11 @@
     "procedures": 9,
     "blocks": 40,
     "starts": 13,
-    "ends": 31
+    "ends": 30
   },
   "edges": {
     "start": 13,
-    "end": 31,
+    "end": 30,
     "branch": 35,
     "branch_cycle": 0,
     "block_graph": 0,
@@ -25,6 +25,6 @@
     "all": 0,
     "intermediate": 0,
     "postpone": 0,
-    "turn_out": 22
+    "turn_out": 21
   }
 }

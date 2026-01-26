@@ -125,6 +125,56 @@ def test_turn_out_end_markers_are_implicit_from_branches() -> None:
     assert "b" not in reconstructed_proc.end_block_ids
 
 
+def test_turn_out_markers_skip_terminal_end_blocks() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"], "b": ["c"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    turn_out_blocks = {
+        element.get("customData", {}).get("cjm", {}).get("block_id")
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == END_TYPE_TURN_OUT
+    }
+    assert turn_out_blocks == {"a"}
+
+
+def test_turn_out_markers_allow_intermediate_non_terminal_blocks() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::intermediate"],
+                "branches": {"a": ["b"], "b": ["c"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    turn_out_blocks = {
+        element.get("customData", {}).get("cjm", {}).get("block_id")
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == END_TYPE_TURN_OUT
+    }
+    assert turn_out_blocks == {"a", "b"}
+
+
 def test_default_end_marker_color_is_applied() -> None:
     payload = {
         "markup_type": "service",

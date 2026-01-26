@@ -880,7 +880,15 @@ class GridLayoutEngine(LayoutEngine):
             allowed_blocks.update(start_blocks)
             allowed_blocks.update(end_blocks)
             allowed_blocks.update(edges_for_layout.keys())
-        turn_out_sources = turn_out_blocks or set(procedure.branches.keys())
+        turn_out_sources = set(turn_out_blocks or set(procedure.branches.keys()))
+        if end_blocks:
+            end_block_set = set(end_blocks)
+            for block_id in list(turn_out_sources):
+                if block_id not in end_block_set:
+                    continue
+                end_type = normalize_end_type(end_block_types.get(block_id)) or END_TYPE_DEFAULT
+                if end_type != "intermediate":
+                    turn_out_sources.discard(block_id)
         turn_out_block_list = sorted(
             {
                 block
@@ -1309,8 +1317,13 @@ class GridLayoutEngine(LayoutEngine):
             lvl = levels.get(node_id, 0)
             occupied_rows.setdefault(lvl, []).append(row_positions.get(node_id, 0.0))
 
+        marker_clearance = (self.config.block_size.height + self.config.marker_size.height) / (
+            2 * (self.config.block_size.height + self.config.gap_y)
+        )
+        marker_clearance += 0.05
+
         def row_taken(level: int, row: float) -> bool:
-            return any(abs(row - occ) < 1e-3 for occ in occupied_rows.get(level, []))
+            return any(abs(row - occ) < marker_clearance for occ in occupied_rows.get(level, []))
 
         end_marker_nodes = [
             node_id for node_id, info in node_info.items() if info.kind == "end_marker"
