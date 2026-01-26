@@ -171,11 +171,13 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
     assert set(graph.get("p2", [])) == {"p1"}
 
 
-def test_example_procedure_graph_has_cycle() -> None:
+def test_example_procedure_graph_matches_linear_flow() -> None:
     example_path = _repo_root() / "examples" / "markup" / "complex_graph.json"
     payload = json.loads(example_path.read_text(encoding="utf-8"))
     graph = payload.get("procedure_graph", {})
-    assert "proc_alpha" in graph
-    assert "proc_beta" in graph
-    assert "proc_beta" in graph.get("proc_alpha", [])
-    assert "proc_alpha" in graph.get("proc_beta", [])
+    assert graph.get("proc_alpha") == ["proc_beta"]
+    assert graph.get("proc_beta") == ["proc_gamma"]
+    assert graph.get("proc_gamma") == ["proc_delta"]
+    assert graph.get("proc_delta") == ["proc_epsilon"]
+    assert graph.get("proc_epsilon") == ["proc_zeta"]
+    assert "proc_zeta" not in graph

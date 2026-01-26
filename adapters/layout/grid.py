@@ -973,6 +973,8 @@ class GridLayoutEngine(LayoutEngine):
         for block_id in turn_out_block_list:
             if block_id not in all_blocks:
                 continue
+            if block_id in end_blocks:
+                continue
             end_marker_types.setdefault(block_id, set()).add(END_TYPE_TURN_OUT)
 
         end_nodes: dict[str, NodeInfo] = {}

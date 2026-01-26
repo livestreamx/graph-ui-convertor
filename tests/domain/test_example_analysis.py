@@ -87,13 +87,9 @@ def test_example_rendering_matches_expected_counts(name: str) -> None:
         if markup.block_graph:
             layout_engine = GridLayoutEngine()
             block_graph_nodes = layout_engine._block_graph_nodes(markup)
-            owned_blocks_by_proc = layout_engine._resolve_owned_blocks(
-                markup, block_graph_nodes
-            )
+            owned_blocks_by_proc = layout_engine._resolve_owned_blocks(markup, block_graph_nodes)
             procedures = [
-                proc
-                for proc in markup.procedures
-                if owned_blocks_by_proc.get(proc.procedure_id)
+                proc for proc in markup.procedures if owned_blocks_by_proc.get(proc.procedure_id)
             ]
             inferred = layout_engine._infer_procedure_graph_from_block_graph(
                 markup.block_graph, procedures, owned_blocks_by_proc

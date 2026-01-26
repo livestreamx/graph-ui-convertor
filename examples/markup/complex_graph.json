@@ -82,8 +82,8 @@
       "start_block_ids": [],
       "end_block_ids": ["epsilon_intermediate::intermediate"],
       "branches": {
-        "epsilon_review": ["epsilon_intermediate"],
-        "epsilon_intermediate": ["epsilon_pack"]
+        "epsilon_review": ["epsilon_pack"],
+        "epsilon_pack": ["epsilon_intermediate"]
       },
       "block_id_to_block_name": {
         "epsilon_review": "Epsilon review",
@@ -113,27 +113,30 @@
   ],
   "procedure_graph": {
     "proc_alpha": ["proc_beta"],
-    "proc_beta": ["proc_alpha"]
+    "proc_beta": ["proc_gamma"],
+    "proc_gamma": ["proc_delta"],
+    "proc_delta": ["proc_epsilon"],
+    "proc_epsilon": ["proc_zeta"]
   },
   "block_graph": {
     "alpha_start": ["alpha_collect"],
     "alpha_collect": ["alpha_router"],
-    "alpha_router": ["beta_process", "delta_merge"],
-    "delta_start": ["delta_prepare"],
-    "delta_prepare": ["delta_router"],
-    "delta_router": ["beta_process", "gamma_triage"],
-    "zeta_start": ["zeta_intake"],
-    "zeta_intake": ["zeta_router"],
-    "zeta_router": ["epsilon_review", "beta_process"],
+    "alpha_router": ["beta_process"],
     "beta_process": ["beta_check"],
     "beta_check": ["beta_branch"],
-    "beta_branch": ["gamma_triage", "epsilon_review", "beta_end"],
+    "beta_branch": ["beta_end", "gamma_triage"],
     "gamma_triage": ["gamma_assess"],
     "gamma_assess": ["gamma_branch"],
-    "gamma_branch": ["delta_merge", "zeta_finalize", "gamma_exit"],
-    "epsilon_review": ["epsilon_intermediate"],
-    "epsilon_intermediate": ["epsilon_pack", "zeta_finalize"],
-    "delta_merge": ["delta_all"],
+    "gamma_branch": ["gamma_exit", "delta_start"],
+    "delta_start": ["delta_prepare"],
+    "delta_prepare": ["delta_router"],
+    "delta_router": ["delta_merge"],
+    "delta_merge": ["delta_all", "epsilon_review"],
+    "epsilon_review": ["epsilon_pack"],
+    "epsilon_pack": ["epsilon_intermediate", "zeta_start"],
+    "zeta_start": ["zeta_intake"],
+    "zeta_intake": ["zeta_router"],
+    "zeta_router": ["zeta_finalize"],
     "zeta_finalize": ["zeta_postpone"]
   }
 }

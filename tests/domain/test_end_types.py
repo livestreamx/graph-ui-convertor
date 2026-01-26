@@ -150,7 +150,7 @@ def test_turn_out_markers_skip_terminal_end_blocks() -> None:
     assert turn_out_blocks == {"a"}
 
 
-def test_turn_out_markers_allow_intermediate_non_terminal_blocks() -> None:
+def test_turn_out_markers_skip_intermediate_end_blocks() -> None:
     payload = {
         "markup_type": "service",
         "procedures": [
@@ -172,7 +172,7 @@ def test_turn_out_markers_allow_intermediate_non_terminal_blocks() -> None:
         and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
         and element.get("customData", {}).get("cjm", {}).get("end_type") == END_TYPE_TURN_OUT
     }
-    assert turn_out_blocks == {"a", "b"}
+    assert turn_out_blocks == {"a"}
 
 
 def test_default_end_marker_color_is_applied() -> None:
