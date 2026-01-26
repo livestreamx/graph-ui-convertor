@@ -43,7 +43,7 @@ def _meta(element: dict[str, Any]) -> dict[str, Any]:
     return cjm
 
 
-@pytest.mark.parametrize("name", ["basic.json", "complex-graph.json", "graphs_set.json"])
+@pytest.mark.parametrize("name", ["basic.json", "complex_graph.json", "graphs_set.json"])
 def test_example_rendering_matches_expected_counts(name: str) -> None:
     markup = load_markup_fixture(name)
     expected = load_expected_fixture(name)
@@ -84,6 +84,29 @@ def test_example_rendering_matches_expected_counts(name: str) -> None:
     proc_graph_expected = expected.get("procedure_graph")
     if isinstance(proc_graph_expected, dict):
         proc_edge_count = sum(len(values) for values in markup.procedure_graph.values())
+        if markup.block_graph:
+            layout_engine = GridLayoutEngine()
+            block_graph_nodes = layout_engine._block_graph_nodes(markup)
+            owned_blocks_by_proc = layout_engine._resolve_owned_blocks(
+                markup, block_graph_nodes
+            )
+            procedures = [
+                proc
+                for proc in markup.procedures
+                if owned_blocks_by_proc.get(proc.procedure_id)
+            ]
+            inferred = layout_engine._infer_procedure_graph_from_block_graph(
+                markup.block_graph, procedures, owned_blocks_by_proc
+            )
+            merged: dict[str, list[str]] = {proc.procedure_id: [] for proc in procedures}
+            for graph in (markup.procedure_graph, inferred):
+                for parent, children in graph.items():
+                    if parent not in merged:
+                        continue
+                    for child in children:
+                        if child in merged and child != parent and child not in merged[parent]:
+                            merged[parent].append(child)
+            proc_edge_count = sum(len(values) for values in merged.values())
         assert proc_edge_count == proc_graph_expected.get("edges")
 
     block_graph_expected = expected.get("block_graph", {})

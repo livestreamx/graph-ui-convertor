@@ -80,8 +80,14 @@ class GridLayoutEngine(LayoutEngine):
                 frames=frames, blocks=blocks, markers=markers, separators=[], scenarios=[]
             )
         procedure_graph = document.procedure_graph
+        block_graph_procedure: dict[str, list[str]] = {}
         if document.block_graph and not any(procedure_graph.values()):
-            procedure_graph = self._infer_procedure_graph_from_block_graph(
+            block_graph_procedure = self._infer_procedure_graph_from_block_graph(
+                document.block_graph, procedures, owned_blocks_by_proc
+            )
+            procedure_graph = block_graph_procedure
+        elif document.block_graph:
+            block_graph_procedure = self._infer_procedure_graph_from_block_graph(
                 document.block_graph, procedures, owned_blocks_by_proc
             )
 
@@ -89,6 +95,12 @@ class GridLayoutEngine(LayoutEngine):
         order_hint = self._procedure_order_hint(procedures, procedure_graph)
         order_index = {proc_id: idx for idx, proc_id in enumerate(order_hint)}
         adjacency = self._normalize_procedure_graph(proc_ids, procedure_graph)
+        if block_graph_procedure:
+            inferred_adjacency = self._normalize_procedure_graph(proc_ids, block_graph_procedure)
+            for parent, children in inferred_adjacency.items():
+                for child in children:
+                    if child not in adjacency[parent]:
+                        adjacency[parent].append(child)
         sizing: dict[str, Size] = {}
         layout_edges_by_proc = self._layout_edges_by_proc(
             document, procedures, owned_blocks_by_proc

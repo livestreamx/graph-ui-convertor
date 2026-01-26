@@ -56,7 +56,7 @@ def test_roundtrip_preserves_structure() -> None:
 
 
 def test_block_graph_metadata_persists() -> None:
-    markup = load_markup_fixture("complex-graph.json")
+    markup = load_markup_fixture("complex_graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     excal = forward.convert(markup)
@@ -185,7 +185,7 @@ def test_service_name_title_skipped_without_name() -> None:
 
 
 def test_roundtrip_complex_graph_fixture() -> None:
-    markup = load_markup_fixture("complex-graph.json")
+    markup = load_markup_fixture("complex_graph.json")
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()

@@ -172,7 +172,7 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
 
 
 def test_example_procedure_graph_has_cycle() -> None:
-    example_path = _repo_root() / "examples" / "markup" / "complex-graph.json"
+    example_path = _repo_root() / "examples" / "markup" / "complex_graph.json"
     payload = json.loads(example_path.read_text(encoding="utf-8"))
     graph = payload.get("procedure_graph", {})
     assert "proc_alpha" in graph
