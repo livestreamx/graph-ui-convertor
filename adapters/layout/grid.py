@@ -105,6 +105,9 @@ class GridLayoutEngine(LayoutEngine):
         layout_edges_by_proc = self._layout_edges_by_proc(
             document, procedures, owned_blocks_by_proc
         )
+        end_block_row_offsets = self._end_block_row_offsets(
+            document, procedures, owned_blocks_by_proc
+        )
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
@@ -113,6 +116,7 @@ class GridLayoutEngine(LayoutEngine):
                 owned_blocks_by_proc.get(procedure.procedure_id),
                 layout_edges_by_proc.get(procedure.procedure_id),
                 set(procedure.branches.keys()),
+                end_block_row_offsets.get(procedure.procedure_id),
             )
             cols = max_level + 1
             rows = max(row_counts.values() or [1])
@@ -211,6 +215,7 @@ class GridLayoutEngine(LayoutEngine):
                 owned_blocks_by_proc.get(frame_proc.procedure_id),
                 layout_edges_by_proc.get(frame_proc.procedure_id),
                 set(frame_proc.branches.keys()),
+                end_block_row_offsets.get(frame_proc.procedure_id),
             )
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
             level_rows: dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
@@ -271,6 +276,9 @@ class GridLayoutEngine(LayoutEngine):
                         size=self.config.marker_size,
                     )
                 )
+
+        if blocks and markers:
+            self._adjust_start_markers_for_edges(document, blocks, markers)
 
         separators: list[SeparatorPlacement] = []
         if frames and separator_ys:
@@ -709,6 +717,205 @@ class GridLayoutEngine(LayoutEngine):
 
         return edges_by_proc
 
+    def _end_block_row_offsets(
+        self,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> dict[str, dict[str, float]]:
+        if not document.block_graph:
+            return {}
+
+        end_blocks_by_proc = {proc.procedure_id: set(proc.end_block_ids) for proc in procedures}
+        owner_by_block: dict[str, str] = {}
+        ambiguous: set[str] = set()
+        for proc_id, blocks in owned_blocks_by_proc.items():
+            for block_id in blocks:
+                existing = owner_by_block.get(block_id)
+                if existing and existing != proc_id:
+                    ambiguous.add(block_id)
+                else:
+                    owner_by_block[block_id] = proc_id
+
+        offsets: dict[str, dict[str, float]] = {proc.procedure_id: {} for proc in procedures}
+        for source, targets in document.block_graph.items():
+            if source in ambiguous:
+                continue
+            source_proc = owner_by_block.get(source)
+            if not source_proc:
+                continue
+            has_external = False
+            for target in targets:
+                if target in ambiguous:
+                    continue
+                target_proc = owner_by_block.get(target)
+                if target_proc and target_proc != source_proc:
+                    has_external = True
+                    break
+            if not has_external:
+                continue
+            for target in targets:
+                if target in ambiguous:
+                    continue
+                if owner_by_block.get(target) != source_proc:
+                    continue
+                if target not in end_blocks_by_proc.get(source_proc, set()):
+                    continue
+                offsets[source_proc][target] = 1.0
+
+        return offsets
+
+    def _adjust_start_markers_for_edges(
+        self,
+        document: MarkupDocument,
+        blocks: Sequence[BlockPlacement],
+        markers: list[MarkerPlacement],
+    ) -> None:
+        edge_segments = self._block_edge_segments(document, blocks)
+        if not edge_segments:
+            return
+        start_markers = [m for m in markers if m.role == "start_marker"]
+        if not start_markers:
+            return
+        row_shift = self.config.block_size.height + self.config.gap_y
+        diag_shift = max(8.0, self.config.gap_x * 0.2)
+
+        for idx, marker in enumerate(markers):
+            if marker.role != "start_marker":
+                continue
+            if not self._segment_intersects_rect_any(edge_segments, marker):
+                continue
+            updated = marker
+            for _ in range(3):
+                updated = MarkerPlacement(
+                    procedure_id=updated.procedure_id,
+                    block_id=updated.block_id,
+                    role=updated.role,
+                    position=Point(
+                        updated.position.x - diag_shift,
+                        updated.position.y + row_shift,
+                    ),
+                    size=updated.size,
+                    end_type=updated.end_type,
+                )
+                if not self._segment_intersects_rect_any(edge_segments, updated):
+                    break
+            markers[idx] = updated
+
+    def _segment_intersects_rect_any(
+        self,
+        edge_segments: Sequence[tuple[Point, Point]],
+        marker: MarkerPlacement,
+    ) -> bool:
+        rect = self._rect_bounds(marker.position, marker.size)
+        for start, end in edge_segments:
+            if self._segment_intersects_rect(start, end, rect):
+                return True
+        return False
+
+    def _block_edge_segments(
+        self,
+        document: MarkupDocument,
+        blocks: Sequence[BlockPlacement],
+    ) -> list[tuple[Point, Point]]:
+        block_by_id: dict[str, list[BlockPlacement]] = {}
+        for block in blocks:
+            block_by_id.setdefault(block.block_id, []).append(block)
+
+        segments: list[tuple[Point, Point]] = []
+        if document.block_graph:
+            for source_id, targets in document.block_graph.items():
+                source_candidates = block_by_id.get(source_id, [])
+                if len(source_candidates) != 1:
+                    continue
+                source_block = source_candidates[0]
+                for target_id in targets:
+                    target_candidates = block_by_id.get(target_id, [])
+                    if len(target_candidates) != 1:
+                        continue
+                    target_block = target_candidates[0]
+                    segments.append(self._block_edge_segment(source_block, target_block))
+            return segments
+
+        for proc in document.procedures:
+            for source_id, targets in proc.branches.items():
+                source_candidates = block_by_id.get(source_id, [])
+                if len(source_candidates) != 1:
+                    continue
+                source_block = source_candidates[0]
+                for target_id in targets:
+                    target_candidates = block_by_id.get(target_id, [])
+                    if len(target_candidates) != 1:
+                        continue
+                    target_block = target_candidates[0]
+                    segments.append(self._block_edge_segment(source_block, target_block))
+        return segments
+
+    def _block_edge_segment(
+        self,
+        source_block: BlockPlacement,
+        target_block: BlockPlacement,
+    ) -> tuple[Point, Point]:
+        if target_block.position.x >= source_block.position.x:
+            start = self._block_anchor(source_block, side="right")
+            end = self._block_anchor(target_block, side="left")
+        else:
+            start = self._block_anchor(source_block, side="left")
+            end = self._block_anchor(target_block, side="right")
+        return start, end
+
+    def _block_anchor(
+        self,
+        placement: BlockPlacement,
+        side: str,
+    ) -> Point:
+        if side == "left":
+            return Point(
+                placement.position.x,
+                placement.position.y + placement.size.height / 2,
+            )
+        if side == "right":
+            return Point(
+                placement.position.x + placement.size.width,
+                placement.position.y + placement.size.height / 2,
+            )
+        raise ValueError(f"Unsupported side: {side}")
+
+    def _rect_bounds(self, origin: Point, size: Size) -> tuple[float, float, float, float]:
+        return (origin.x, origin.y, origin.x + size.width, origin.y + size.height)
+
+    def _segment_intersects_rect(
+        self,
+        start: Point,
+        end: Point,
+        rect: tuple[float, float, float, float],
+    ) -> bool:
+        x1, y1 = start.x, start.y
+        x2, y2 = end.x, end.y
+        rx1, ry1, rx2, ry2 = rect
+
+        if rx1 <= x1 <= rx2 and ry1 <= y1 <= ry2:
+            return True
+        if rx1 <= x2 <= rx2 and ry1 <= y2 <= ry2:
+            return True
+
+        def ccw(a: Point, b: Point, c: Point) -> bool:
+            return (c.y - a.y) * (b.x - a.x) > (b.y - a.y) * (c.x - a.x)
+
+        def intersects(a: Point, b: Point, c: Point, d: Point) -> bool:
+            return ccw(a, c, d) != ccw(b, c, d) and ccw(a, b, c) != ccw(a, b, d)
+
+        edges = [
+            (Point(rx1, ry1), Point(rx2, ry1)),
+            (Point(rx2, ry1), Point(rx2, ry2)),
+            (Point(rx2, ry2), Point(rx1, ry2)),
+            (Point(rx1, ry2), Point(rx1, ry1)),
+        ]
+        for edge_start, edge_end in edges:
+            if intersects(start, end, edge_start, edge_end):
+                return True
+        return False
+
     def _resolve_owned_blocks(
         self,
         document: MarkupDocument,
@@ -875,6 +1082,7 @@ class GridLayoutEngine(LayoutEngine):
         owned_blocks: set[str] | None = None,
         layout_edges: Mapping[str, list[str]] | None = None,
         turn_out_blocks: set[str] | None = None,
+        end_block_row_offsets: Mapping[str, float] | None = None,
     ) -> tuple[
         dict[str, int],
         int,
@@ -1323,6 +1531,31 @@ class GridLayoutEngine(LayoutEngine):
         for _ in range(3):
             apply_row_smoothing()
         apply_row_smoothing()
+
+        if end_block_row_offsets:
+            for node_id, info in node_info.items():
+                if info.kind != "block":
+                    continue
+                offset = end_block_row_offsets.get(info.block_id)
+                if offset is None:
+                    continue
+                row_positions[node_id] = row_positions.get(node_id, 0.0) + offset
+            for lvl in range(max_level + 1):
+                nodes = level_order.get(lvl, [])
+                if not nodes:
+                    continue
+                nodes.sort(key=lambda n: (row_positions.get(n, 0.0), n))
+                prev_pos: float | None = None
+                prev_span = 0.0
+                for node_id in nodes:
+                    pos = row_positions.get(node_id, 0.0)
+                    if prev_pos is None:
+                        pos = max(0.0, pos)
+                    else:
+                        pos = max(pos, prev_pos + prev_span)
+                    row_positions[node_id] = pos
+                    prev_pos = pos
+                    prev_span = row_span(node_id)
 
         occupied_rows: dict[int, list[float]] = {}
         for node_id, info in node_info.items():
