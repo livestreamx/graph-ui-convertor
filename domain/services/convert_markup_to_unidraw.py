@@ -29,6 +29,7 @@ _SHAPE_TEXT_COLOR = "#3A3A3A"
 _DEFAULT_TEXT_COLOR = "#2b2b2b"
 _UNIDRAW_ALPHA = 100
 _UNIDRAW_FILL_STYLE = "s"
+_UNIDRAW_FILL_STYLE_HATCH = "h"
 _UNIDRAW_STROKE_SOLID = "s"
 _UNIDRAW_STROKE_DASHED = "d"
 _UNIDRAW_LINE_TYPE_CONNECTOR = "c"
@@ -169,7 +170,10 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_style: str | None = None,
+        fill_style: str | None = None,
     ) -> Element:
+        resolved_fill = _UNIDRAW_FILL_STYLE_HATCH if fill_style == "hachure" else fill_style
         return self._base_element(
             element_id=element_id,
             type_name="shape",
@@ -182,6 +186,8 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 stroke_color="#1e1e1e",
                 background_color=background_color or "#cce5ff",
                 stroke_width=1.0,
+                stroke_style=stroke_style,
+                fill_style=resolved_fill,
             ),
         )
 
@@ -263,6 +269,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         size: Size,
         frame_id: str | None,
         metadata: Metadata,
+        group_ids: list[str] | None = None,
         background_color: str | None = None,
         stroke_color: str | None = None,
         stroke_style: str | None = None,
@@ -274,6 +281,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             position=position,
             size=size,
             metadata=metadata,
+            group_ids=group_ids,
             extra={"shape": _SHAPE_ELLIPSE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
                 stroke_color=stroke_color or "#1e1e1e",
@@ -632,6 +640,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         background_color: str,
         stroke_width: float,
         stroke_style: str | None = None,
+        fill_style: str | None = None,
     ) -> dict[str, Any]:
         style = self._text_style(
             text_color=_SHAPE_TEXT_COLOR,
@@ -642,7 +651,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         style.update(
             {
                 "fc": background_color,
-                "fs": _UNIDRAW_FILL_STYLE,
+                "fs": fill_style or _UNIDRAW_FILL_STYLE,
                 "sc": stroke_color,
                 "sw": stroke_width,
                 "ss": _UNIDRAW_STROKE_DASHED if stroke_style == "dashed" else _UNIDRAW_STROKE_SOLID,

@@ -11,6 +11,7 @@ from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
     END_TYPE_TURN_OUT,
+    INITIAL_BLOCK_COLOR,
     INTERMEDIATE_BLOCK_COLOR,
     METADATA_SCHEMA_VERSION,
     BlockPlacement,
@@ -80,6 +81,7 @@ class MarkupToDiagramConverter(ABC):
             base_metadata,
             end_block_type_lookup,
             block_name_lookup,
+            document.block_graph_initials,
         )
 
         start_label_index: dict[tuple[str, str], int] = {}
@@ -709,6 +711,7 @@ class MarkupToDiagramConverter(ABC):
         base_metadata: Metadata,
         end_block_type_lookup: dict[tuple[str, str], str],
         block_name_lookup: dict[tuple[str, str], str],
+        block_graph_initials: set[str],
     ) -> dict[tuple[str, str], BlockPlacement]:
         placement_index: dict[tuple[str, str], BlockPlacement] = {}
         for block in blocks:
@@ -717,11 +720,14 @@ class MarkupToDiagramConverter(ABC):
             rect_id = self._stable_id("block", block.procedure_id, block.block_id)
             text_id = self._stable_id("block-text", block.procedure_id, block.block_id)
             end_block_type = end_block_type_lookup.get((block.procedure_id, block.block_id))
-            block_meta = {
+            is_initial = block.block_id in block_graph_initials
+            block_meta: dict[str, object] = {
                 "procedure_id": block.procedure_id,
                 "block_id": block.block_id,
                 "role": "block",
             }
+            if is_initial:
+                block_meta["block_graph_initial"] = True
             if end_block_type:
                 block_meta["end_block_type"] = end_block_type
             label_text = block_name_lookup.get((block.procedure_id, block.block_id), block.block_id)
@@ -734,16 +740,24 @@ class MarkupToDiagramConverter(ABC):
                     group_ids=[group_id],
                     metadata=self._with_base_metadata(block_meta, base_metadata),
                     background_color=(
-                        INTERMEDIATE_BLOCK_COLOR if end_block_type == "intermediate" else None
+                        INITIAL_BLOCK_COLOR
+                        if is_initial
+                        else (
+                            INTERMEDIATE_BLOCK_COLOR if end_block_type == "intermediate" else None
+                        )
                     ),
+                    stroke_style="dashed" if is_initial else None,
+                    fill_style="hachure" if is_initial else None,
                 )
             )
-            label_meta = {
+            label_meta: dict[str, object] = {
                 "procedure_id": block.procedure_id,
                 "block_id": block.block_id,
                 "role": "block_label",
                 "end_block_type": end_block_type,
             }
+            if is_initial:
+                label_meta["block_graph_initial"] = True
             if label_text != block.block_id:
                 label_meta["block_name"] = label_text
             registry.add(
@@ -793,6 +807,13 @@ class MarkupToDiagramConverter(ABC):
             marker_index[(marker.procedure_id, marker.block_id, marker.role, marker.end_type)] = (
                 marker
             )
+            group_id = self._stable_id(
+                "marker-group",
+                marker.procedure_id,
+                marker.role,
+                marker.block_id,
+                marker.end_type or "",
+            )
             element_id = self._marker_element_id(
                 marker.procedure_id, marker.role, marker.block_id, marker.end_type
             )
@@ -822,6 +843,7 @@ class MarkupToDiagramConverter(ABC):
                     size=marker.size,
                     frame_id=frame_ids.get(marker.procedure_id),
                     metadata=self._with_base_metadata(marker_meta, base_metadata),
+                    group_ids=[group_id],
                     background_color=background_color,
                     stroke_style=stroke_style,
                 )
@@ -853,6 +875,7 @@ class MarkupToDiagramConverter(ABC):
                     center=self._center(marker.position, marker.size.width, marker.size.height),
                     container_id=element_id,
                     frame_id=frame_ids.get(marker.procedure_id),
+                    group_ids=[group_id],
                     metadata=self._with_base_metadata(marker_meta, base_metadata),
                     max_width=marker.size.width - 24,
                     max_height=min(52.0, marker.size.height - 14),
@@ -1516,6 +1539,8 @@ class MarkupToDiagramConverter(ABC):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_style: str | None = None,
+        fill_style: str | None = None,
     ) -> Element:
         raise NotImplementedError
 
@@ -1562,6 +1587,7 @@ class MarkupToDiagramConverter(ABC):
         size: Size,
         frame_id: str | None,
         metadata: Metadata,
+        group_ids: list[str] | None = None,
         background_color: str | None = None,
         stroke_color: str | None = None,
         stroke_style: str | None = None,

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import ExcalidrawDocument, MarkupDocument
+from domain.models import INITIAL_BLOCK_COLOR, ExcalidrawDocument, MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 
@@ -197,6 +197,61 @@ def test_block_graph_cycle_edges_are_marked() -> None:
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     graph = {key: sorted(values) for key, values in reconstructed.block_graph.items()}
     assert graph == {"b": ["c"], "c": ["b"]}
+
+
+def test_block_graph_initial_suffix_roundtrip() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["root"],
+                "end_block_ids": ["leaf::end"],
+                "branches": {"root": ["leaf"]},
+            }
+        ],
+        "block_graph": {"root::initial": ["child", "leaf::initial"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    assert markup.block_graph == {"root": ["child", "leaf"]}
+    assert markup.block_graph_initials == {"root", "leaf"}
+
+    serialized = markup.to_markup_dict()
+    block_graph = serialized.get("block_graph")
+    assert block_graph == {"root::initial": ["child", "leaf::initial"]}
+
+
+def test_initial_block_styling_in_excalidraw() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["root"],
+                "end_block_ids": ["child::end"],
+                "branches": {"root": ["child"]},
+                "block_id_to_block_name": {
+                    "root": "Root block",
+                    "child": "Child block",
+                },
+            }
+        ],
+        "block_graph": {"root::initial": ["child"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal: ExcalidrawDocument = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    block = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("block_id") == "root"
+    )
+    meta = block.get("customData", {}).get("cjm", {})
+    assert meta.get("block_graph_initial") is True
+    assert block.get("backgroundColor") == INITIAL_BLOCK_COLOR
+    assert block.get("strokeStyle") == "dashed"
+    assert block.get("fillStyle") == "hachure"
 
 
 def test_block_graph_skips_ambiguous_nodes_in_cycle_detection() -> None:

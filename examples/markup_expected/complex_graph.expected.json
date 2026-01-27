@@ -1,7 +1,7 @@
 {
   "counts": {
     "procedures": 6,
-    "blocks": 24,
+    "blocks": 25,
     "starts": 3,
     "ends": 23
   },
@@ -10,13 +10,13 @@
     "end": 23,
     "branch": 0,
     "branch_cycle": 0,
-    "block_graph": 23,
+    "block_graph": 26,
     "block_graph_cycle": 0
   },
   "block_graph": {
-    "edges": 23,
+    "edges": 26,
     "cycle_edges": 0,
-    "cross_procedure_edges": 5,
+    "cross_procedure_edges": 6,
     "cycle_pairs": []
   },
   "end_types": {
@@ -28,6 +28,6 @@
     "turn_out": 18
   },
   "procedure_graph": {
-    "edges": 5
+    "edges": 6
   }
 }

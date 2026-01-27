@@ -41,6 +41,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
 
     def _post_process_elements(self, elements: list[Element]) -> None:
         ensure_excalidraw_links(elements, self.link_templates)
+        self._register_text_bindings(elements)
         procedure_edges: list[Element] = []
         other_edges: list[Element] = []
         rest: list[Element] = []
@@ -57,6 +58,36 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
                 rest.append(element)
         if procedure_edges or other_edges:
             elements[:] = procedure_edges + other_edges + rest
+
+    def _register_text_bindings(self, elements: list[Element]) -> None:
+        index: dict[str, Element] = {}
+        for element in elements:
+            element_id = element.get("id")
+            if isinstance(element_id, str):
+                index[element_id] = element
+        for element in elements:
+            if element.get("type") != "text":
+                continue
+            text_id = element.get("id")
+            if not isinstance(text_id, str):
+                continue
+            container_id = element.get("containerId")
+            if not isinstance(container_id, str):
+                continue
+            container = index.get(container_id)
+            if container is None:
+                continue
+            bound_elements = container.setdefault("boundElements", [])
+            if not isinstance(bound_elements, list):
+                continue
+            if any(
+                isinstance(bound, dict)
+                and bound.get("id") == text_id
+                and bound.get("type") == "text"
+                for bound in bound_elements
+            ):
+                continue
+            bound_elements.append({"id": text_id, "type": "text"})
 
     def _register_edge_bindings(self, arrow: Element, registry: ElementRegistry) -> None:
         arrow_id = arrow.get("id")
@@ -114,6 +145,8 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_style: str | None = None,
+        fill_style: str | None = None,
     ) -> Element:
         return self._base_shape(
             element_id=element_id,
@@ -126,10 +159,11 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             extra={
                 "strokeColor": "#1e1e1e",
                 "backgroundColor": background_color or "#cce5ff",
-                "fillStyle": "hachure",
+                "fillStyle": fill_style or "hachure",
                 "seed": self._rand_seed(),
                 "version": 1,
                 "versionNonce": self._rand_seed(),
+                "strokeStyle": stroke_style or "solid",
                 "boundElements": [],
             },
             metadata=metadata,
@@ -229,6 +263,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         size: Size,
         frame_id: str | None,
         metadata: Metadata,
+        group_ids: list[str] | None = None,
         background_color: str | None = None,
         stroke_color: str | None = None,
         stroke_style: str | None = None,
@@ -241,6 +276,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             width=size.width,
             height=size.height,
             frame_id=frame_id,
+            group_ids=group_ids,
             extra={
                 "strokeColor": stroke_color or "#1e1e1e",
                 "backgroundColor": background_color or "#d1ffd6",

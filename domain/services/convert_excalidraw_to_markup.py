@@ -48,6 +48,7 @@ class ExcalidrawToMarkupConverter:
         elements: Iterable[Element] = document.get("elements", [])
         frames, proc_names = self._collect_frames(elements)
         blocks = self._collect_blocks(elements, frames)
+        block_initials = self._collect_block_initials(elements)
         markers = self._collect_markers(elements, frames)
         block_names = self._collect_block_names(elements, frames)
 
@@ -147,6 +148,7 @@ class ExcalidrawToMarkupConverter:
             procedures=procedures,
             procedure_graph=procedure_graph,
             block_graph=block_graph,
+            block_graph_initials=block_initials,
         )
 
     def _collect_frames(self, elements: Iterable[Element]) -> tuple[dict[str, str], dict[str, str]]:
@@ -204,6 +206,19 @@ class ExcalidrawToMarkupConverter:
                 element_id=element_id,
             )
         return blocks
+
+    def _collect_block_initials(self, elements: Iterable[Element]) -> set[str]:
+        initials: set[str] = set()
+        for element in elements:
+            if element.get("type") not in {"rectangle", "text"}:
+                continue
+            meta = self._metadata(element)
+            block_id = meta.get("block_id")
+            if not isinstance(block_id, str):
+                continue
+            if meta.get("block_graph_initial") is True:
+                initials.add(block_id)
+        return initials
 
     def _collect_markers(
         self,

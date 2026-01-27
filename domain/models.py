@@ -11,6 +11,7 @@ END_BLOCK_SEPARATOR = "::"
 END_TYPE_DEFAULT = "end"
 END_TYPE_TURN_OUT = "turn_out"
 END_TYPE_VALUES = {"end", "exit", "all", "intermediate", "postpone", END_TYPE_TURN_OUT}
+BLOCK_GRAPH_INITIAL_SUFFIX = "initial"
 END_TYPE_COLORS = {
     "end": "#8fdc8f",
     "exit": "#ffe08a",
@@ -20,6 +21,7 @@ END_TYPE_COLORS = {
     END_TYPE_TURN_OUT: "#cfe3ff",
 }
 INTERMEDIATE_BLOCK_COLOR = "#ffb347"
+INITIAL_BLOCK_COLOR = "#d1ffd6"
 
 
 def normalize_end_type(value: str | None) -> str | None:
@@ -47,6 +49,15 @@ def split_end_block_id(raw: str) -> tuple[str, str]:
         if normalized:
             return head, normalized
     return base, END_TYPE_DEFAULT
+
+
+def split_block_graph_id(raw: str) -> tuple[str, bool]:
+    base = str(raw)
+    if END_BLOCK_SEPARATOR in base:
+        head, suffix = base.rsplit(END_BLOCK_SEPARATOR, 1)
+        if suffix.strip().lower() == BLOCK_GRAPH_INITIAL_SUFFIX:
+            return head, True
+    return base, False
 
 
 def merge_end_types(existing: str | None, new: str) -> str:
@@ -179,6 +190,7 @@ class MarkupDocument(BaseModel):
     procedures: list[Procedure] = Field(default_factory=list)
     procedure_graph: dict[str, list[str]] = Field(default_factory=dict)
     block_graph: dict[str, list[str]] = Field(default_factory=dict)
+    block_graph_initials: set[str] = Field(default_factory=set)
     procedure_meta: dict[str, dict[str, object]] = Field(default_factory=dict)
 
     @field_validator("finedog_unit_id", mode="before")
@@ -213,6 +225,40 @@ class MarkupDocument(BaseModel):
                     break
         return updated or data
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_block_graph_initials(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        raw_graph = data.get("block_graph")
+        if not isinstance(raw_graph, dict):
+            return data
+        updated = dict(data)
+        initial_blocks: set[str] = set()
+        existing_initials = data.get("block_graph_initials")
+        if isinstance(existing_initials, list | set | tuple):
+            initial_blocks.update(str(value) for value in existing_initials)
+        normalized: dict[str, list[str]] = {}
+        for raw_source, raw_targets in raw_graph.items():
+            source_id, source_initial = split_block_graph_id(raw_source)
+            if source_initial:
+                initial_blocks.add(source_id)
+            targets = normalized.setdefault(source_id, [])
+            if not isinstance(raw_targets, list):
+                raw_targets = list(raw_targets) if raw_targets is not None else []
+            for raw_target in raw_targets:
+                target_id, target_initial = split_block_graph_id(raw_target)
+                if target_initial:
+                    initial_blocks.add(target_id)
+                if target_id not in targets:
+                    targets.append(target_id)
+        updated["block_graph"] = normalized
+        if initial_blocks:
+            updated["block_graph_initials"] = initial_blocks
+        elif "block_graph_initials" in data:
+            updated["block_graph_initials"] = set()
+        return updated
+
     @field_validator("procedures", mode="after")
     @classmethod
     def ensure_unique_procedure_ids(cls, procedures: list[Procedure]) -> list[Procedure]:
@@ -245,7 +291,9 @@ class MarkupDocument(BaseModel):
         if self.procedure_graph:
             payload["procedure_graph"] = dict(self.procedure_graph)
         if self.block_graph:
-            payload["block_graph"] = _sorted_branches(self.block_graph)
+            payload["block_graph"] = _format_block_graph(
+                self.block_graph, self.block_graph_initials
+            )
         return payload
 
 
@@ -269,6 +317,20 @@ def _sorted_unique(values: list[str]) -> list[str]:
 
 def _sorted_branches(branches: dict[str, list[str]]) -> dict[str, list[str]]:
     return {key: sorted(set(values)) for key, values in branches.items()}
+
+
+def _format_block_graph(
+    block_graph: dict[str, list[str]], initial_blocks: set[str]
+) -> dict[str, list[str]]:
+    def decorate(block_id: str) -> str:
+        if block_id in initial_blocks:
+            return f"{block_id}{END_BLOCK_SEPARATOR}{BLOCK_GRAPH_INITIAL_SUFFIX}"
+        return block_id
+
+    formatted: dict[str, list[str]] = {}
+    for source, targets in block_graph.items():
+        formatted[decorate(source)] = [decorate(target) for target in sorted(set(targets))]
+    return formatted
 
 
 def _merge_end_block_ids(block_ids: list[str], end_types: dict[str, str]) -> list[str]:

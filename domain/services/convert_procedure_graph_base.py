@@ -185,6 +185,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 label, color = labels[stat_key]
                 label_text = label if value == 1 else plurals.get(label, f"{label}s")
                 element_id = self._stable_id("procedure-stat", frame.procedure_id, stat_key)
+                group_id = self._stable_id("procedure-stat-group", frame.procedure_id, stat_key)
                 stat_meta = self._with_base_metadata(
                     {
                         "procedure_id": frame.procedure_id,
@@ -205,6 +206,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                         size=stat_size,
                         frame_id=frame_ids.get(frame.procedure_id),
                         metadata=stat_meta,
+                        group_ids=[group_id],
                         background_color=color,
                     )
                 )
@@ -216,6 +218,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                         center=self._center(position, stat_size.width, stat_size.height),
                         container_id=element_id,
                         frame_id=frame_ids.get(frame.procedure_id),
+                        group_ids=[group_id],
                         metadata=stat_meta,
                         max_width=stat_size.width - 10.0,
                         max_height=stat_size.height - 8.0,

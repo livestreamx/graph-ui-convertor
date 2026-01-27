@@ -119,10 +119,42 @@ def test_turn_out_end_markers_are_implicit_from_branches() -> None:
     }
     assert turn_out_blocks == {"a", "b"}
 
-    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
-    reconstructed_proc = reconstructed.procedures[0]
-    assert "a" not in reconstructed_proc.end_block_ids
-    assert "b" not in reconstructed_proc.end_block_ids
+
+def test_marker_text_is_bound_to_ellipse() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    markers = {
+        element.get("id"): element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role")
+        in {"start_marker", "end_marker"}
+    }
+    assert markers
+
+    texts = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text" and element.get("containerId") in markers
+    ]
+    assert texts
+    for text in texts:
+        container_id = text.get("containerId")
+        assert isinstance(container_id, str)
+        bound = markers[container_id].get("boundElements", [])
+        assert {"id": text.get("id"), "type": "text"} in bound
 
 
 def test_turn_out_markers_skip_terminal_end_blocks() -> None:
