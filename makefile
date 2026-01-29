@@ -273,7 +273,7 @@ catalog-up: dirs
 		exit 1; \
 	fi; \
 	echo "Using Poetry $$POETRY_VERSION for Catalog image build."; \
-	docker build --build-arg POETRY_VERSION="$$POETRY_VERSION" -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
+	docker build --build-arg POETRY_VERSION="$$POETRY_VERSION" --build-arg PYPI_URL="$$PYPI_URL" -f $(CATALOG_DOCKERFILE) -t $(CATALOG_IMAGE) .
 	@docker network inspect $(DEMO_NETWORK) >/dev/null 2>&1 || docker network create $(DEMO_NETWORK)
 	@docker rm -f $(CATALOG_CONTAINER) >/dev/null 2>&1 || true
 	@docker run -d --name $(CATALOG_CONTAINER) \
