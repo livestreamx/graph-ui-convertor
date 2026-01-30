@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
@@ -27,6 +30,14 @@ def _sample_markup() -> MarkupDocument:
         "procedure_graph": {"p2": ["p1"]},
     }
     return MarkupDocument.model_validate(payload)
+
+
+def _load_markup_fixture(name: str) -> MarkupDocument:
+    for parent in Path(__file__).resolve().parents:
+        fixture = parent / "examples" / "markup" / name
+        if fixture.exists():
+            return MarkupDocument.model_validate(json.loads(fixture.read_text(encoding="utf-8")))
+    raise RuntimeError("Repository root not found")
 
 
 def test_procedure_graph_orders_frames_and_edges() -> None:
@@ -217,6 +228,87 @@ def test_no_procedure_edges_without_links() -> None:
         in {"procedure_flow", "procedure_cycle"}
     ]
     assert not procedure_edges
+
+
+def test_start_block_shifted_when_edge_passes_through() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["start"],
+                "end_block_ids": [],
+                "branches": {},
+                "block_id_to_block_name": {
+                    "initial": "Initial",
+                    "start": "Start",
+                    "prepare": "Prepare",
+                },
+            }
+        ],
+        "block_graph": {
+            "initial": ["start", "prepare"],
+            "start": ["prepare"],
+        },
+    }
+    markup = MarkupDocument.model_validate(payload)
+    layout = GridLayoutEngine()
+    plan = layout.build_plan(markup)
+    blocks = {block.block_id: block for block in plan.blocks}
+
+    initial = blocks["initial"]
+    prepare = blocks["prepare"]
+    start_block = blocks["start"]
+    edge_start, edge_end = layout._block_edge_segment(initial, prepare)
+    rect = layout._rect_bounds(start_block.position, start_block.size)
+
+    assert not layout._segment_intersects_rect(edge_start, edge_end, rect)
+
+
+def test_intermediate_procedure_shifted_for_cross_edge() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["c"],
+                "end_block_ids": [],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "p3",
+                "start_block_ids": ["e"],
+                "end_block_ids": [],
+                "branches": {"e": ["f"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": ["p3"]},
+        "block_graph": {"b": ["f"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+
+    assert frames["p2"].origin.y > frames["p1"].origin.y
+    assert frames["p2"].origin.y > frames["p3"].origin.y
+
+
+def test_complex_graph_gamma_shift_and_triage_position() -> None:
+    markup = _load_markup_fixture("complex_graph.json")
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    assert frames["proc_gamma"].origin.y > frames["proc_beta"].origin.y
+
+    blocks = {(block.procedure_id, block.block_id): block for block in plan.blocks}
+    beta_branch = blocks[("proc_beta", "beta_branch")]
+    gamma_triage = blocks[("proc_gamma", "gamma_triage")]
+    assert gamma_triage.position.x > beta_branch.position.x
 
 
 def test_scenarios_describe_components() -> None:

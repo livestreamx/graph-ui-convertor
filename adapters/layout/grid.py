@@ -108,6 +108,7 @@ class GridLayoutEngine(LayoutEngine):
         end_block_row_offsets = self._end_block_row_offsets(
             document, procedures, owned_blocks_by_proc
         )
+        cross_proc_edges = self._cross_procedure_edges(document, procedures, owned_blocks_by_proc)
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
@@ -185,19 +186,33 @@ class GridLayoutEngine(LayoutEngine):
                 total += proc_gap_y * (len(nodes) - 1)
                 level_heights[lvl] = total
 
-            component_height = max(level_heights.values() or [0.0])
+            frame_offsets = self._component_frame_offsets(
+                component,
+                cross_proc_edges,
+                order_index,
+                sizing,
+            )
+            component_frames: list[FramePlacement] = []
             for lvl, nodes in level_nodes.items():
                 y = origin_y
                 for proc_id in nodes:
                     frame_size = sizing[proc_id]
+                    y = max(y, origin_y + frame_offsets.get(proc_id, 0.0))
                     frame = FramePlacement(
                         procedure_id=proc_id,
                         origin=Point(level_offsets.get(lvl, origin_x), y),
                         size=frame_size,
                     )
                     frames.append(frame)
+                    component_frames.append(frame)
                     y += frame_size.height + proc_gap_y
 
+            if component_frames:
+                component_height = (
+                    max(frame.origin.y + frame.size.height for frame in component_frames) - origin_y
+                )
+            else:
+                component_height = 0.0
             if idx < len(components) - 1:
                 separator_ys.append(origin_y + component_height + component_gap / 2)
                 origin_y += component_height + component_gap
@@ -276,6 +291,9 @@ class GridLayoutEngine(LayoutEngine):
                         size=self.config.marker_size,
                     )
                 )
+
+        if blocks:
+            self._adjust_blocks_for_edges(document, blocks, markers)
 
         if blocks and markers:
             self._adjust_start_markers_for_edges(document, blocks, markers)
@@ -717,6 +735,74 @@ class GridLayoutEngine(LayoutEngine):
 
         return edges_by_proc
 
+    def _cross_procedure_edges(
+        self,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> set[tuple[str, str]]:
+        if not document.block_graph:
+            return set()
+
+        owner_by_block: dict[str, str] = {}
+        ambiguous: set[str] = set()
+        for proc_id, blocks in owned_blocks_by_proc.items():
+            for block_id in blocks:
+                existing = owner_by_block.get(block_id)
+                if existing and existing != proc_id:
+                    ambiguous.add(block_id)
+                else:
+                    owner_by_block[block_id] = proc_id
+
+        edges: set[tuple[str, str]] = set()
+        for source, targets in document.block_graph.items():
+            if source in ambiguous:
+                continue
+            source_proc = owner_by_block.get(source)
+            if not source_proc:
+                continue
+            for target in targets:
+                if target in ambiguous:
+                    continue
+                target_proc = owner_by_block.get(target)
+                if not target_proc or target_proc == source_proc:
+                    continue
+                edges.add((source_proc, target_proc))
+        return edges
+
+    def _component_frame_offsets(
+        self,
+        component: set[str],
+        cross_proc_edges: set[tuple[str, str]],
+        order_index: Mapping[str, int],
+        sizing: Mapping[str, Size],
+    ) -> dict[str, float]:
+        if not cross_proc_edges:
+            return {}
+        offsets: dict[str, float] = {}
+        for source_proc, target_proc in cross_proc_edges:
+            if source_proc not in component or target_proc not in component:
+                continue
+            src_idx = order_index.get(source_proc)
+            tgt_idx = order_index.get(target_proc)
+            if src_idx is None or tgt_idx is None:
+                continue
+            if tgt_idx <= src_idx:
+                continue
+            if tgt_idx - src_idx < 2:
+                continue
+            low, high = src_idx, tgt_idx
+            for proc_id in component:
+                proc_idx = order_index.get(proc_id)
+                if proc_idx is None or proc_idx <= low or proc_idx >= high:
+                    continue
+                frame_size = sizing.get(proc_id)
+                if not frame_size:
+                    continue
+                shift = frame_size.height + self.config.lane_gap
+                offsets[proc_id] = max(offsets.get(proc_id, 0.0), shift)
+        return offsets
+
     def _end_block_row_offsets(
         self,
         document: MarkupDocument,
@@ -802,6 +888,73 @@ class GridLayoutEngine(LayoutEngine):
                     break
             markers[idx] = updated
 
+    def _adjust_blocks_for_edges(
+        self,
+        document: MarkupDocument,
+        blocks: list[BlockPlacement],
+        markers: list[MarkerPlacement],
+    ) -> None:
+        edge_segments = self._block_edge_segments_with_blocks(document, blocks)
+        if not edge_segments:
+            return
+
+        start_blocks: set[tuple[str, str]] = set()
+        for proc in document.procedures:
+            for block_id in proc.start_block_ids:
+                start_blocks.add((proc.procedure_id, block_id))
+
+        block_index = {
+            (block.procedure_id, block.block_id): idx for idx, block in enumerate(blocks)
+        }
+        row_shift = self.config.block_size.height + self.config.gap_y
+
+        def shift_block(proc_id: str, block_id: str, dy: float) -> None:
+            idx = block_index.get((proc_id, block_id))
+            if idx is None:
+                return
+            block = blocks[idx]
+            blocks[idx] = BlockPlacement(
+                procedure_id=block.procedure_id,
+                block_id=block.block_id,
+                position=Point(block.position.x, block.position.y + dy),
+                size=block.size,
+            )
+            for marker_idx, marker in enumerate(markers):
+                if marker.procedure_id == proc_id and marker.block_id == block_id:
+                    markers[marker_idx] = MarkerPlacement(
+                        procedure_id=marker.procedure_id,
+                        block_id=marker.block_id,
+                        role=marker.role,
+                        position=Point(marker.position.x, marker.position.y + dy),
+                        size=marker.size,
+                        end_type=marker.end_type,
+                    )
+
+        for proc_id, block_id in start_blocks:
+            idx = block_index.get((proc_id, block_id))
+            if idx is None:
+                continue
+            for _ in range(3):
+                block = blocks[idx]
+                rect = self._rect_bounds(block.position, block.size)
+                intersects = False
+                for source_block, target_block, start, end in edge_segments:
+                    if (
+                        source_block.block_id == block.block_id
+                        and source_block.procedure_id == block.procedure_id
+                    ) or (
+                        target_block.block_id == block.block_id
+                        and target_block.procedure_id == block.procedure_id
+                    ):
+                        continue
+                    if self._segment_intersects_rect(start, end, rect):
+                        intersects = True
+                        break
+                if not intersects:
+                    break
+                shift_block(proc_id, block_id, row_shift)
+                edge_segments = self._block_edge_segments_with_blocks(document, blocks)
+
     def _segment_intersects_rect_any(
         self,
         edge_segments: Sequence[tuple[Point, Point]],
@@ -849,6 +1002,46 @@ class GridLayoutEngine(LayoutEngine):
                         continue
                     target_block = target_candidates[0]
                     segments.append(self._block_edge_segment(source_block, target_block))
+        return segments
+
+    def _block_edge_segments_with_blocks(
+        self,
+        document: MarkupDocument,
+        blocks: Sequence[BlockPlacement],
+    ) -> list[tuple[BlockPlacement, BlockPlacement, Point, Point]]:
+        block_by_id: dict[str, list[BlockPlacement]] = {}
+        for block in blocks:
+            block_by_id.setdefault(block.block_id, []).append(block)
+
+        segments: list[tuple[BlockPlacement, BlockPlacement, Point, Point]] = []
+        if document.block_graph:
+            for source_id, targets in document.block_graph.items():
+                source_candidates = block_by_id.get(source_id, [])
+                if len(source_candidates) != 1:
+                    continue
+                source_block = source_candidates[0]
+                for target_id in targets:
+                    target_candidates = block_by_id.get(target_id, [])
+                    if len(target_candidates) != 1:
+                        continue
+                    target_block = target_candidates[0]
+                    start, end = self._block_edge_segment(source_block, target_block)
+                    segments.append((source_block, target_block, start, end))
+            return segments
+
+        for proc in document.procedures:
+            for source_id, targets in proc.branches.items():
+                source_candidates = block_by_id.get(source_id, [])
+                if len(source_candidates) != 1:
+                    continue
+                source_block = source_candidates[0]
+                for target_id in targets:
+                    target_candidates = block_by_id.get(target_id, [])
+                    if len(target_candidates) != 1:
+                        continue
+                    target_block = target_candidates[0]
+                    start, end = self._block_edge_segment(source_block, target_block)
+                    segments.append((source_block, target_block, start, end))
         return segments
 
     def _block_edge_segment(
