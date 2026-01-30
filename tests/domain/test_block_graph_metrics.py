@@ -37,3 +37,15 @@ def test_basic_block_graph_metrics() -> None:
     assert len(metrics.merge_nodes) == 2
     assert metrics.cycle_path is not None
     assert {"route_review", "route_recheck"}.issubset(set(metrics.cycle_path))
+    assert metrics.cycle_count == 1
+
+
+def test_complex_graph_cycle_count() -> None:
+    payload = json.loads(
+        (_repo_root() / "examples" / "markup" / "complex_graph.json").read_text(encoding="utf-8")
+    )
+    document = MarkupDocument.model_validate(payload)
+    metrics = compute_graph_metrics(document.block_graph)
+
+    assert metrics.is_acyclic is False
+    assert metrics.cycle_count == 2

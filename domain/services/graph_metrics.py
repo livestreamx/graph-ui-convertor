@@ -23,6 +23,7 @@ class GraphMetrics:
     merge_nodes: set[str]
     is_acyclic: bool
     cycle_path: list[str] | None
+    cycle_count: int
     weakly_connected: bool
 
 
@@ -61,6 +62,7 @@ def compute_graph_metrics(adjacency: Mapping[str, Iterable[str]]) -> GraphMetric
     edges = sum(out_degree.values())
     cycle_path = _find_cycle_path(graph.adjacency)
     is_acyclic = cycle_path is None
+    cycle_count = _count_cycles(graph.adjacency)
     weakly_connected = _is_weakly_connected(graph.vertices, graph.adjacency)
 
     return GraphMetrics(
@@ -75,6 +77,7 @@ def compute_graph_metrics(adjacency: Mapping[str, Iterable[str]]) -> GraphMetric
         merge_nodes=merge_nodes,
         is_acyclic=is_acyclic,
         cycle_path=cycle_path,
+        cycle_count=cycle_count,
         weakly_connected=weakly_connected,
     )
 
@@ -107,6 +110,60 @@ def _find_cycle_path(adjacency: Mapping[str, list[str]]) -> list[str] | None:
             if cycle:
                 return cycle
     return None
+
+
+def _count_cycles(adjacency: Mapping[str, list[str]]) -> int:
+    nodes = set(adjacency.keys())
+    for targets in adjacency.values():
+        nodes.update(targets)
+    if not nodes:
+        return 0
+
+    index = 0
+    indices: dict[str, int] = {}
+    lowlinks: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    components: list[list[str]] = []
+
+    def strongconnect(node: str) -> None:
+        nonlocal index
+        indices[node] = index
+        lowlinks[node] = index
+        index += 1
+        stack.append(node)
+        on_stack.add(node)
+
+        for child in adjacency.get(node, []):
+            if child not in indices:
+                strongconnect(child)
+                lowlinks[node] = min(lowlinks[node], lowlinks[child])
+            elif child in on_stack:
+                lowlinks[node] = min(lowlinks[node], indices[child])
+
+        if lowlinks[node] == indices[node]:
+            component: list[str] = []
+            while True:
+                current = stack.pop()
+                on_stack.remove(current)
+                component.append(current)
+                if current == node:
+                    break
+            components.append(component)
+
+    for node in nodes:
+        if node not in indices:
+            strongconnect(node)
+
+    cycle_count = 0
+    for component in components:
+        if len(component) > 1:
+            cycle_count += 1
+            continue
+        node = component[0]
+        if node in adjacency.get(node, []):
+            cycle_count += 1
+    return cycle_count
 
 
 def _is_weakly_connected(vertices: set[str], adjacency: Mapping[str, list[str]]) -> bool:

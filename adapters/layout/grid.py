@@ -574,8 +574,7 @@ class GridLayoutEngine(LayoutEngine):
         if metrics.is_acyclic:
             properties.append("- ацикличный")
         else:
-            cycle_count = 1 if metrics.cycle_path else 0
-            cycle_text = f"- цикличный, кол-во циклов: {cycle_count}"
+            cycle_text = f"- цикличный, кол-во циклов: {metrics.cycle_count}"
         properties.extend(
             [
                 "- ориентированный",

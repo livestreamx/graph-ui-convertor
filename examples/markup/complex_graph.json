@@ -95,7 +95,7 @@
     {
       "proc_id": "proc_zeta",
       "proc_name": "Zeta Completion",
-      "start_block_ids": ["zeta_start"],
+      "start_block_ids": [],
       "end_block_ids": ["zeta_postpone::postpone"],
       "branches": {
         "zeta_start": ["zeta_intake"],
