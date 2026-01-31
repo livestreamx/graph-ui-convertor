@@ -157,23 +157,31 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             "start": ("start", "#d1ffd6"),
             "branch": ("branch", "#cce5ff"),
             "end": ("end", END_TYPE_COLORS[END_TYPE_DEFAULT]),
+            "postpone": ("postpone", END_TYPE_COLORS["postpone"]),
         }
         plurals = {
             "start": "starts",
             "branch": "branches",
             "end": "ends",
+            "postpone": "postpones",
         }
         for frame in frames:
             proc = procedure_map.get(frame.procedure_id)
             if proc is None:
                 continue
             start_count = len(proc.start_block_ids)
-            end_count = len(proc.end_block_ids)
+            postpone_count = sum(
+                1 for block_id in proc.end_block_ids if proc.end_block_types.get(block_id) == "postpone"
+            )
+            end_count = sum(
+                1 for block_id in proc.end_block_ids if proc.end_block_types.get(block_id) != "postpone"
+            )
             branch_count = sum(len(targets) for targets in proc.branches.values())
             stats = [
                 ("start", start_count),
                 ("branch", branch_count),
                 ("end", end_count),
+                ("postpone", postpone_count),
             ]
             stats = [(stat_key, value) for stat_key, value in stats if value > 0]
             if not stats:

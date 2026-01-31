@@ -527,6 +527,52 @@ def test_procedure_graph_converter_adds_stats_and_label() -> None:
     assert "1 end" in stat_texts
 
 
+def test_procedure_graph_converter_renders_postpone_stats_separately() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "proc_internal",
+                "proc_name": "Payments Graph",
+                "start_block_ids": ["s1"],
+                "end_block_ids": ["e1::end", "e2::postpone"],
+                "branches": {"s1": ["e1", "e2"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload)
+    layout = ProcedureGraphLayoutEngine(LayoutConfig(block_size=Size(280.0, 180.0), gap_y=120.0))
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    stats = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "procedure_stat"
+    ]
+    assert len(stats) == 4
+    counts = {
+        stat["customData"]["cjm"]["stat_type"]: stat["customData"]["cjm"]["stat_value"]
+        for stat in stats
+    }
+    assert counts["start"] == 1
+    assert counts["branch"] == 2
+    assert counts["end"] == 1
+    assert counts["postpone"] == 1
+
+    stat_texts = {
+        element.get("text")
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "procedure_stat"
+    }
+    assert "1 start" in stat_texts
+    assert "2 branches" in stat_texts
+    assert "1 end" in stat_texts
+    assert "1 postpone" in stat_texts
+
+
 def test_procedure_graph_converter_skips_zero_stats() -> None:
     payload = {
         "markup_type": "service",
