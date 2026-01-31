@@ -8,6 +8,7 @@ from domain.models import (
     FramePlacement,
     MarkupDocument,
     Point,
+    ServiceZonePlacement,
     Size,
 )
 from domain.services.convert_markup_base import (
@@ -27,6 +28,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             for proc in document.procedures
             if proc.procedure_name
         }
+        self._build_service_zone_rectangles(plan.service_zones, registry, base_metadata)
         frame_ids = self._build_procedure_frames(
             document, plan.frames, registry, base_metadata, proc_name_lookup
         )
@@ -34,6 +36,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         self._build_separators(plan.separators, registry, base_metadata)
         self._build_scenarios(plan.scenarios, registry, base_metadata)
         self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
+        self._build_service_zone_labels(plan.service_zones, registry, base_metadata)
         self._build_service_title(plan, registry, base_metadata, document.service_name)
         self._center_on_first_frame(plan, registry.elements)
         self._post_process_elements(registry.elements)
@@ -171,10 +174,14 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 continue
             start_count = len(proc.start_block_ids)
             postpone_count = sum(
-                1 for block_id in proc.end_block_ids if proc.end_block_types.get(block_id) == "postpone"
+                1
+                for block_id in proc.end_block_ids
+                if proc.end_block_types.get(block_id) == "postpone"
             )
             end_count = sum(
-                1 for block_id in proc.end_block_ids if proc.end_block_types.get(block_id) != "postpone"
+                1
+                for block_id in proc.end_block_ids
+                if proc.end_block_types.get(block_id) != "postpone"
             )
             branch_count = sum(len(targets) for targets in proc.branches.values())
             stats = [
@@ -233,3 +240,69 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                         font_size=14.0,
                     )
                 )
+
+    def _build_service_zone_rectangles(
+        self,
+        zones: list[ServiceZonePlacement],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+    ) -> None:
+        for zone in zones:
+            group_id = self._stable_id("service-zone-group", zone.service_key)
+            zone_id = self._stable_id("service-zone", zone.service_key)
+            zone_meta: dict[str, object] = {
+                "role": "service_zone",
+                "service_name": zone.service_name,
+                "service_color": zone.color,
+            }
+            if zone.team_name:
+                zone_meta["team_name"] = zone.team_name
+            if zone.team_id is not None:
+                zone_meta["team_id"] = zone.team_id
+            if zone.procedure_ids:
+                zone_meta["procedure_ids"] = list(zone.procedure_ids)
+            registry.add(
+                self._rectangle_element(
+                    element_id=zone_id,
+                    position=zone.origin,
+                    size=zone.size,
+                    frame_id=None,
+                    group_ids=[group_id],
+                    metadata=self._with_base_metadata(zone_meta, base_metadata),
+                    background_color="transparent",
+                    stroke_color=zone.color,
+                    stroke_style="dashed",
+                    fill_style="solid",
+                )
+            )
+
+    def _build_service_zone_labels(
+        self,
+        zones: list[ServiceZonePlacement],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+    ) -> None:
+        for zone in zones:
+            group_id = self._stable_id("service-zone-group", zone.service_key)
+            label_id = self._stable_id("service-zone-label", zone.service_key)
+            label_meta: dict[str, object] = {
+                "role": "service_zone_label",
+                "service_name": zone.service_name,
+                "service_color": zone.color,
+            }
+            if zone.team_name:
+                label_meta["team_name"] = zone.team_name
+            if zone.team_id is not None:
+                label_meta["team_id"] = zone.team_id
+            registry.add(
+                self._text_block_element(
+                    element_id=label_id,
+                    text=zone.service_name,
+                    origin=zone.label_origin,
+                    width=zone.label_size.width,
+                    height=zone.label_size.height,
+                    metadata=self._with_base_metadata(label_meta, base_metadata),
+                    group_ids=[group_id],
+                    font_size=zone.label_font_size,
+                )
+            )

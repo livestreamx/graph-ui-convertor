@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 
 from adapters.layout.grid import GridLayoutEngine, LayoutConfig
 from domain.models import (
@@ -12,9 +13,26 @@ from domain.models import (
     ScenarioPlacement,
     ScenarioProceduresBlock,
     SeparatorPlacement,
+    ServiceZonePlacement,
     Size,
     normalize_finedog_unit_id,
 )
+
+
+@dataclass(frozen=True)
+class _ServiceInfo:
+    service_key: str
+    service_name: str
+    team_name: str
+    team_id: str | int | None
+    color: str
+
+
+@dataclass(frozen=True)
+class _ServiceBand:
+    service: _ServiceInfo
+    start_y: float
+    height: float
 
 
 class ProcedureGraphLayoutEngine(GridLayoutEngine):
@@ -25,11 +43,17 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         frames: list[FramePlacement] = []
         separators: list[SeparatorPlacement] = []
         scenarios: list[ScenarioPlacement] = []
+        service_zones: list[ServiceZonePlacement] = []
 
         procedures = list(document.procedures)
         if not procedures:
             return LayoutPlan(
-                frames=frames, blocks=[], markers=[], separators=separators, scenarios=scenarios
+                frames=frames,
+                blocks=[],
+                markers=[],
+                separators=separators,
+                scenarios=scenarios,
+                service_zones=service_zones,
             )
 
         proc_ids = [proc.procedure_id for proc in procedures]
@@ -51,6 +75,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separator_ys: list[float] = []
         frame_lookup: dict[str, FramePlacement] = {}
         procedure_map = {proc.procedure_id: proc for proc in procedures}
+        procedure_meta = document.procedure_meta or {}
         block_graph_nodes = self._block_graph_nodes(document) if document.block_graph else set()
         owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
         layout_edges_by_proc = self._layout_edges_by_proc(
@@ -76,28 +101,152 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             for nodes in level_nodes.values():
                 nodes.sort(key=lambda proc_id: order_index.get(proc_id, 0))
 
-            level_heights: dict[int, float] = {}
-            for lvl, nodes in level_nodes.items():
-                if not nodes:
-                    level_heights[lvl] = 0.0
-                    continue
-                total = len(nodes) * node_size.height + proc_gap_y * (len(nodes) - 1)
-                level_heights[lvl] = total
-
-            component_height = max(level_heights.values() or [0.0])
+            service_info_by_key, proc_service_keys = self._component_service_info(
+                component, procedure_meta
+            )
+            zone_enabled = len(service_info_by_key) > 1
             component_frames: list[FramePlacement] = []
-            for lvl, nodes in level_nodes.items():
-                y = origin_y
-                for proc_id in nodes:
-                    frame = FramePlacement(
-                        procedure_id=proc_id,
-                        origin=Point(origin_x + lvl * lane_span, y),
-                        size=node_size,
+            component_height = 0.0
+
+            if zone_enabled:
+                service_order = self._sorted_service_infos(service_info_by_key)
+                assigned, service_counts = self._assign_component_services(
+                    proc_service_keys, service_order
+                )
+                service_order = [
+                    info for info in service_order if service_counts.get(info.service_key, 0) > 0
+                ]
+                if service_order:
+                    label_height = self.config.service_zone_label_font_size * 1.35
+                    top_padding = (
+                        self.config.service_zone_padding_y
+                        + label_height
+                        + self.config.service_zone_label_gap
                     )
-                    frames.append(frame)
-                    frame_lookup[proc_id] = frame
-                    component_frames.append(frame)
-                    y += node_size.height + proc_gap_y
+                    bottom_padding = self.config.service_zone_padding_y
+
+                    max_counts: dict[str, int] = {info.service_key: 0 for info in service_order}
+                    for nodes in level_nodes.values():
+                        counts: dict[str, int] = {}
+                        for proc_id in nodes:
+                            key = assigned.get(proc_id)
+                            if not key:
+                                continue
+                            counts[key] = counts.get(key, 0) + 1
+                        for key, count in counts.items():
+                            if count > max_counts.get(key, 0):
+                                max_counts[key] = count
+
+                    bands: list[_ServiceBand] = []
+                    current_y = origin_y
+                    for info in service_order:
+                        key = info.service_key
+                        count = max_counts.get(key, 0)
+                        if count <= 0:
+                            continue
+                        nodes_height = count * node_size.height + proc_gap_y * (count - 1)
+                        band_height = nodes_height + top_padding + bottom_padding
+                        bands.append(
+                            _ServiceBand(service=info, start_y=current_y, height=band_height)
+                        )
+                        current_y += band_height + proc_gap_y
+                    if bands:
+                        component_height = current_y - origin_y - proc_gap_y
+
+                    band_lookup = {band.service.service_key: band for band in bands}
+                    for lvl, nodes in level_nodes.items():
+                        by_service: dict[str, list[str]] = {}
+                        for proc_id in nodes:
+                            key = assigned.get(proc_id)
+                            if not key:
+                                continue
+                            by_service.setdefault(key, []).append(proc_id)
+                        for key, proc_ids in by_service.items():
+                            proc_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+                            band = band_lookup.get(key)
+                            if not band:
+                                continue
+                            start_y = band.start_y + top_padding
+                            for offset, proc_id in enumerate(proc_ids):
+                                frame = FramePlacement(
+                                    procedure_id=proc_id,
+                                    origin=Point(
+                                        origin_x + lvl * lane_span,
+                                        start_y + offset * (node_size.height + proc_gap_y),
+                                    ),
+                                    size=node_size,
+                                )
+                                frames.append(frame)
+                                frame_lookup[proc_id] = frame
+                                component_frames.append(frame)
+
+                    padding_x = self.config.service_zone_padding_x
+                    padding_y = self.config.service_zone_padding_y
+                    frames_by_service: dict[str, list[FramePlacement]] = {}
+                    for frame in component_frames:
+                        key = assigned.get(frame.procedure_id)
+                        if not key:
+                            continue
+                        frames_by_service.setdefault(key, []).append(frame)
+
+                    for band in bands:
+                        key = band.service.service_key
+                        service_frames = frames_by_service.get(key, [])
+                        if not service_frames:
+                            continue
+                        min_x = min(frame.origin.x for frame in service_frames)
+                        max_x = max(frame.origin.x + frame.size.width for frame in service_frames)
+                        origin = Point(min_x - padding_x, band.start_y)
+                        size = Size(
+                            max_x - min_x + padding_x * 2,
+                            band.height,
+                        )
+                        label_origin = Point(
+                            origin.x + padding_x,
+                            origin.y + padding_y,
+                        )
+                        label_size = Size(size.width - padding_x * 2, label_height)
+                        procedure_ids = tuple(
+                            sorted({frame.procedure_id for frame in service_frames})
+                        )
+                        service_zones.append(
+                            ServiceZonePlacement(
+                                service_key=key,
+                                service_name=band.service.service_name,
+                                team_name=band.service.team_name,
+                                team_id=band.service.team_id,
+                                color=band.service.color,
+                                origin=origin,
+                                size=size,
+                                label_origin=label_origin,
+                                label_size=label_size,
+                                label_font_size=self.config.service_zone_label_font_size,
+                                procedure_ids=procedure_ids,
+                            )
+                        )
+
+            if not zone_enabled or not component_frames:
+                level_heights: dict[int, float] = {}
+                for lvl, nodes in level_nodes.items():
+                    if not nodes:
+                        level_heights[lvl] = 0.0
+                        continue
+                    total = len(nodes) * node_size.height + proc_gap_y * (len(nodes) - 1)
+                    level_heights[lvl] = total
+
+                component_height = max(level_heights.values() or [0.0])
+                for lvl, nodes in level_nodes.items():
+                    y = origin_y
+                    for proc_id in nodes:
+                        frame = FramePlacement(
+                            procedure_id=proc_id,
+                            origin=Point(origin_x + lvl * lane_span, y),
+                            size=node_size,
+                        )
+                        frames.append(frame)
+                        frame_lookup[proc_id] = frame
+                        component_frames.append(frame)
+                        y += node_size.height + proc_gap_y
 
             scenario_total_height = 0.0
             if component_frames:
@@ -110,7 +259,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     procedure_graph=document.procedure_graph,
                     layout_edges_by_proc=layout_edges_by_proc,
                     order_index=order_index,
-                    procedure_meta=document.procedure_meta,
+                    procedure_meta=procedure_meta,
                 )
                 if scenario:
                     scenarios.append(scenario)
@@ -143,6 +292,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             markers=[],
             separators=separators,
             scenarios=scenarios,
+            service_zones=service_zones,
         )
 
     def _procedure_node_size(self) -> Size:
@@ -502,3 +652,116 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
             groups.append((team_name, team_id, sorted_services))
         return groups, None
+
+    def _service_zone_key(
+        self,
+        team_name: str,
+        team_id: str | int | None,
+        service_name: str,
+    ) -> str:
+        team_token = str(team_id) if team_id is not None else team_name
+        return f"{team_token}::{service_name}"
+
+    def _procedure_service_entries(
+        self,
+        meta: Mapping[str, object],
+    ) -> list[Mapping[str, object]]:
+        services = meta.get("services")
+        if isinstance(services, list) and services:
+            entries = [service for service in services if isinstance(service, Mapping)]
+            if entries:
+                return entries
+        return [
+            {
+                "team_name": meta.get("team_name") or meta.get("team_id") or "Unknown team",
+                "team_id": meta.get("team_id"),
+                "service_name": meta.get("service_name") or "Unknown service",
+                "service_color": meta.get("procedure_color"),
+            }
+        ]
+
+    def _normalize_service_entry(
+        self,
+        meta: Mapping[str, object],
+        entry: Mapping[str, object],
+    ) -> _ServiceInfo:
+        team_name = str(entry.get("team_name") or "Unknown team")
+        team_id = entry.get("team_id")
+        if not isinstance(team_id, str | int):
+            team_id = None
+        service_name = str(entry.get("service_name") or "Unknown service")
+        color = entry.get("service_color")
+        if not isinstance(color, str) or not color:
+            color = meta.get("procedure_color")
+        if not isinstance(color, str) or not color:
+            color = "#e9f0fb"
+        service_key = self._service_zone_key(team_name, team_id, service_name)
+        return _ServiceInfo(
+            service_key=service_key,
+            service_name=service_name,
+            team_name=team_name,
+            team_id=team_id,
+            color=color,
+        )
+
+    def _component_service_info(
+        self,
+        component: set[str],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+    ) -> tuple[dict[str, _ServiceInfo], dict[str, list[str]]]:
+        service_info_by_key: dict[str, _ServiceInfo] = {}
+        proc_service_keys: dict[str, list[str]] = {}
+        for proc_id in component:
+            meta = procedure_meta.get(proc_id, {})
+            entries = self._procedure_service_entries(meta)
+            keys: list[str] = []
+            for entry in entries:
+                info = self._normalize_service_entry(meta, entry)
+                if info.service_key not in keys:
+                    keys.append(info.service_key)
+                if info.service_key not in service_info_by_key:
+                    service_info_by_key[info.service_key] = info
+            if keys:
+                proc_service_keys[proc_id] = keys
+        return service_info_by_key, proc_service_keys
+
+    def _sorted_service_infos(
+        self,
+        service_info_by_key: Mapping[str, _ServiceInfo],
+    ) -> list[_ServiceInfo]:
+        return sorted(
+            service_info_by_key.values(),
+            key=lambda info: (
+                info.team_name.lower(),
+                info.service_name.lower(),
+                str(info.team_id or ""),
+            ),
+        )
+
+    def _assign_component_services(
+        self,
+        proc_service_keys: Mapping[str, list[str]],
+        service_order: list[_ServiceInfo],
+    ) -> tuple[dict[str, str], dict[str, int]]:
+        counts: dict[str, int] = {info.service_key: 0 for info in service_order}
+        assigned: dict[str, str] = {}
+        deferred: list[str] = []
+        for proc_id, keys in proc_service_keys.items():
+            if len(keys) == 1:
+                assigned[proc_id] = keys[0]
+                counts[keys[0]] = counts.get(keys[0], 0) + 1
+            elif keys:
+                deferred.append(proc_id)
+
+        order_index = {info.service_key: idx for idx, info in enumerate(service_order)}
+        for proc_id in deferred:
+            keys = proc_service_keys.get(proc_id, [])
+            if not keys:
+                continue
+            chosen = min(
+                keys,
+                key=lambda key: (counts.get(key, 0), order_index.get(key, 0)),
+            )
+            assigned[proc_id] = chosen
+            counts[chosen] = counts.get(chosen, 0) + 1
+        return assigned, counts

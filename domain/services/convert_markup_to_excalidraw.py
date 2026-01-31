@@ -145,6 +145,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
     ) -> Element:
@@ -157,7 +158,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             frame_id=frame_id,
             group_ids=group_ids,
             extra={
-                "strokeColor": "#1e1e1e",
+                "strokeColor": stroke_color or "#1e1e1e",
                 "backgroundColor": background_color or "#cce5ff",
                 "fillStyle": fill_style or "hachure",
                 "seed": self._rand_seed(),

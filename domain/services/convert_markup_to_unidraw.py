@@ -170,6 +170,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
     ) -> Element:
@@ -183,7 +184,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             group_ids=group_ids,
             extra={"shape": _SHAPE_RECTANGLE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
-                stroke_color="#1e1e1e",
+                stroke_color=stroke_color or "#1e1e1e",
                 background_color=background_color or "#cce5ff",
                 stroke_width=1.0,
                 stroke_style=stroke_style,

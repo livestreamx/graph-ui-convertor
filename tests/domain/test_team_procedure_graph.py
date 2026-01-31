@@ -636,6 +636,128 @@ def test_procedure_graph_converter_uses_procedure_color() -> None:
     assert unidraw_frame.get("style", {}).get("fc") == "#d9f5ff"
 
 
+def test_procedure_graph_converter_renders_service_zones_for_multiple_services() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Payments",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Refunds",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        }
+                    ],
+                },
+                "p2": {
+                    "team_name": "Beta",
+                    "service_name": "Refunds",
+                    "procedure_color": "#e3f7d9",
+                    "services": [
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Refunds",
+                            "service_color": "#e3f7d9",
+                        }
+                    ],
+                },
+            }
+        }
+    )
+    layout = ProcedureGraphLayoutEngine()
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    zones = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert len(zones) == 2
+    assert all(zone.get("strokeStyle") == "dashed" for zone in zones)
+    assert all(zone.get("backgroundColor") == "transparent" for zone in zones)
+    colors = {
+        zone.get("customData", {}).get("cjm", {}).get("service_name"): zone.get("strokeColor")
+        for zone in zones
+    }
+    assert colors.get("Payments") == "#d9f5ff"
+    assert colors.get("Refunds") == "#e3f7d9"
+
+    labels = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "service_zone_label"
+    ]
+    label_texts = {label.get("text", "").replace("\n", " ").strip() for label in labels}
+    assert "Payments" in label_texts
+    assert "Refunds" in label_texts
+
+
+def test_procedure_graph_converter_skips_service_zones_for_single_service() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Payments",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        }
+                    ],
+                }
+            }
+        }
+    )
+    layout = ProcedureGraphLayoutEngine()
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    zones = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert not zones
+
+
 def test_procedure_graph_unidraw_cycle_edges_follow_offsets() -> None:
     payload = {
         "markup_type": "procedure_graph",

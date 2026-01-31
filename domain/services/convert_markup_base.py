@@ -1539,6 +1539,7 @@ class MarkupToDiagramConverter(ABC):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
     ) -> Element:
