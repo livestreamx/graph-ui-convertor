@@ -698,6 +698,7 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     assert len(zones) == 2
     assert all(zone.get("strokeStyle") == "dashed" for zone in zones)
     assert all(zone.get("backgroundColor") == "transparent" for zone in zones)
+    assert all(zone.get("roundness") == {"type": 3} for zone in zones)
     colors = {
         zone.get("customData", {}).get("cjm", {}).get("service_name"): zone.get("strokeColor")
         for zone in zones
@@ -713,6 +714,201 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     label_texts = {label.get("text", "").replace("\n", " ").strip() for label in labels}
     assert "Payments" in label_texts
     assert "Refunds" in label_texts
+
+
+def test_procedure_graph_layout_zones_include_shared_procedures() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p_alpha",
+                "proc_name": "Alpha Only",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "p_beta",
+                "proc_name": "Beta Only",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {"e": ["f"]},
+            },
+        ],
+        "procedure_graph": {"shared": ["p_alpha"], "p_alpha": [], "p_beta": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        },
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Loans",
+                            "service_color": "#e3f7d9",
+                        },
+                    ]
+                },
+                "p_alpha": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                },
+                "p_beta": {
+                    "team_name": "Beta",
+                    "service_name": "Loans",
+                    "procedure_color": "#e3f7d9",
+                },
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    zones = {zone.service_name: zone for zone in plan.service_zones}
+    assert "Payments" in zones
+    assert "Loans" in zones
+    assert "shared" in zones["Payments"].procedure_ids
+    assert "shared" in zones["Loans"].procedure_ids
+
+    frame_lookup = {frame.procedure_id: frame for frame in plan.frames}
+    for zone in zones.values():
+        for proc_id in zone.procedure_ids:
+            frame = frame_lookup[proc_id]
+            assert zone.origin.x <= frame.origin.x
+            assert zone.origin.y <= frame.origin.y
+            assert frame.origin.x + frame.size.width <= zone.origin.x + zone.size.width
+            assert frame.origin.y + frame.size.height <= zone.origin.y + zone.size.height
+
+
+def test_procedure_graph_layout_prefers_linear_for_simple_graph() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Step 1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Step 2",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "p3",
+                "proc_name": "Step 3",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {"e": ["f"]},
+            },
+            {
+                "proc_id": "p4",
+                "proc_name": "Step 4",
+                "start_block_ids": ["g"],
+                "end_block_ids": ["h::end"],
+                "branches": {"g": ["h"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": ["p3"], "p3": ["p4"], "p4": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {"team_name": "Alpha", "service_name": "Payments"},
+                "p2": {"team_name": "Alpha", "service_name": "Payments"},
+                "p3": {"team_name": "Beta", "service_name": "Loans"},
+                "p4": {"team_name": "Beta", "service_name": "Loans"},
+            }
+        }
+    )
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    y_positions = {frame.origin.y for frame in plan.frames}
+    assert len(y_positions) == 1
+
+
+def test_procedure_graph_layout_uses_bands_when_linear_crosses() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Alpha Start",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Beta Start",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "p3",
+                "proc_name": "Beta End",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {"e": ["f"]},
+            },
+            {
+                "proc_id": "p4",
+                "proc_name": "Alpha End",
+                "start_block_ids": ["g"],
+                "end_block_ids": ["h::end"],
+                "branches": {"g": ["h"]},
+            },
+        ],
+        "procedure_graph": {
+            "p3": [],
+            "p1": ["p4"],
+            "p2": ["p3"],
+            "p4": [],
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {"team_name": "Alpha", "service_name": "Payments"},
+                "p4": {"team_name": "Alpha", "service_name": "Payments"},
+                "p2": {"team_name": "Beta", "service_name": "Loans"},
+                "p3": {"team_name": "Beta", "service_name": "Loans"},
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    frame_lookup = {frame.procedure_id: frame for frame in plan.frames}
+    service_ranges: dict[str, tuple[float, float]] = {}
+    for proc_id, meta in document.procedure_meta.items():
+        service_name = str(meta.get("service_name"))
+        frame = frame_lookup[proc_id]
+        min_y, max_y = service_ranges.get(service_name, (frame.origin.y, frame.origin.y))
+        min_y = min(min_y, frame.origin.y)
+        max_y = max(max_y, frame.origin.y + frame.size.height)
+        service_ranges[service_name] = (min_y, max_y)
+
+    payments = service_ranges.get("Payments")
+    loans = service_ranges.get("Loans")
+    assert payments is not None
+    assert loans is not None
+    assert payments[1] < loans[0] or loans[1] < payments[0]
 
 
 def test_procedure_graph_converter_skips_service_zones_for_single_service() -> None:

@@ -107,6 +107,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             zone_enabled = len(service_info_by_key) > 1
             component_frames: list[FramePlacement] = []
             component_height = 0.0
+            zones_for_component: list[ServiceZonePlacement] = []
+            service_order: list[_ServiceInfo] = []
+            assigned: dict[str, str] = {}
 
             if zone_enabled:
                 service_order = self._sorted_service_infos(service_info_by_key)
@@ -117,6 +120,23 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     info for info in service_order if service_counts.get(info.service_key, 0) > 0
                 ]
                 if service_order:
+                    linear_frames = self._linear_component_frames(
+                        level_nodes=level_nodes,
+                        origin_x=origin_x,
+                        origin_y=origin_y,
+                        lane_span=lane_span,
+                        node_size=node_size,
+                        proc_gap_y=proc_gap_y,
+                    )
+                    has_edges = any(component_adjacency.values())
+                    use_linear_layout = has_edges and not self._edges_cross(
+                        frame_lookup={frame.procedure_id: frame for frame in linear_frames},
+                        adjacency=component_adjacency,
+                    )
+                else:
+                    use_linear_layout = True
+                    linear_frames = []
+                if service_order and not use_linear_layout:
                     label_height = self.config.service_zone_label_font_size * 1.35
                     top_padding = (
                         self.config.service_zone_padding_y
@@ -179,53 +199,27 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                                 frames.append(frame)
                                 frame_lookup[proc_id] = frame
                                 component_frames.append(frame)
+                else:
+                    if not service_order:
+                        linear_frames = self._linear_component_frames(
+                            level_nodes=level_nodes,
+                            origin_x=origin_x,
+                            origin_y=origin_y,
+                            lane_span=lane_span,
+                            node_size=node_size,
+                            proc_gap_y=proc_gap_y,
+                        )
+                    for frame in linear_frames:
+                        frames.append(frame)
+                        frame_lookup[frame.procedure_id] = frame
+                        component_frames.append(frame)
+                    if component_frames:
+                        max_bottom = max(
+                            frame.origin.y + frame.size.height for frame in component_frames
+                        )
+                        component_height = max_bottom - origin_y
 
-                    padding_x = self.config.service_zone_padding_x
-                    padding_y = self.config.service_zone_padding_y
-                    frames_by_service: dict[str, list[FramePlacement]] = {}
-                    for frame in component_frames:
-                        key = assigned.get(frame.procedure_id)
-                        if not key:
-                            continue
-                        frames_by_service.setdefault(key, []).append(frame)
-
-                    for band in bands:
-                        key = band.service.service_key
-                        service_frames = frames_by_service.get(key, [])
-                        if not service_frames:
-                            continue
-                        min_x = min(frame.origin.x for frame in service_frames)
-                        max_x = max(frame.origin.x + frame.size.width for frame in service_frames)
-                        origin = Point(min_x - padding_x, band.start_y)
-                        size = Size(
-                            max_x - min_x + padding_x * 2,
-                            band.height,
-                        )
-                        label_origin = Point(
-                            origin.x + padding_x,
-                            origin.y + padding_y,
-                        )
-                        label_size = Size(size.width - padding_x * 2, label_height)
-                        procedure_ids = tuple(
-                            sorted({frame.procedure_id for frame in service_frames})
-                        )
-                        service_zones.append(
-                            ServiceZonePlacement(
-                                service_key=key,
-                                service_name=band.service.service_name,
-                                team_name=band.service.team_name,
-                                team_id=band.service.team_id,
-                                color=band.service.color,
-                                origin=origin,
-                                size=size,
-                                label_origin=label_origin,
-                                label_size=label_size,
-                                label_font_size=self.config.service_zone_label_font_size,
-                                procedure_ids=procedure_ids,
-                            )
-                        )
-
-            if not zone_enabled or not component_frames:
+            if not zone_enabled:
                 level_heights: dict[int, float] = {}
                 for lvl, nodes in level_nodes.items():
                     if not nodes:
@@ -247,6 +241,24 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         frame_lookup[proc_id] = frame
                         component_frames.append(frame)
                         y += node_size.height + proc_gap_y
+                if component_frames:
+                    max_bottom = max(
+                        frame.origin.y + frame.size.height for frame in component_frames
+                    )
+                    component_height = max(component_height, max_bottom - origin_y)
+
+            if zone_enabled and component_frames:
+                zones_for_component = self._build_component_service_zones(
+                    service_info_by_key=service_info_by_key,
+                    proc_service_keys=proc_service_keys,
+                    frame_lookup=frame_lookup,
+                )
+                if zones_for_component:
+                    service_zones.extend(zones_for_component)
+                    max_zone_bottom = max(
+                        zone.origin.y + zone.size.height for zone in zones_for_component
+                    )
+                    component_height = max(component_height, max_zone_bottom - origin_y)
 
             scenario_total_height = 0.0
             if component_frames:
@@ -765,3 +777,150 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             assigned[proc_id] = chosen
             counts[chosen] = counts.get(chosen, 0) + 1
         return assigned, counts
+
+    def _linear_component_frames(
+        self,
+        level_nodes: Mapping[int, list[str]],
+        origin_x: float,
+        origin_y: float,
+        lane_span: float,
+        node_size: Size,
+        proc_gap_y: float,
+    ) -> list[FramePlacement]:
+        frames: list[FramePlacement] = []
+        for lvl, nodes in level_nodes.items():
+            y = origin_y
+            for proc_id in nodes:
+                frames.append(
+                    FramePlacement(
+                        procedure_id=proc_id,
+                        origin=Point(origin_x + lvl * lane_span, y),
+                        size=node_size,
+                    )
+                )
+                y += node_size.height + proc_gap_y
+        return frames
+
+    def _build_component_service_zones(
+        self,
+        service_info_by_key: Mapping[str, _ServiceInfo],
+        proc_service_keys: Mapping[str, list[str]],
+        frame_lookup: Mapping[str, FramePlacement],
+    ) -> list[ServiceZonePlacement]:
+        if not service_info_by_key:
+            return []
+        service_order = self._sorted_service_infos(service_info_by_key)
+        padding_x = self.config.service_zone_padding_x
+        padding_y = self.config.service_zone_padding_y
+        label_gap = self.config.service_zone_label_gap
+        label_font_size = self.config.service_zone_label_font_size
+        zones: list[ServiceZonePlacement] = []
+        procedures_by_service: dict[str, list[str]] = {}
+        for proc_id, keys in proc_service_keys.items():
+            for key in keys:
+                procedures_by_service.setdefault(key, []).append(proc_id)
+
+        for info in service_order:
+            proc_ids = sorted(set(procedures_by_service.get(info.service_key, [])))
+            if not proc_ids:
+                continue
+            service_frames = [
+                frame_lookup[proc_id] for proc_id in proc_ids if proc_id in frame_lookup
+            ]
+            if not service_frames:
+                continue
+            min_x = min(frame.origin.x for frame in service_frames)
+            max_x = max(frame.origin.x + frame.size.width for frame in service_frames)
+            min_y = min(frame.origin.y for frame in service_frames)
+            max_y = max(frame.origin.y + frame.size.height for frame in service_frames)
+            label_width = max_x - min_x
+            label_lines = self._wrap_lines(
+                [info.service_name], label_width if label_width > 0 else 1.0, label_font_size
+            )
+            label_height = len(label_lines) * label_font_size * 1.35
+            top_padding = padding_y + label_height + label_gap
+            origin = Point(min_x - padding_x, min_y - top_padding)
+            size = Size(
+                max_x - min_x + padding_x * 2,
+                max_y - min_y + top_padding + padding_y,
+            )
+            label_origin = Point(
+                origin.x + padding_x,
+                origin.y + padding_y,
+            )
+            label_size = Size(size.width - padding_x * 2, label_height)
+            zones.append(
+                ServiceZonePlacement(
+                    service_key=info.service_key,
+                    service_name=info.service_name,
+                    team_name=info.team_name,
+                    team_id=info.team_id,
+                    color=info.color,
+                    origin=origin,
+                    size=size,
+                    label_origin=label_origin,
+                    label_size=label_size,
+                    label_font_size=label_font_size,
+                    procedure_ids=tuple(proc_ids),
+                )
+            )
+        return zones
+
+    def _edges_cross(
+        self,
+        frame_lookup: Mapping[str, FramePlacement],
+        adjacency: Mapping[str, list[str]],
+    ) -> bool:
+        edges: list[tuple[str, str, Point, Point]] = []
+        for parent, children in adjacency.items():
+            source = frame_lookup.get(parent)
+            if not source:
+                continue
+            for child in children:
+                target = frame_lookup.get(child)
+                if not target:
+                    continue
+                start = Point(
+                    x=source.origin.x + source.size.width,
+                    y=source.origin.y + source.size.height / 2,
+                )
+                end = Point(
+                    x=target.origin.x,
+                    y=target.origin.y + target.size.height / 2,
+                )
+                edges.append((parent, child, start, end))
+
+        for idx, edge in enumerate(edges):
+            _, _, start_a, end_a = edge
+            for other in edges[idx + 1 :]:
+                if edge[0] in other[:2] or edge[1] in other[:2]:
+                    continue
+                _, _, start_b, end_b = other
+                if self._segments_intersect(start_a, end_a, start_b, end_b):
+                    return True
+        return False
+
+    def _segments_intersect(self, a1: Point, a2: Point, b1: Point, b2: Point) -> bool:
+        if (
+            self._points_equal(a1, b1)
+            or self._points_equal(a1, b2)
+            or self._points_equal(a2, b1)
+            or self._points_equal(a2, b2)
+        ):
+            return False
+        o1 = self._orientation(a1, a2, b1)
+        o2 = self._orientation(a1, a2, b2)
+        o3 = self._orientation(b1, b2, a1)
+        o4 = self._orientation(b1, b2, a2)
+        if 0 in {o1, o2, o3, o4}:
+            return False
+        return o1 != o2 and o3 != o4
+
+    def _orientation(self, p: Point, q: Point, r: Point) -> int:
+        value = (q.y - p.y) * (r.x - q.x) - (q.x - p.x) * (r.y - q.y)
+        if abs(value) < 1e-6:
+            return 0
+        return 1 if value > 0 else -1
+
+    def _points_equal(self, p1: Point, p2: Point, eps: float = 1e-6) -> bool:
+        return abs(p1.x - p2.x) <= eps and abs(p1.y - p2.y) <= eps

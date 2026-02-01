@@ -173,6 +173,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
         resolved_fill = _UNIDRAW_FILL_STYLE_HATCH if fill_style == "hachure" else fill_style
         return self._base_element(

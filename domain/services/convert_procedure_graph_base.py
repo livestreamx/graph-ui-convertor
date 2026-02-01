@@ -273,6 +273,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                     stroke_color=zone.color,
                     stroke_style="dashed",
                     fill_style="solid",
+                    roundness={"type": 3},
                 )
             )
 

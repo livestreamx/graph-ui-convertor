@@ -148,7 +148,20 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
+        extra = {
+            "strokeColor": stroke_color or "#1e1e1e",
+            "backgroundColor": background_color or "#cce5ff",
+            "fillStyle": fill_style or "hachure",
+            "seed": self._rand_seed(),
+            "version": 1,
+            "versionNonce": self._rand_seed(),
+            "strokeStyle": stroke_style or "solid",
+            "boundElements": [],
+        }
+        if roundness is not None:
+            extra["roundness"] = roundness
         return self._base_shape(
             element_id=element_id,
             type_name="rectangle",
@@ -157,16 +170,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=size.height,
             frame_id=frame_id,
             group_ids=group_ids,
-            extra={
-                "strokeColor": stroke_color or "#1e1e1e",
-                "backgroundColor": background_color or "#cce5ff",
-                "fillStyle": fill_style or "hachure",
-                "seed": self._rand_seed(),
-                "version": 1,
-                "versionNonce": self._rand_seed(),
-                "strokeStyle": stroke_style or "solid",
-                "boundElements": [],
-            },
+            extra=extra,
             metadata=metadata,
         )
 

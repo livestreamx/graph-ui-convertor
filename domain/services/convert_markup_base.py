@@ -1542,6 +1542,7 @@ class MarkupToDiagramConverter(ABC):
         stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
         raise NotImplementedError
 
