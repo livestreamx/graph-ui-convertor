@@ -128,5 +128,7 @@ def test_catalog_team_graph_api(
         assert "Beta" in html_response.text
         assert "markups merged" in html_response.text
         assert "1 markup" in html_response.text
+        assert "Flags" in html_response.text
+        assert "Use all available markups when rendering merge nodes." in html_response.text
     finally:
         stubber.deactivate()

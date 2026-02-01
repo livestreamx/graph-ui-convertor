@@ -7,6 +7,12 @@ from domain.services.build_team_procedure_graph import (
     _SERVICE_COLORS,
     BuildTeamProcedureGraph,
 )
+from domain.services.convert_markup_to_excalidraw import (
+    SERVICE_ZONE_LABEL_FONT_FAMILY as EXCALIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY,
+)
+from domain.services.convert_markup_to_unidraw import (
+    SERVICE_ZONE_LABEL_FONT_FAMILY as UNIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY,
+)
 from domain.services.convert_procedure_graph_to_excalidraw import (
     ProcedureGraphToExcalidrawConverter,
 )
@@ -862,6 +868,21 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     assert label_colors.get("Payments") == "#d9f5ff"
     assert label_colors.get("Refunds") == "#e3f7d9"
     assert all(label.get("fontStyle") == "bold" for label in labels)
+    assert all(
+        label.get("fontFamily") == EXCALIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY for label in labels
+    )
+
+    unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_labels = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "service_zone_label"
+    ]
+    assert unidraw_labels
+    assert all(
+        label.get("style", {}).get("tff") == UNIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY
+        for label in unidraw_labels
+    )
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:

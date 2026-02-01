@@ -204,6 +204,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data = load_index(context)
@@ -249,7 +250,9 @@ def create_app(settings: AppSettings) -> FastAPI:
                 diagram_label = resolve_diagram_label(diagram_format)
                 diagram_ext = resolve_diagram_extension(diagram_format)
                 diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
-                team_query = build_team_query(team_ids)
+                team_query = build_team_query(
+                    team_ids, merge_nodes_all_markups=merge_nodes_all_markups
+                )
                 diagram_open_url = diagram_base_url
                 open_mode = "manual"
                 if is_same_origin(request, diagram_base_url):
@@ -282,6 +285,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "selected_markups_count": selected_markups_count,
                 "team_query": team_query,
                 "error_message": error_message,
+                "merge_nodes_all_markups": merge_nodes_all_markups,
             },
         )
 
@@ -383,6 +387,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph_open(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
@@ -392,7 +397,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
-        team_query = build_team_query(team_ids)
+        team_query = build_team_query(team_ids, merge_nodes_all_markups=merge_nodes_all_markups)
         return templates.TemplateResponse(
             request,
             "catalog_open.html",
@@ -446,6 +451,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/teams/graph")
     def api_team_graph(
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -790,10 +796,13 @@ def build_team_diagram_payload(
     return payload
 
 
-def build_team_query(team_ids: list[str]) -> str:
+def build_team_query(team_ids: list[str], merge_nodes_all_markups: bool = False) -> str:
     if not team_ids:
         return ""
-    return urlencode({"team_ids": ",".join(team_ids)})
+    payload: dict[str, str] = {"team_ids": ",".join(team_ids)}
+    if merge_nodes_all_markups:
+        payload["merge_nodes_all_markups"] = "true"
+    return urlencode(payload)
 
 
 def normalize_team_ids(team_ids: list[str]) -> list[str]:

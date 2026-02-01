@@ -407,4 +407,5 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             )
             if isinstance(label_element, dict):
                 self._apply_text_bold(label_element)
+                self._apply_service_zone_label_style(label_element)
             registry.add(label_element)

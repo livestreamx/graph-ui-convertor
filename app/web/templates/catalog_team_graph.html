@@ -75,6 +75,21 @@
           name="team_ids"
           value="{{ team_ids | join(',') }}"
         />
+        <div class="team-graph-flags">
+          <div class="team-graph-flags-title">Flags</div>
+          <label class="team-graph-flag">
+            <input
+              type="checkbox"
+              name="merge_nodes_all_markups"
+              value="true"
+              {% if merge_nodes_all_markups %}checked{% endif %}
+            />
+            <span>Use all available markups when rendering merge nodes.</span>
+          </label>
+          <div class="team-graph-flag-hint">
+            Applies to merge nodes on the cross-team diagram.
+          </div>
+        </div>
       </form>
     </div>
 

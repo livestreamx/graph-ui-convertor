@@ -229,12 +229,14 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 4. В каталоге есть отдельный раздел для кросс-командных графов (кнопка Open builder): перейдите на
    `/catalog/teams/graph`, выберите команды и нажмите Build graphs для общего графа процедур на
    основе `procedure_graph`.
-5. При скачивании общего графа файл получает суффикс с `team_ids` (например,
+5. В сборщике кросс-командного графа есть секция Flags. Флаг `merge_nodes_all_markups` пока
+   влияет только на UI и не изменяет отрисовку узлов слияния.
+6. При скачивании общего графа файл получает суффикс с `team_ids` (например,
    `team-graph_alpha_beta.excalidraw`).
-6. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
-7. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
-8. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
-9. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
-10. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
+7. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
+8. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
+9. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+10. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
+11. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
 
 В карточках и деталях каталога отображается `updated_at`;.

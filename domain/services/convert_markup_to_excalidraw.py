@@ -13,6 +13,8 @@ from domain.services.convert_markup_base import (
 from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_excalidraw_links
 from domain.services.excalidraw_title import apply_title_focus
 
+SERVICE_ZONE_LABEL_FONT_FAMILY = "Lilita One"
+
 
 class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
     def __init__(
@@ -107,6 +109,11 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             return
         element["x"] = float(element.get("x", 0.0)) + dx
         element["y"] = float(element.get("y", 0.0)) + dy
+
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        if element.get("type") != "text":
+            return
+        element["fontFamily"] = SERVICE_ZONE_LABEL_FONT_FAMILY
 
     def _frame_element(
         self,

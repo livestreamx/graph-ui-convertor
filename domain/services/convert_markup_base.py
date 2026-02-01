@@ -156,6 +156,9 @@ class MarkupToDiagramConverter(ABC):
     def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
         return 2 if is_cycle else None
 
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        return
+
     @abstractmethod
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
         raise NotImplementedError

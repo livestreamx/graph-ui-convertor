@@ -24,6 +24,7 @@ from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_uni
 
 _DEFAULT_TEXT_FONT_FAMILY = "Caveat, Segoe UI Emoji"
 _DEFAULT_SHAPE_FONT_FAMILY = "Neue Haas Unica, Segoe UI Emoji"
+SERVICE_ZONE_LABEL_FONT_FAMILY = "Neue Haas Unica Black, Neue Haas Unica, Segoe UI Emoji"
 _FRAME_TEXT_COLOR = "#CCCCCC"
 _SHAPE_TEXT_COLOR = "#3A3A3A"
 _DEFAULT_TEXT_COLOR = "#2b2b2b"
@@ -134,6 +135,13 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                 if isinstance(tip_pos, dict):
                     tip_pos["x"] = float(tip_pos.get("x", 0.0)) + dx
                     tip_pos["y"] = float(tip_pos.get("y", 0.0)) + dy
+
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        if element.get("type") != "text":
+            return
+        style = element.get("style")
+        if isinstance(style, dict):
+            style["tff"] = SERVICE_ZONE_LABEL_FONT_FAMILY
 
     def _frame_element(
         self,

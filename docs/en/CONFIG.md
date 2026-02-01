@@ -118,6 +118,8 @@ catalog:
   `/api/teams/graph`, `team_ids` supports comma-separated values).
 - The cross-team builder keeps selection details under the help tooltip next to Build graphs and
   colors procedures by service; shared procedures are highlighted in light red.
+- The cross-team builder includes a Flags section. `merge_nodes_all_markups` tracks whether all
+  available markups should be considered for merge nodes (UI only for now).
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 
