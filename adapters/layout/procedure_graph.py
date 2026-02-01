@@ -35,6 +35,16 @@ class _ServiceBand:
     height: float
 
 
+@dataclass(frozen=True)
+class _ZoneDraft:
+    info: _ServiceInfo
+    procedure_ids: tuple[str, ...]
+    origin: Point
+    size: Size
+    label_origin: Point
+    label_size: Size
+
+
 class ProcedureGraphLayoutEngine(GridLayoutEngine):
     def __init__(self, config: LayoutConfig | None = None) -> None:
         super().__init__(config or LayoutConfig())
@@ -814,7 +824,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         padding_y = self.config.service_zone_padding_y
         label_gap = self.config.service_zone_label_gap
         label_font_size = self.config.service_zone_label_font_size
-        zones: list[ServiceZonePlacement] = []
+        drafts: dict[str, _ZoneDraft] = {}
         procedures_by_service: dict[str, list[str]] = {}
         for proc_id, keys in proc_service_keys.items():
             for key in keys:
@@ -849,6 +859,75 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 origin.y + padding_y,
             )
             label_size = Size(size.width - padding_x * 2, label_height)
+            drafts[info.service_key] = _ZoneDraft(
+                info=info,
+                procedure_ids=tuple(proc_ids),
+                origin=origin,
+                size=size,
+                label_origin=label_origin,
+                label_size=label_size,
+            )
+
+        if not drafts:
+            return []
+
+        contains: dict[str, list[str]] = {key: [] for key in drafts}
+        draft_items = list(drafts.items())
+        for idx, (outer_key, outer) in enumerate(draft_items):
+            for inner_key, inner in draft_items[idx + 1 :]:
+                if self._rect_contains(outer.origin, outer.size, inner.origin, inner.size):
+                    contains[outer_key].append(inner_key)
+                elif self._rect_contains(inner.origin, inner.size, outer.origin, outer.size):
+                    contains[inner_key].append(outer_key)
+
+        depth_cache: dict[str, int] = {}
+        visiting: set[str] = set()
+
+        def zone_depth(key: str) -> int:
+            if key in depth_cache:
+                return depth_cache[key]
+            if key in visiting:
+                return 0
+            visiting.add(key)
+            depth = 0
+            for child_key in contains.get(key, []):
+                depth = max(depth, zone_depth(child_key) + 1)
+            visiting.remove(key)
+            depth_cache[key] = depth
+            return depth
+
+        border_gap_x = max(12.0, padding_x * 0.35)
+        border_gap_y = max(12.0, padding_y * 0.35)
+        zones: list[ServiceZonePlacement] = []
+
+        for info in service_order:
+            draft = drafts.get(info.service_key)
+            if not draft:
+                continue
+            depth = zone_depth(info.service_key)
+            if depth > 0:
+                label_step = draft.label_size.height + label_gap
+                extra_left = border_gap_x * depth
+                extra_right = border_gap_x * depth
+                extra_bottom = border_gap_y * depth
+                extra_top = (border_gap_y + label_step) * depth
+            else:
+                extra_left = 0.0
+                extra_right = 0.0
+                extra_bottom = 0.0
+                extra_top = 0.0
+
+            origin = Point(draft.origin.x - extra_left, draft.origin.y - extra_top)
+            size = Size(
+                draft.size.width + extra_left + extra_right,
+                draft.size.height + extra_top + extra_bottom,
+            )
+            label_origin = Point(
+                draft.label_origin.x - extra_left,
+                draft.label_origin.y - extra_top,
+            )
+            label_size = Size(max(1.0, size.width - padding_x * 2), draft.label_size.height)
+
             zones.append(
                 ServiceZonePlacement(
                     service_key=info.service_key,
@@ -861,7 +940,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     label_origin=label_origin,
                     label_size=label_size,
                     label_font_size=label_font_size,
-                    procedure_ids=tuple(proc_ids),
+                    procedure_ids=draft.procedure_ids,
                 )
             )
         return zones
@@ -924,3 +1003,29 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
 
     def _points_equal(self, p1: Point, p2: Point, eps: float = 1e-6) -> bool:
         return abs(p1.x - p2.x) <= eps and abs(p1.y - p2.y) <= eps
+
+    def _rect_contains(
+        self,
+        outer_origin: Point,
+        outer_size: Size,
+        inner_origin: Point,
+        inner_size: Size,
+        eps: float = 1e-6,
+    ) -> bool:
+        outer_right = outer_origin.x + outer_size.width
+        outer_bottom = outer_origin.y + outer_size.height
+        inner_right = inner_origin.x + inner_size.width
+        inner_bottom = inner_origin.y + inner_size.height
+        if (
+            outer_origin.x <= inner_origin.x + eps
+            and outer_origin.y <= inner_origin.y + eps
+            and outer_right >= inner_right - eps
+            and outer_bottom >= inner_bottom - eps
+        ):
+            return not (
+                abs(outer_origin.x - inner_origin.x) <= eps
+                and abs(outer_origin.y - inner_origin.y) <= eps
+                and abs(outer_right - inner_right) <= eps
+                and abs(outer_bottom - inner_bottom) <= eps
+            )
+        return False

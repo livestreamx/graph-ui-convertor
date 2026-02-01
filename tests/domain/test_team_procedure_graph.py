@@ -792,6 +792,65 @@ def test_procedure_graph_layout_zones_include_shared_procedures() -> None:
             assert frame.origin.y + frame.size.height <= zone.origin.y + zone.size.height
 
 
+def test_procedure_graph_layout_expands_outer_service_zone() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p_alpha",
+                "proc_name": "Alpha Only",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"shared": ["p_alpha"], "p_alpha": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        },
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Loans",
+                            "service_color": "#e3f7d9",
+                        },
+                    ]
+                },
+                "p_alpha": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                },
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    zones = {zone.service_name: zone for zone in plan.service_zones}
+    payments = zones["Payments"]
+    loans = zones["Loans"]
+
+    assert payments.origin.x < loans.origin.x
+    assert payments.origin.y < loans.origin.y
+    assert payments.origin.x + payments.size.width > loans.origin.x + loans.size.width
+    assert payments.origin.y + payments.size.height > loans.origin.y + loans.size.height
+    assert payments.label_origin.y < loans.label_origin.y
+
+
 def test_procedure_graph_layout_prefers_linear_for_simple_graph() -> None:
     payload = {
         "markup_type": "procedure_graph",
