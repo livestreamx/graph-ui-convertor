@@ -439,8 +439,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedures_blocks, procedures_text, block_padding = self._component_service_blocks(
             component, procedure_meta
         )
-        merge_blocks, merge_text, merge_block_padding = self._component_merge_blocks(
-            component, procedure_map, procedure_meta, order_index
+        merge_blocks, merge_text, merge_block_padding, merge_node_numbers = (
+            self._component_merge_blocks(component, procedure_map, procedure_meta, order_index)
         )
         merge_height = 0.0
         merge_origin = None
@@ -495,6 +495,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             merge_padding=self.config.scenario_merge_padding if merge_blocks else None,
             merge_blocks=tuple(merge_blocks) if merge_blocks else None,
             merge_block_padding=merge_block_padding if merge_blocks else None,
+            merge_node_numbers=merge_node_numbers,
         )
 
     def _component_service_blocks(
@@ -605,14 +606,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedure_map: Mapping[str, Procedure],
         procedure_meta: Mapping[str, Mapping[str, object]],
         order_index: Mapping[str, int],
-    ) -> tuple[list[ScenarioProceduresBlock], str | None, float | None]:
+    ) -> tuple[list[ScenarioProceduresBlock], str | None, float | None, dict[str, int] | None]:
         merge_ids = [
             proc_id
             for proc_id in component
             if procedure_meta.get(proc_id, {}).get("is_intersection") is True
         ]
         if not merge_ids:
-            return [], None, None
+            return [], None, None, None
 
         merge_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
         header = "Узлы слияния:"
@@ -631,7 +632,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 text="\n".join(header_lines),
                 height=len(header_lines) * line_height,
                 font_size=font_size,
-                underline=True,
+                underline=False,
             )
         )
         if header_gap:
@@ -653,7 +654,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 set(service_tokens),
                 key=lambda item: (item[0].lower(), item[1].lower()),
             )
-            label = " + ".join([f"{team} / {service}" for team, service in unique_tokens])
+            label_parts = [f"[{team}] {service}" for team, service in unique_tokens]
+            label = " x ".join(label_parts)
             key = tuple(unique_tokens)
             group = groups.setdefault(key, _MergeGroup(label=label, proc_ids=[]))
             group.proc_ids.append(proc_id)
@@ -667,11 +669,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             ordered_groups.append((order, label, proc_ids))
         ordered_groups.sort(key=lambda item: (item[0], item[1].lower()))
 
+        merge_numbers: dict[str, int] = {}
+        merge_index = 1
+        multiple_groups = len(ordered_groups) > 1
         for idx, (_, label, proc_ids) in enumerate(ordered_groups):
             if idx > 0:
                 blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=group_gap))
                 lines.append("")
-            header_line = f"{label}:"
+            header_line = f"> {label}:"
             header_lines = self._wrap_lines(
                 [header_line], content_width - item_padding * 2, font_size
             )
@@ -684,7 +689,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
             )
             lines.append(header_line)
-            item_lines = [f"- {proc_id}" for proc_id in proc_ids]
+            item_lines: list[str] = []
+            for proc_id in proc_ids:
+                proc = procedure_map.get(proc_id)
+                proc_name = proc.procedure_name if proc and proc.procedure_name else proc_id
+                item_lines.append(f"({merge_index}) {proc_name}")
+                merge_numbers[proc_id] = merge_index
+                merge_index += 1
             wrapped = self._wrap_lines(item_lines, content_width - item_padding * 2, font_size)
             blocks.append(
                 ScenarioProceduresBlock(
@@ -692,13 +703,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     text="\n".join(wrapped),
                     height=len(wrapped) * line_height + item_padding * 2,
                     font_size=font_size,
+                    underline=multiple_groups and idx < len(ordered_groups) - 1,
                 )
             )
             lines.extend(item_lines)
 
         if lines and not lines[-1]:
             lines.pop()
-        return blocks, "\n".join(lines), item_padding
+        return blocks, "\n".join(lines), item_padding, merge_numbers
 
     def _component_service_groups(
         self,

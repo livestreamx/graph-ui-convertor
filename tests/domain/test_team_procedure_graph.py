@@ -430,9 +430,8 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
     assert "Узлы слияния" in merge_text
-    assert "Alpha / Payments + Beta / Loans" in merge_text
-    assert "shared" in merge_text
-    assert "Shared Flow" not in merge_text
+    assert "> [Alpha] Payments x [Beta] Loans:" in merge_text
+    assert "(1) Shared Flow" in merge_text
 
 
 def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
@@ -482,9 +481,101 @@ def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert merge_text.count("Alpha / Payments + Beta / Loans") == 1
-    assert "shared_one" in merge_text
-    assert "shared_two" in merge_text
+    assert merge_text.count("> [Alpha] Payments x [Beta] Loans:") == 1
+    assert "(1) Shared One" in merge_text
+    assert "(2) Shared Two" in merge_text
+
+
+def test_procedure_graph_merge_panel_no_group_divider_for_single_group() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                }
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    underlines = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_underline"
+    ]
+    assert not underlines
+
+
+def test_procedure_graph_merge_panel_adds_group_divider_for_multiple_groups() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "shared_one",
+                "proc_name": "Shared One",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "shared_two",
+                "proc_name": "Shared Two",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"shared_one": ["shared_two"], "shared_two": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared_one": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                },
+                "shared_two": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Gamma", "service_name": "Investments"},
+                        {"team_name": "Delta", "service_name": "Support"},
+                    ],
+                },
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+
+    underlines = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_underline"
+    ]
+    assert len(underlines) == 1
 
 
 def test_procedure_graph_separator_below_services_block() -> None:
@@ -767,6 +858,10 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     label_texts = {label.get("text", "").replace("\n", " ").strip() for label in labels}
     assert "Payments" in label_texts
     assert "Refunds" in label_texts
+    label_colors = {label.get("text", "").strip(): label.get("strokeColor") for label in labels}
+    assert label_colors.get("Payments") == "#d9f5ff"
+    assert label_colors.get("Refunds") == "#e3f7d9"
+    assert all(label.get("fontStyle") == "bold" for label in labels)
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
@@ -820,6 +915,20 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
         if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_pointer"
     )
     assert pointer.get("strokeColor") == "#ff2d2d"
+
+    marker = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_index_marker"
+    )
+    assert marker.get("strokeColor") == "#ff2d2d"
+    label = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_index_label"
+    )
+    assert label.get("strokeColor") == "#ff2d2d"
+    assert label.get("text") == "1"
 
 
 def test_procedure_graph_layout_zones_include_shared_procedures() -> None:

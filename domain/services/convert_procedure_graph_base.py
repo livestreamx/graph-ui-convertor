@@ -8,6 +8,7 @@ from domain.models import (
     FramePlacement,
     MarkupDocument,
     Point,
+    ScenarioPlacement,
     ServiceZonePlacement,
     Size,
 )
@@ -30,8 +31,14 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             if proc.procedure_name
         }
         self._build_service_zone_rectangles(plan.service_zones, registry, base_metadata)
+        merge_numbers = self._merge_number_lookup(plan.scenarios)
         frame_ids = self._build_procedure_frames(
-            document, plan.frames, registry, base_metadata, proc_name_lookup
+            document,
+            plan.frames,
+            registry,
+            base_metadata,
+            proc_name_lookup,
+            merge_numbers,
         )
         self._build_procedure_stats(document, plan.frames, frame_ids, registry, base_metadata)
         self._build_separators(plan.separators, registry, base_metadata)
@@ -47,6 +54,31 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
     def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
         return 1.0
 
+    def _merge_number_lookup(self, scenarios: list[ScenarioPlacement]) -> dict[str, int] | None:
+        merge_numbers: dict[str, int] = {}
+        for scenario in scenarios:
+            numbers = getattr(scenario, "merge_node_numbers", None)
+            if isinstance(numbers, dict):
+                for proc_id, index in numbers.items():
+                    if isinstance(proc_id, str) and isinstance(index, int):
+                        merge_numbers[proc_id] = index
+        return merge_numbers or None
+
+    def _apply_text_color(self, element: dict[str, Any], color: str) -> None:
+        if "strokeColor" in element:
+            element["strokeColor"] = color
+        style = element.get("style")
+        if isinstance(style, dict):
+            if "tc" in style:
+                style["tc"] = color
+
+    def _apply_text_bold(self, element: dict[str, Any]) -> None:
+        if "strokeColor" in element:
+            element["fontStyle"] = "bold"
+            element["fontWeight"] = 700
+            if "strokeWidth" in element:
+                element["strokeWidth"] = max(2.0, float(element.get("strokeWidth", 1.0)))
+
     def _format_procedure_label(self, procedure_name: str | None, procedure_id: str) -> str:
         return procedure_name or procedure_id
 
@@ -57,6 +89,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         registry: ElementRegistry,
         base_metadata: Metadata,
         proc_name_lookup: dict[str, str],
+        merge_numbers: dict[str, int] | None = None,
     ) -> dict[str, str]:
         frame_ids: dict[str, str] = {}
         procedure_meta = document.procedure_meta or {}
@@ -143,6 +176,71 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             )
             registry.add(arrow)
             self._register_edge_bindings(arrow, registry)
+            merge_index = merge_numbers.get(frame.procedure_id) if merge_numbers else None
+            if merge_index is not None:
+                marker_id = self._stable_id("intersection-index-marker", frame.procedure_id)
+                marker_meta = self._with_base_metadata(
+                    {
+                        "procedure_id": frame.procedure_id,
+                        "role": "intersection_index_marker",
+                        "merge_index": merge_index,
+                    },
+                    base_metadata,
+                )
+                marker_diameter = highlight_padding * 2.7
+                marker_radius = marker_diameter / 2
+                marker_center = Point(
+                    x=pointer_start.x - highlight_padding * 0.95,
+                    y=pointer_start.y - highlight_padding * 0.95,
+                )
+                marker_origin = Point(
+                    x=marker_center.x - marker_radius,
+                    y=marker_center.y - marker_radius,
+                )
+                marker = self._ellipse_element(
+                    element_id=marker_id,
+                    position=marker_origin,
+                    size=Size(marker_diameter, marker_diameter),
+                    frame_id=None,
+                    metadata=marker_meta,
+                    background_color="transparent",
+                    stroke_color=highlight_color,
+                    stroke_width=2.0,
+                )
+                if isinstance(marker, dict) and "roughness" in marker:
+                    marker["roughness"] = 1
+                registry.add(marker)
+                label_meta = self._with_base_metadata(
+                    {
+                        "procedure_id": frame.procedure_id,
+                        "role": "intersection_index_label",
+                        "merge_index": merge_index,
+                    },
+                    base_metadata,
+                )
+                label_font_size = getattr(
+                    getattr(self.layout_engine, "config", None),
+                    "service_zone_label_font_size",
+                    20.0,
+                )
+                index_label = self._text_element(
+                    element_id=self._stable_id("intersection-index-label", frame.procedure_id),
+                    text=str(merge_index),
+                    center=marker_center,
+                    container_id=marker_id,
+                    frame_id=None,
+                    metadata=label_meta,
+                    max_width=marker_diameter,
+                    max_height=marker_diameter,
+                    font_size=label_font_size,
+                )
+                self._apply_text_color(index_label, highlight_color)
+                if isinstance(index_label, dict):
+                    if "strokeWidth" in index_label:
+                        index_label["strokeWidth"] = 2.0
+                    if "roughness" in index_label:
+                        index_label["roughness"] = 1
+                registry.add(index_label)
         return frame_ids
 
     def _build_procedure_stats(
@@ -296,15 +394,17 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 label_meta["team_name"] = zone.team_name
             if zone.team_id is not None:
                 label_meta["team_id"] = zone.team_id
-            registry.add(
-                self._text_block_element(
-                    element_id=label_id,
-                    text=zone.service_name,
-                    origin=zone.label_origin,
-                    width=zone.label_size.width,
-                    height=zone.label_size.height,
-                    metadata=self._with_base_metadata(label_meta, base_metadata),
-                    group_ids=[group_id],
-                    font_size=zone.label_font_size,
-                )
+            label_element = self._text_block_element(
+                element_id=label_id,
+                text=zone.service_name,
+                origin=zone.label_origin,
+                width=zone.label_size.width,
+                height=zone.label_size.height,
+                metadata=self._with_base_metadata(label_meta, base_metadata),
+                group_ids=[group_id],
+                font_size=zone.label_font_size,
+                text_color=zone.color,
             )
+            if isinstance(label_element, dict):
+                self._apply_text_bold(label_element)
+            registry.add(label_element)
