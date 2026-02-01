@@ -367,7 +367,7 @@ def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None
                 "branches": {"a": ["b"]},
             }
         ],
-        "procedure_graph": {},
+        "procedure_graph": {"shared_one": ["shared_two"], "shared_two": []},
     }
     document = MarkupDocument.model_validate(payload).model_copy(
         update={
@@ -406,7 +406,7 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
                 "branches": {"a": ["b"]},
             }
         ],
-        "procedure_graph": {},
+        "procedure_graph": {"shared_one": ["shared_two"], "shared_two": []},
     }
     document = MarkupDocument.model_validate(payload).model_copy(
         update={
@@ -430,8 +430,61 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
     assert "Узлы слияния" in merge_text
+    assert "Alpha / Payments + Beta / Loans" in merge_text
     assert "shared" in merge_text
     assert "Shared Flow" not in merge_text
+
+
+def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "shared_one",
+                "proc_name": "Shared One",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "shared_two",
+                "proc_name": "Shared Two",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"shared_one": ["shared_two"], "shared_two": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared_one": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                },
+                "shared_two": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                },
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+
+    assert plan.scenarios
+    merge_text = plan.scenarios[0].merge_text or ""
+    assert merge_text.count("Alpha / Payments + Beta / Loans") == 1
+    assert "shared_one" in merge_text
+    assert "shared_two" in merge_text
 
 
 def test_procedure_graph_separator_below_services_block() -> None:
@@ -716,6 +769,59 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     assert "Refunds" in label_texts
 
 
+def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                }
+            }
+        }
+    )
+    layout = ProcedureGraphLayoutEngine()
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    merge_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_panel"
+    )
+    assert merge_panel.get("backgroundColor") == "#ff2d2d"
+    assert merge_panel.get("strokeColor") == "#ff2d2d"
+
+    highlight = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_highlight"
+    )
+    assert highlight.get("strokeColor") == "#ff2d2d"
+
+    pointer = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_pointer"
+    )
+    assert pointer.get("strokeColor") == "#ff2d2d"
+
+
 def test_procedure_graph_layout_zones_include_shared_procedures() -> None:
     payload = {
         "markup_type": "procedure_graph",
@@ -790,6 +896,45 @@ def test_procedure_graph_layout_zones_include_shared_procedures() -> None:
             assert zone.origin.y <= frame.origin.y
             assert frame.origin.x + frame.size.width <= zone.origin.x + zone.size.width
             assert frame.origin.y + frame.size.height <= zone.origin.y + zone.size.height
+
+
+def test_procedure_graph_layout_aligns_zone_top_with_scenario() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Payments",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Loans",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {"team_name": "Alpha", "service_name": "Payments"},
+                "p2": {"team_name": "Beta", "service_name": "Loans"},
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+
+    assert plan.scenarios
+    assert plan.service_zones
+    top_zone = min(plan.service_zones, key=lambda zone: zone.origin.y)
+    top_scenario = min(plan.scenarios, key=lambda scenario: scenario.origin.y)
+    assert abs(top_zone.origin.y - top_scenario.origin.y) <= 1e-6
 
 
 def test_procedure_graph_layout_expands_outer_service_zone() -> None:

@@ -45,6 +45,12 @@ class _ZoneDraft:
     label_size: Size
 
 
+@dataclass
+class _MergeGroup:
+    label: str
+    proc_ids: list[str]
+
+
 class ProcedureGraphLayoutEngine(GridLayoutEngine):
     def __init__(self, config: LayoutConfig | None = None) -> None:
         super().__init__(config or LayoutConfig())
@@ -93,6 +99,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         )
 
         for idx, component in enumerate(components):
+            component_top = origin_y
             component_adjacency = {
                 proc_id: [child for child in adjacency.get(proc_id, []) if child in component]
                 for proc_id in component
@@ -116,6 +123,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
             zone_enabled = len(service_info_by_key) > 1
             component_frames: list[FramePlacement] = []
+            component_frame_lookup: dict[str, FramePlacement] = {}
             component_height = 0.0
             zones_for_component: list[ServiceZonePlacement] = []
             service_order: list[_ServiceInfo] = []
@@ -206,9 +214,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                                     ),
                                     size=node_size,
                                 )
-                                frames.append(frame)
-                                frame_lookup[proc_id] = frame
                                 component_frames.append(frame)
+                                component_frame_lookup[proc_id] = frame
                 else:
                     if not service_order:
                         linear_frames = self._linear_component_frames(
@@ -220,9 +227,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                             proc_gap_y=proc_gap_y,
                         )
                     for frame in linear_frames:
-                        frames.append(frame)
-                        frame_lookup[frame.procedure_id] = frame
                         component_frames.append(frame)
+                        component_frame_lookup[frame.procedure_id] = frame
                     if component_frames:
                         max_bottom = max(
                             frame.origin.y + frame.size.height for frame in component_frames
@@ -247,9 +253,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                             origin=Point(origin_x + lvl * lane_span, y),
                             size=node_size,
                         )
-                        frames.append(frame)
-                        frame_lookup[proc_id] = frame
                         component_frames.append(frame)
+                        component_frame_lookup[proc_id] = frame
                         y += node_size.height + proc_gap_y
                 if component_frames:
                     max_bottom = max(
@@ -261,14 +266,41 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 zones_for_component = self._build_component_service_zones(
                     service_info_by_key=service_info_by_key,
                     proc_service_keys=proc_service_keys,
-                    frame_lookup=frame_lookup,
+                    frame_lookup=component_frame_lookup,
                 )
                 if zones_for_component:
-                    service_zones.extend(zones_for_component)
-                    max_zone_bottom = max(
-                        zone.origin.y + zone.size.height for zone in zones_for_component
-                    )
-                    component_height = max(component_height, max_zone_bottom - origin_y)
+                    min_zone_top = min(zone.origin.y for zone in zones_for_component)
+                    if min_zone_top < component_top:
+                        shift = component_top - min_zone_top
+                        component_frames = [
+                            FramePlacement(
+                                procedure_id=frame.procedure_id,
+                                origin=Point(frame.origin.x, frame.origin.y + shift),
+                                size=frame.size,
+                            )
+                            for frame in component_frames
+                        ]
+                        component_frame_lookup = {
+                            frame.procedure_id: frame for frame in component_frames
+                        }
+                        zones_for_component = [
+                            ServiceZonePlacement(
+                                service_key=zone.service_key,
+                                service_name=zone.service_name,
+                                team_name=zone.team_name,
+                                team_id=zone.team_id,
+                                color=zone.color,
+                                origin=Point(zone.origin.x, zone.origin.y + shift),
+                                size=zone.size,
+                                label_origin=Point(
+                                    zone.label_origin.x, zone.label_origin.y + shift
+                                ),
+                                label_size=zone.label_size,
+                                label_font_size=zone.label_font_size,
+                                procedure_ids=zone.procedure_ids,
+                            )
+                            for zone in zones_for_component
+                        ]
 
             scenario_total_height = 0.0
             if component_frames:
@@ -276,12 +308,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     component=component,
                     component_index=idx + 1,
                     component_count=len(components),
-                    frame_lookup=frame_lookup,
+                    frame_lookup=component_frame_lookup,
                     procedure_map=procedure_map,
                     procedure_graph=document.procedure_graph,
                     layout_edges_by_proc=layout_edges_by_proc,
                     order_index=order_index,
                     procedure_meta=procedure_meta,
+                    component_top_y=component_top,
                 )
                 if scenario:
                     scenarios.append(scenario)
@@ -291,12 +324,30 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         - scenario.origin.y
                     )
 
+            if component_frames:
+                frames.extend(component_frames)
+                frame_lookup.update(component_frame_lookup)
+            if zones_for_component:
+                service_zones.extend(zones_for_component)
+
+            component_height = 0.0
+            if component_frames:
+                max_frame_bottom = max(
+                    frame.origin.y + frame.size.height for frame in component_frames
+                )
+                component_height = max(component_height, max_frame_bottom - component_top)
+            if zones_for_component:
+                max_zone_bottom = max(
+                    zone.origin.y + zone.size.height for zone in zones_for_component
+                )
+                component_height = max(component_height, max_zone_bottom - component_top)
+
             component_visual_height = max(component_height, scenario_total_height)
             if idx < len(components) - 1:
-                separator_ys.append(origin_y + component_visual_height + component_gap / 2)
-                origin_y += component_visual_height + component_gap
+                separator_ys.append(component_top + component_visual_height + component_gap / 2)
+                origin_y = component_top + component_visual_height + component_gap
             else:
-                origin_y += component_visual_height + proc_gap_y
+                origin_y = component_top + component_visual_height + proc_gap_y
 
         if frames and separator_ys:
             min_x = min(frame.origin.x for frame in frames)
@@ -331,6 +382,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
         order_index: dict[str, int],
         procedure_meta: Mapping[str, Mapping[str, object]] | None,
+        component_top_y: float,
     ) -> ScenarioPlacement | None:
         procedure_meta = procedure_meta or {}
         component_frames = [
@@ -339,7 +391,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         if not component_frames:
             return None
         min_x = min(frame.origin.x for frame in component_frames)
-        min_y = min(frame.origin.y for frame in component_frames)
+        min_y = component_top_y
         title = "Граф" if component_count == 1 else f"Граф {component_index}"
         starts, ends, variants = self._component_stats(
             component, procedure_map, procedure_graph, layout_edges_by_proc
@@ -566,8 +618,8 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         header = "Узлы слияния:"
         font_size = self.config.scenario_merge_font_size
         line_height = font_size * 1.35
-        header_gap = 0.0
-        item_gap = 0.0
+        header_gap = max(6.0, font_size * 0.4)
+        group_gap = max(8.0, font_size * 0.5)
         item_padding = 0.0
         content_width = self.config.scenario_width - (self.config.scenario_merge_padding * 2)
         blocks: list[ScenarioProceduresBlock] = []
@@ -586,9 +638,54 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
 
         lines = [header]
-        for idx, proc_id in enumerate(merge_ids):
-            line = proc_id
-            wrapped = self._wrap_lines([line], content_width - item_padding * 2, font_size)
+        groups: dict[tuple[tuple[str, str], ...], _MergeGroup] = {}
+        for proc_id in merge_ids:
+            meta = procedure_meta.get(proc_id, {})
+            entries = self._procedure_service_entries(meta)
+            service_tokens: list[tuple[str, str]] = []
+            for entry in entries:
+                team_name = str(entry.get("team_name") or "Unknown team")
+                service_name = str(entry.get("service_name") or "Unknown service")
+                service_tokens.append((team_name, service_name))
+            if not service_tokens:
+                service_tokens.append(("Unknown team", "Unknown service"))
+            unique_tokens = sorted(
+                set(service_tokens),
+                key=lambda item: (item[0].lower(), item[1].lower()),
+            )
+            label = " + ".join([f"{team} / {service}" for team, service in unique_tokens])
+            key = tuple(unique_tokens)
+            group = groups.setdefault(key, _MergeGroup(label=label, proc_ids=[]))
+            group.proc_ids.append(proc_id)
+
+        ordered_groups: list[tuple[int, str, list[str]]] = []
+        for group in groups.values():
+            proc_ids = [str(proc_id) for proc_id in group.proc_ids]
+            proc_ids.sort(key=lambda proc_id: (order_index.get(proc_id, 0), proc_id))
+            order = min(order_index.get(proc_id, 0) for proc_id in proc_ids)
+            label = group.label
+            ordered_groups.append((order, label, proc_ids))
+        ordered_groups.sort(key=lambda item: (item[0], item[1].lower()))
+
+        for idx, (_, label, proc_ids) in enumerate(ordered_groups):
+            if idx > 0:
+                blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=group_gap))
+                lines.append("")
+            header_line = f"{label}:"
+            header_lines = self._wrap_lines(
+                [header_line], content_width - item_padding * 2, font_size
+            )
+            blocks.append(
+                ScenarioProceduresBlock(
+                    kind="merge_group",
+                    text="\n".join(header_lines),
+                    height=len(header_lines) * line_height + item_padding * 2,
+                    font_size=font_size,
+                )
+            )
+            lines.append(header_line)
+            item_lines = [f"- {proc_id}" for proc_id in proc_ids]
+            wrapped = self._wrap_lines(item_lines, content_width - item_padding * 2, font_size)
             blocks.append(
                 ScenarioProceduresBlock(
                     kind="merge_item",
@@ -597,9 +694,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     font_size=font_size,
                 )
             )
-            lines.append(line)
-            if idx < len(merge_ids) - 1 and item_gap:
-                blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=item_gap))
+            lines.extend(item_lines)
 
         if lines and not lines[-1]:
             lines.pop()

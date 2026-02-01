@@ -28,6 +28,7 @@ from domain.ports.layout import LayoutEngine
 
 Metadata = dict[str, Any]
 Element = dict[str, Any]
+MERGE_ALERT_COLOR = "#ff2d2d"
 
 
 @dataclass
@@ -415,8 +416,8 @@ class MarkupToDiagramConverter(ABC):
                             base_metadata,
                         ),
                         group_ids=[merge_group],
-                        background_color="#fff6d6",
-                        stroke_color="#c9b27a",
+                        background_color=MERGE_ALERT_COLOR,
+                        stroke_color=MERGE_ALERT_COLOR,
                     )
                 )
                 if merge_blocks:
@@ -450,6 +451,7 @@ class MarkupToDiagramConverter(ABC):
                                 ),
                                 group_ids=[merge_group],
                                 font_size=block_font_size,
+                                text_color="#ffffff",
                             )
                         )
                         if block.underline:
@@ -467,7 +469,7 @@ class MarkupToDiagramConverter(ABC):
                                         {"role": "scenario_merge_underline", "scenario_index": idx},
                                         base_metadata,
                                     ),
-                                    stroke_color="#1e1e1e",
+                                    stroke_color="#ffffff",
                                     stroke_width=2.0,
                                     group_ids=[merge_group],
                                 )
@@ -489,6 +491,7 @@ class MarkupToDiagramConverter(ABC):
                             ),
                             group_ids=[merge_group],
                             font_size=merge_font_size,
+                            text_color="#ffffff",
                         )
                     )
             procedures_group = self._stable_id("scenario-procedures-group", str(idx))

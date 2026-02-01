@@ -12,6 +12,7 @@ from domain.models import (
     Size,
 )
 from domain.services.convert_markup_base import (
+    MERGE_ALERT_COLOR,
     ElementRegistry,
     MarkupToDiagramConverter,
     Metadata,
@@ -88,7 +89,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             if not is_intersection:
                 continue
             highlight_padding = 18.0
-            highlight_color = "#f5c542"
+            highlight_color = MERGE_ALERT_COLOR
             highlight_meta = self._with_base_metadata(
                 {
                     "procedure_id": frame.procedure_id,
