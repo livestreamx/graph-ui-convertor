@@ -116,5 +116,16 @@
         "m4": ["m5"]
       }
     }
-  ]
+  ],
+  "procedure_graph": {
+    "proc_shared_intake": [],
+    "proc_shared_routing": [],
+    "proc_end_markers": [],
+    "proc_primary_chain": [],
+    "proc_source_order": [],
+    "proc_marker_shift": [],
+    "proc_shared_children": [],
+    "proc_parallel_merge": [],
+    "proc_multi_starts": []
+  }
 }
