@@ -268,6 +268,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         selected_documents=selected_documents,
                         all_documents=all_documents,
                         selected_team_ids=team_ids,
+                        merge_selected_markups=merge_selected_markups,
                     )
                     diagram_format = resolve_diagram_format(context.settings)
                     diagram_label = resolve_diagram_label(diagram_format)

@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
 from domain.models import MarkupDocument
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.graph_metrics import compute_graph_metrics
 
 
@@ -12,12 +13,14 @@ from domain.services.graph_metrics import compute_graph_metrics
 class MarkupTypeStat:
     markup_type: str
     count: int
+    item_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
 class TeamIntersectionStat:
     team_name: str
     count: int
+    entities: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -43,16 +46,27 @@ class ServiceLoadStat:
 class CrossTeamGraphDashboard:
     markup_type_counts: tuple[MarkupTypeStat, ...]
     unique_graph_count: int
+    unique_graphs: tuple[str, ...]
     bot_graph_count: int
+    bot_graphs: tuple[str, ...]
     multi_graph_count: int
+    multi_graphs: tuple[str, ...]
     bot_procedure_count: int
+    bot_procedures: tuple[str, ...]
     multi_procedure_count: int
+    multi_procedures: tuple[str, ...]
+    employee_procedure_count: int
+    employee_procedures: tuple[str, ...]
     total_procedure_count: int
     internal_intersection_markup_count: int
+    internal_intersection_entities: tuple[str, ...]
     external_intersection_markup_count: int
+    external_intersection_entities: tuple[str, ...]
     external_team_intersections: tuple[TeamIntersectionStat, ...]
     split_service_count: int
+    split_entities: tuple[str, ...]
     target_service_count: int
+    target_entities: tuple[str, ...]
     total_service_count: int
     linking_procedures: tuple[ProcedureLinkStat, ...]
     overloaded_services: tuple[ServiceLoadStat, ...]
@@ -107,6 +121,7 @@ class BuildCrossTeamGraphDashboard:
         selected_documents: Sequence[MarkupDocument],
         all_documents: Sequence[MarkupDocument],
         selected_team_ids: Sequence[str],
+        merge_selected_markups: bool = False,
         top_limit: int = 10,
     ) -> CrossTeamGraphDashboard:
         selected_graphs = self._collect_graphs(selected_documents)
@@ -118,8 +133,43 @@ class BuildCrossTeamGraphDashboard:
         selected_team_set = {
             team_id for team_id in (str(value).strip() for value in selected_team_ids) if team_id
         }
+        (
+            unique_graph_labels,
+            graph_keys_by_procedure_id,
+        ) = self._extract_graph_view(
+            selected_documents,
+            merge_selected_markups=merge_selected_markups,
+        )
         markup_type_counts = tuple(self._build_markup_type_counts(selected_documents))
         total_procedure_count = sum(len(document.procedures) for document in selected_documents)
+        bot_procedures = sorted(
+            {
+                procedure.procedure_id
+                for document in selected_documents
+                for procedure in document.procedures
+                if _has_substring(procedure.procedure_id, "bot")
+            },
+            key=str.lower,
+        )
+        multi_procedures = sorted(
+            {
+                procedure.procedure_id
+                for document in selected_documents
+                for procedure in document.procedures
+                if _has_substring(procedure.procedure_id, "multi")
+            },
+            key=str.lower,
+        )
+        employee_procedures = sorted(
+            {
+                procedure.procedure_id
+                for document in selected_documents
+                for procedure in document.procedures
+                if not _has_substring(procedure.procedure_id, "bot")
+                and not _has_substring(procedure.procedure_id, "multi")
+            },
+            key=str.lower,
+        )
         bot_procedure_count = sum(
             1
             for document in selected_documents
@@ -132,25 +182,41 @@ class BuildCrossTeamGraphDashboard:
             for procedure in document.procedures
             if _has_substring(procedure.procedure_id, "multi")
         )
-
-        bot_graph_count = sum(
+        employee_procedure_count = sum(
             1
-            for graph in selected_graphs.values()
-            if any(_has_substring(proc_id, "bot") for proc_id in graph.procedure_ids)
+            for document in selected_documents
+            for procedure in document.procedures
+            if not _has_substring(procedure.procedure_id, "bot")
+            and not _has_substring(procedure.procedure_id, "multi")
         )
-        multi_graph_count = sum(
-            1
-            for graph in selected_graphs.values()
-            if any(_has_substring(proc_id, "multi") for proc_id in graph.procedure_ids)
+
+        bot_graph_labels = sorted(
+            {
+                graph_label
+                for proc_id, graph_keys in graph_keys_by_procedure_id.items()
+                if _has_substring(proc_id, "bot")
+                for graph_label in graph_keys
+            },
+            key=str.lower,
+        )
+        multi_graph_labels = sorted(
+            {
+                graph_label
+                for proc_id, graph_keys in graph_keys_by_procedure_id.items()
+                if _has_substring(proc_id, "multi")
+                for graph_label in graph_keys
+            },
+            key=str.lower,
         )
 
         selected_snapshots = self._collect_service_snapshots(selected_service_docs)
         selected_proc_to_services = self._build_proc_to_services(selected_services)
         all_proc_to_services = self._build_proc_to_services(all_services)
 
-        internal_intersection_markup_count = 0
-        external_intersection_markup_count = 0
+        internal_intersection_entities: set[str] = set()
+        external_intersection_entities: set[str] = set()
         external_team_counter: Counter[str] = Counter()
+        external_team_entities: dict[str, set[str]] = {}
         for snapshot in selected_snapshots:
             has_internal = False
             has_external = False
@@ -170,20 +236,32 @@ class BuildCrossTeamGraphDashboard:
                         continue
                     has_external = True
                     external_teams_for_markup.add(service.team_name)
+                    external_team_entities.setdefault(service.team_name, set()).add(
+                        _entity_label(service.team_name, service.service_name)
+                    )
+            service = all_services.get(snapshot.service_key)
+            entity_label = _entity_label(
+                snapshot.team_name,
+                service.service_name if service is not None else "Unknown entity",
+            )
             if has_internal:
-                internal_intersection_markup_count += 1
+                internal_intersection_entities.add(entity_label)
             if has_external:
-                external_intersection_markup_count += 1
+                external_intersection_entities.add(entity_label)
             for team_name in external_teams_for_markup:
                 external_team_counter[team_name] += 1
 
         split_service_count = 0
         target_service_count = 0
+        split_entities: list[str] = []
+        target_entities: list[str] = []
         for service in selected_services.values():
+            entity_label = _entity_label(service.team_name, service.service_name)
             component_count = _count_weak_components(service.procedure_ids, service.adjacency)
             has_split_graph = component_count > 1
             if has_split_graph:
                 split_service_count += 1
+                split_entities.append(entity_label)
             has_merge_with_other_service = any(
                 any(
                     other_service != service.key
@@ -193,6 +271,7 @@ class BuildCrossTeamGraphDashboard:
             )
             if not has_split_graph and not has_merge_with_other_service:
                 target_service_count += 1
+                target_entities.append(entity_label)
 
         linking_procedures = tuple(
             self._build_linking_procedures(selected_graphs, top_limit=top_limit)
@@ -202,7 +281,11 @@ class BuildCrossTeamGraphDashboard:
         )
 
         external_team_intersections = tuple(
-            TeamIntersectionStat(team_name=name, count=count)
+            TeamIntersectionStat(
+                team_name=name,
+                count=count,
+                entities=tuple(sorted(external_team_entities.get(name, set()), key=str.lower)),
+            )
             for name, count in sorted(
                 external_team_counter.items(),
                 key=lambda item: (-item[1], item[0].lower()),
@@ -211,21 +294,62 @@ class BuildCrossTeamGraphDashboard:
 
         return CrossTeamGraphDashboard(
             markup_type_counts=markup_type_counts,
-            unique_graph_count=len(selected_graphs),
-            bot_graph_count=bot_graph_count,
-            multi_graph_count=multi_graph_count,
+            unique_graph_count=len(unique_graph_labels),
+            unique_graphs=tuple(unique_graph_labels),
+            bot_graph_count=len(bot_graph_labels),
+            bot_graphs=tuple(bot_graph_labels),
+            multi_graph_count=len(multi_graph_labels),
+            multi_graphs=tuple(multi_graph_labels),
             bot_procedure_count=bot_procedure_count,
+            bot_procedures=tuple(bot_procedures),
             multi_procedure_count=multi_procedure_count,
+            multi_procedures=tuple(multi_procedures),
+            employee_procedure_count=employee_procedure_count,
+            employee_procedures=tuple(employee_procedures),
             total_procedure_count=total_procedure_count,
-            internal_intersection_markup_count=internal_intersection_markup_count,
-            external_intersection_markup_count=external_intersection_markup_count,
+            internal_intersection_markup_count=len(internal_intersection_entities),
+            internal_intersection_entities=tuple(
+                sorted(internal_intersection_entities, key=str.lower)
+            ),
+            external_intersection_markup_count=len(external_intersection_entities),
+            external_intersection_entities=tuple(
+                sorted(external_intersection_entities, key=str.lower)
+            ),
             external_team_intersections=external_team_intersections,
             split_service_count=split_service_count,
+            split_entities=tuple(sorted(split_entities, key=str.lower)),
             target_service_count=target_service_count,
+            target_entities=tuple(sorted(target_entities, key=str.lower)),
             total_service_count=len(selected_services),
             linking_procedures=linking_procedures,
             overloaded_services=overloaded_services,
         )
+
+    def _extract_graph_view(
+        self,
+        selected_documents: Sequence[MarkupDocument],
+        *,
+        merge_selected_markups: bool,
+    ) -> tuple[list[str], dict[str, set[str]]]:
+        graph_document = BuildTeamProcedureGraph().build(
+            selected_documents,
+            merge_selected_markups=merge_selected_markups,
+        )
+        graph_keys: set[str] = set()
+        graph_keys_by_procedure_id: dict[str, set[str]] = {}
+        for proc_id, payload in (graph_document.procedure_meta or {}).items():
+            services = payload.get("services")
+            keys = _extract_service_keys(services)
+            if not keys:
+                keys = {
+                    _entity_label(
+                        str(payload.get("team_name") or "Unknown team"),
+                        str(payload.get("service_name") or "Unknown entity"),
+                    )
+                }
+            graph_keys.update(keys)
+            graph_keys_by_procedure_id.setdefault(proc_id, set()).update(keys)
+        return sorted(graph_keys, key=str.lower), graph_keys_by_procedure_id
 
     def _collect_graphs(self, documents: Sequence[MarkupDocument]) -> dict[str, _GraphAggregate]:
         graphs: dict[str, _GraphAggregate] = {}
@@ -265,11 +389,22 @@ class BuildCrossTeamGraphDashboard:
         documents: Sequence[MarkupDocument],
     ) -> list[MarkupTypeStat]:
         counts: Counter[str] = Counter()
+        by_type_labels: dict[str, set[str]] = {}
         for document in documents:
             markup_type = str(document.markup_type or "").strip() or "unknown"
             counts[markup_type] += 1
+            by_type_labels.setdefault(markup_type, set()).add(
+                _entity_label(
+                    str(document.team_name or document.team_id or "").strip() or "Unknown team",
+                    str(document.service_name or "").strip() or "Unknown entity",
+                )
+            )
         return [
-            MarkupTypeStat(markup_type=markup_type, count=count)
+            MarkupTypeStat(
+                markup_type=markup_type,
+                count=count,
+                item_labels=tuple(sorted(by_type_labels.get(markup_type, set()), key=str.lower)),
+            )
             for markup_type, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         ]
 
@@ -417,3 +552,25 @@ def _count_weak_components(nodes: set[str], adjacency: Mapping[str, set[str]]) -
 
 def _has_substring(value: str, fragment: str) -> bool:
     return fragment.lower() in str(value).lower()
+
+
+def _entity_label(team_name: str, service_name: str) -> str:
+    normalized_team = str(team_name or "").strip() or "Unknown team"
+    normalized_service = str(service_name or "").strip() or "Unknown entity"
+    return f"{normalized_team} / {normalized_service}"
+
+
+def _extract_service_keys(services: object) -> set[str]:
+    if not isinstance(services, list):
+        return set()
+    result: set[str] = set()
+    for item in services:
+        if not isinstance(item, dict):
+            continue
+        result.add(
+            _entity_label(
+                str(item.get("team_name") or "Unknown team"),
+                str(item.get("service_name") or "Unknown entity"),
+            )
+        )
+    return result

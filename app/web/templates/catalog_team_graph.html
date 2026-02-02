@@ -228,81 +228,241 @@
               <div class="team-graph-dashboard-section">
                 <div class="team-graph-dashboard-title">Signal Coverage</div>
                 <div class="team-graph-dashboard-grid">
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Unique graphs</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Graphs</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Graphs help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Unique graphs</div>
+                          <div class="team-graph-help-hint">Count of unique graphs from selected teams.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.unique_graph_count }}</div>
-                    <div class="team-graph-kpi-note">Across selected markups</div>
+                    {% if team_dashboard.unique_graphs %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.unique_graphs %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Graphs with bot procedures</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Bot graphs</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Bot graphs help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Bot graphs</div>
+                          <div class="team-graph-help-hint">Graphs where at least one <code>procedure_id</code> contains <code>bot</code>.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.bot_graph_count }}</div>
-                    <div class="team-graph-kpi-note"><code>procedure_id</code> contains "bot"</div>
+                    {% if team_dashboard.bot_graphs %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.bot_graphs %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Graphs with multi procedures</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Multi graphs</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Multi graphs help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Multichannel graphs</div>
+                          <div class="team-graph-help-hint">Graphs where at least one <code>procedure_id</code> contains <code>multi</code>.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.multi_graph_count }}</div>
-                    <div class="team-graph-kpi-note"><code>procedure_id</code> contains "multi"</div>
+                    {% if team_dashboard.multi_graphs %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.multi_graphs %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
                 </div>
                 <div class="team-graph-split-grid">
                   <article class="team-graph-data-card">
-                    <div class="team-graph-data-title">Markups by type</div>
+                    <div class="team-graph-data-head">
+                      <div class="team-graph-data-title">Markup types</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Markup types help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Markup types</div>
+                          <div class="team-graph-help-hint">Total selected markups split by <code>markup_type</code>.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-chip-row">
                       {% for stat in team_dashboard.markup_type_counts %}
-                        <span class="team-graph-chip">{{ stat.markup_type }} · {{ stat.count }}</span>
+                        <span class="team-graph-chip team-graph-chip-drilldown">
+                          {{ stat.markup_type }} · {{ stat.count }}
+                          {% if stat.item_labels %}
+                            <span class="team-graph-chip-list">
+                              {% for item in stat.item_labels %}
+                                <span class="team-graph-chip-list-item">{{ item }}</span>
+                              {% endfor %}
+                            </span>
+                          {% endif %}
+                        </span>
                       {% endfor %}
                     </div>
                   </article>
                   <article class="team-graph-data-card">
-                    <div class="team-graph-data-title">Procedure share</div>
-                    <div class="team-graph-inline-metric">
-                      Bot:
-                      <strong>
+                    <div class="team-graph-data-head">
+                      <div class="team-graph-data-title">Procedure mix</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Procedure mix help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Procedure mix</div>
+                          <div class="team-graph-help-hint">Share among all procedures in selected markups by <code>procedure_id</code> substring: <code>bot</code>, <code>multi</code>, and everything else is employee procedures.</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
+                      <span class="team-graph-inline-metric-label">Bot procedures</span>
+                      <span class="team-graph-inline-metric-value">
                         {% if total_procedures %}
                           {{ (team_dashboard.bot_procedure_count * 100 / total_procedures) | round(1) }}%
                         {% else %}
                           0%
                         {% endif %}
-                      </strong>
-                      ({{ team_dashboard.bot_procedure_count }}/{{ total_procedures }})
+                      </span>
+                      <span class="team-graph-inline-metric-note">{{ team_dashboard.bot_procedure_count }} / {{ total_procedures }}</span>
+                      {% if team_dashboard.bot_procedures %}
+                        <div class="team-graph-hover-list team-graph-hover-list-inline">
+                          {% for item in team_dashboard.bot_procedures %}
+                            <div class="team-graph-hover-item team-graph-mono">{{ item }}</div>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
                     </div>
-                    <div class="team-graph-inline-metric">
-                      Multi:
-                      <strong>
+                    <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
+                      <span class="team-graph-inline-metric-label">Multichannel procedures</span>
+                      <span class="team-graph-inline-metric-value">
                         {% if total_procedures %}
                           {{ (team_dashboard.multi_procedure_count * 100 / total_procedures) | round(1) }}%
                         {% else %}
                           0%
                         {% endif %}
-                      </strong>
-                      ({{ team_dashboard.multi_procedure_count }}/{{ total_procedures }})
+                      </span>
+                      <span class="team-graph-inline-metric-note">{{ team_dashboard.multi_procedure_count }} / {{ total_procedures }}</span>
+                      {% if team_dashboard.multi_procedures %}
+                        <div class="team-graph-hover-list team-graph-hover-list-inline">
+                          {% for item in team_dashboard.multi_procedures %}
+                            <div class="team-graph-hover-item team-graph-mono">{{ item }}</div>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
+                    </div>
+                    <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
+                      <span class="team-graph-inline-metric-label">Employee procedures</span>
+                      <span class="team-graph-inline-metric-value">
+                        {% if total_procedures %}
+                          {{ (team_dashboard.employee_procedure_count * 100 / total_procedures) | round(1) }}%
+                        {% else %}
+                          0%
+                        {% endif %}
+                      </span>
+                      <span class="team-graph-inline-metric-note">{{ team_dashboard.employee_procedure_count }} / {{ total_procedures }}</span>
+                      {% if team_dashboard.employee_procedures %}
+                        <div class="team-graph-hover-list team-graph-hover-list-inline">
+                          {% for item in team_dashboard.employee_procedures %}
+                            <div class="team-graph-hover-item team-graph-mono">{{ item }}</div>
+                          {% endfor %}
+                        </div>
+                      {% endif %}
                     </div>
                   </article>
                 </div>
               </div>
 
               <div class="team-graph-dashboard-section">
-                <div class="team-graph-dashboard-title">Service Integrity</div>
+                <div class="team-graph-dashboard-title">Entity Integrity</div>
                 <div class="team-graph-dashboard-grid">
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Service markups with internal intersections</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Internal overlap entities</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Internal overlap help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Internal overlap entities</div>
+                          <div class="team-graph-help-hint">Entities that share at least one procedure with another selected entity.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">
                       {{ team_dashboard.internal_intersection_markup_count }}
                     </div>
+                    {% if team_dashboard.internal_intersection_entities %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.internal_intersection_entities %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Service markups intersecting external teams</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">External overlap entities</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External overlap help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">External overlap entities</div>
+                          <div class="team-graph-help-hint">Entities that intersect with at least one entity from teams outside selection.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">
                       {{ team_dashboard.external_intersection_markup_count }}
                     </div>
+                    {% if team_dashboard.external_intersection_entities %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.external_intersection_entities %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Services split into disconnected graphs</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Split entities</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Split entities help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Split entities</div>
+                          <div class="team-graph-help-hint">Entities with more than one disconnected component in their procedure graph.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.split_service_count }}</div>
-                    <div class="team-graph-kpi-note">Of {{ total_services }} services</div>
+                    {% if team_dashboard.split_entities %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.split_entities %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
-                  <article class="team-graph-kpi-card">
-                    <div class="team-graph-kpi-label">Target-state services</div>
+                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Target entities</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Target entities help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Target entities</div>
+                          <div class="team-graph-help-hint">Entities without overlaps with other entities and without disconnected parts.</div>
+                        </div>
+                      </div>
+                    </div>
                     <div class="team-graph-kpi-value">
                       {% if total_services %}
                         {{ (team_dashboard.target_service_count * 100 / total_services) | round(1) }}%
@@ -310,19 +470,50 @@
                         0%
                       {% endif %}
                     </div>
-                    <div class="team-graph-kpi-note">
-                      {{ team_dashboard.target_service_count }}/{{ total_services }} without merges or splits
-                    </div>
+                    <div class="team-graph-kpi-note">{{ team_dashboard.target_service_count }} / {{ total_services }}</div>
+                    {% if team_dashboard.target_entities %}
+                      <div class="team-graph-hover-list">
+                        {% for item in team_dashboard.target_entities %}
+                          <div class="team-graph-hover-item">{{ item }}</div>
+                        {% endfor %}
+                      </div>
+                    {% endif %}
                   </article>
                 </div>
                 <article class="team-graph-data-card">
-                  <div class="team-graph-data-title">External team intersections</div>
+                  <div class="team-graph-data-head">
+                    <div class="team-graph-data-title">External team overlaps</div>
+                    <button
+                      class="ghost-button team-graph-overlap-toggle"
+                      type="button"
+                      data-overlap-toggle
+                      aria-expanded="false"
+                    >
+                      Show entities
+                    </button>
+                    <div class="team-graph-help team-graph-help-inline">
+                      <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
+                      <div class="team-graph-help-popover team-graph-help-popover-wide">
+                        <div class="team-graph-help-title">External team overlaps</div>
+                        <div class="team-graph-help-hint">Teams outside selection, ranked by number of selected entities that overlap with them. Click <b>Show entities</b> to inspect concrete external entities for each team.</div>
+                      </div>
+                    </div>
+                  </div>
                   {% if team_dashboard.external_team_intersections %}
-                    <div class="team-graph-ranked-list">
+                    <div class="team-graph-ranked-list team-graph-overlap-list" data-overlap-list>
                       {% for item in team_dashboard.external_team_intersections %}
-                        <div class="team-graph-ranked-item">
-                          <span>{{ loop.index }}. {{ item.team_name }}</span>
-                          <span>{{ item.count }}</span>
+                        <div class="team-graph-overlap-team">
+                          <div class="team-graph-ranked-item">
+                            <span>{{ loop.index }}. {{ item.team_name }}</span>
+                            <span>{{ item.count }}</span>
+                          </div>
+                          {% if item.entities %}
+                            <div class="team-graph-overlap-entities">
+                              {% for entity in item.entities %}
+                                <div class="team-graph-hover-item">{{ entity }}</div>
+                              {% endfor %}
+                            </div>
+                          {% endif %}
                         </div>
                       {% endfor %}
                     </div>
@@ -336,7 +527,16 @@
                 <div class="team-graph-dashboard-title">Risk Hotspots</div>
                 <div class="team-graph-split-grid">
                   <article class="team-graph-data-card">
-                    <div class="team-graph-data-title">Top linking procedures</div>
+                    <div class="team-graph-data-head">
+                      <div class="team-graph-data-title">Top linking procedures</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top linking procedures help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Top linking procedures</div>
+                          <div class="team-graph-help-hint">Rank by reuse across graphs and by total in/out dependencies.</div>
+                        </div>
+                      </div>
+                    </div>
                     {% if team_dashboard.linking_procedures %}
                       <div class="team-graph-ranked-list">
                         {% for item in team_dashboard.linking_procedures %}
@@ -354,7 +554,16 @@
                     {% endif %}
                   </article>
                   <article class="team-graph-data-card">
-                    <div class="team-graph-data-title">Top overloaded services</div>
+                    <div class="team-graph-data-head">
+                      <div class="team-graph-data-title">Top overloaded entities</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Top overloaded entities</div>
+                          <div class="team-graph-help-hint">Rank by cycles, block count, in-team merge nodes, then procedure count.</div>
+                        </div>
+                      </div>
+                    </div>
                     {% if team_dashboard.overloaded_services %}
                       <div class="team-graph-ranked-list">
                         {% for item in team_dashboard.overloaded_services %}
@@ -480,6 +689,16 @@
           });
           updateToggle(toggle, toggleInput);
         });
+
+        const overlapToggle = page.querySelector("[data-overlap-toggle]");
+        const overlapList = page.querySelector("[data-overlap-list]");
+        if (overlapToggle instanceof HTMLButtonElement && overlapList instanceof HTMLElement) {
+          overlapToggle.addEventListener("click", () => {
+            const expanded = overlapList.classList.toggle("is-expanded");
+            overlapToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+            overlapToggle.textContent = expanded ? "Hide entities" : "Show entities";
+          });
+        }
 
         page.dataset.initialized = "true";
       };

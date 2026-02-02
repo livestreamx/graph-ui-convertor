@@ -246,10 +246,24 @@ main {
   z-index: 10;
 }
 
+.team-graph-help-popover-wide {
+  width: min(360px, 88vw);
+}
+
 .team-graph-help:hover .team-graph-help-popover,
 .team-graph-help:focus-within .team-graph-help-popover {
   display: grid;
   gap: 10px;
+}
+
+.team-graph-help-inline {
+  display: inline-flex;
+}
+
+.team-graph-help-button-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
 }
 
 .team-graph-help-title {
@@ -627,6 +641,20 @@ main {
   background: rgba(10, 16, 34, 0.8);
   display: grid;
   gap: 6px;
+  align-content: start;
+}
+
+.team-graph-kpi-card {
+  position: relative;
+}
+
+.team-graph-kpi-head,
+.team-graph-data-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .team-graph-kpi-label,
@@ -652,6 +680,7 @@ main {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 10px;
+  align-items: start;
 }
 
 .team-graph-chip-row {
@@ -661,6 +690,7 @@ main {
 }
 
 .team-graph-chip {
+  position: relative;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 999px;
   padding: 4px 9px;
@@ -669,20 +699,136 @@ main {
   background: rgba(255, 255, 255, 0.06);
 }
 
-.team-graph-inline-metric {
-  font-size: 13px;
+.team-graph-chip-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(360px, 80vw);
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(7, 12, 26, 0.98);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 8;
+}
+
+.team-graph-chip-drilldown:hover .team-graph-chip-list,
+.team-graph-chip-drilldown:focus-within .team-graph-chip-list {
+  display: grid;
+  gap: 5px;
+}
+
+.team-graph-chip-list-item {
+  display: block;
+  font-size: 12px;
   color: var(--text);
 }
 
-.team-graph-inline-metric strong {
+.team-graph-inline-metric {
+  position: relative;
+  font-size: 12px;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+}
+
+.team-graph-inline-metric:first-of-type {
+  border-top: 0;
+}
+
+.team-graph-inline-metric-label {
+  color: var(--muted);
+}
+
+.team-graph-inline-metric-value {
   font-family: "Space Grotesk", sans-serif;
   font-size: 16px;
-  margin: 0 4px;
+}
+
+.team-graph-inline-metric-note {
+  color: var(--muted);
+}
+
+.team-graph-hover-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 10px;
+  right: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(7, 12, 26, 0.98);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 8;
+}
+
+.team-graph-hover-list-inline {
+  left: 0;
+  right: 0;
+}
+
+.team-graph-hover-item {
+  font-size: 12px;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.team-graph-kpi-card-drilldown:hover .team-graph-hover-list,
+.team-graph-kpi-card-drilldown:focus-within .team-graph-hover-list,
+.team-graph-inline-metric-drilldown:hover .team-graph-hover-list,
+.team-graph-inline-metric-drilldown:focus-within .team-graph-hover-list {
+  display: grid;
+  gap: 4px;
 }
 
 .team-graph-ranked-list {
   display: grid;
   gap: 6px;
+  align-content: start;
+}
+
+.team-graph-overlap-toggle {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.team-graph-overlap-list {
+  overflow: hidden;
+}
+
+.team-graph-overlap-team {
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 6px;
+}
+
+.team-graph-overlap-team:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.team-graph-overlap-entities {
+  max-height: 0;
+  opacity: 0;
+  overflow-y: auto;
+  margin-top: 0;
+  transition: max-height 0.24s ease, opacity 0.2s ease, margin-top 0.2s ease;
+}
+
+.team-graph-overlap-list.is-expanded .team-graph-overlap-entities {
+  max-height: 170px;
+  opacity: 1;
+  margin-top: 4px;
 }
 
 .team-graph-ranked-item {

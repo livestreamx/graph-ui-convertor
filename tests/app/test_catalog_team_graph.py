@@ -154,9 +154,11 @@ def test_catalog_team_graph_api(
         assert "Step 3. Merge graphs" in html_response.text
         assert "Step 4. Use diagram" in html_response.text
         assert "Signal Coverage" in html_response.text
-        assert "Service Integrity" in html_response.text
+        assert "Entity Integrity" in html_response.text
         assert "Risk Hotspots" in html_response.text
-        assert "Unique graphs" in html_response.text
+        assert "Graphs" in html_response.text
+        assert "Multichannel procedures" in html_response.text
+        assert "Employee procedures" in html_response.text
         assert 'id="team-graph-page"' in html_response.text
         assert 'hx-get="/catalog/teams/graph"' in html_response.text
         assert 'hx-target="#team-graph-page"' in html_response.text

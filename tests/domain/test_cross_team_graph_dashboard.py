@@ -108,6 +108,7 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert dashboard.total_procedure_count == 8
     assert dashboard.bot_procedure_count == 2
     assert dashboard.multi_procedure_count == 1
+    assert dashboard.employee_procedure_count == 5
 
     assert dashboard.internal_intersection_markup_count == 3
     assert dashboard.external_intersection_markup_count == 3
@@ -130,3 +131,35 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert top_service.service_name == "Cards"
     assert top_service.cycle_count == 1
     assert top_service.block_count == 4
+
+
+def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay-v1",
+            procedures=[Procedure(procedure_id="entry", branches={"a": ["b"]})],
+            procedure_graph={"entry": []},
+        ),
+        _doc(
+            markup_type="operations",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay-v2",
+            procedures=[Procedure(procedure_id="entry_ops", branches={"c": ["d"]})],
+            procedure_graph={"entry_ops": []},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.unique_graph_count == 1
+    assert dashboard.unique_graphs == ("Alpha / Payments",)
