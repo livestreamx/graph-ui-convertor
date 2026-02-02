@@ -298,13 +298,14 @@ main {
 .team-graph-flag-item {
   position: relative;
   display: grid;
-  gap: 16px;
+  gap: 12px;
   padding: 16px 18px;
   border-radius: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: linear-gradient(140deg, rgba(10, 15, 32, 0.96), rgba(8, 13, 28, 0.88));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(140deg, rgba(10, 15, 32, 0.96), rgba(8, 13, 28, 0.9));
   box-shadow: var(--shadow);
-  transition: border-color 0.25s ease, transform 0.25s ease;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease,
+    background 0.25s ease;
 }
 
 .team-graph-flag-item::after {
@@ -329,11 +330,32 @@ main {
 
 .team-graph-flag-item.is-on {
   border-color: rgba(129, 237, 155, 0.45);
+  background: linear-gradient(150deg, rgba(12, 24, 36, 0.96), rgba(6, 12, 26, 0.92));
+  box-shadow: 0 0 0 1px rgba(129, 237, 155, 0.2), var(--shadow);
 }
 
-.team-graph-flag-info {
-  display: grid;
-  gap: 6px;
+.team-graph-flag-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.team-graph-flag-status {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: 999px;
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+.team-graph-flag-status[data-state="on"] {
+  background: rgba(129, 237, 155, 0.16);
+  color: #d4ffe2;
+  border-color: rgba(129, 237, 155, 0.35);
 }
 
 .team-graph-flag-title {
@@ -349,72 +371,27 @@ main {
 .team-graph-flag-action {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
 }
 
-.team-graph-flag-input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
+.team-graph-flag-button {
+  min-width: 140px;
+  justify-content: center;
 }
 
-.team-graph-flag-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+.team-graph-flag-button[data-state="on"] {
+  background: rgba(129, 237, 155, 0.9);
+  color: #0b1a12;
+  border-color: rgba(129, 237, 155, 0.6);
 }
 
-.team-graph-flag-toggle:hover {
-  border-color: rgba(255, 255, 255, 0.3);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.06);
+.team-graph-flag-button[data-state="on"]:hover {
+  background: rgba(129, 237, 155, 1);
+  transform: translateY(-1px);
 }
 
-.team-graph-flag-toggle-track {
-  position: relative;
-  width: 44px;
-  height: 22px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.2);
-  transition: background 0.2s ease;
-}
-
-.team-graph-flag-toggle-knob {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 999px;
-  background: #f7f2ff;
-  transition: transform 0.2s ease, background 0.2s ease;
-}
-
-.team-graph-flag-toggle[data-state="on"] {
-  border-color: rgba(129, 237, 155, 0.5);
-  background: rgba(129, 237, 155, 0.12);
-  box-shadow: 0 0 0 3px rgba(129, 237, 155, 0.08);
-}
-
-.team-graph-flag-toggle[data-state="on"] .team-graph-flag-toggle-track {
-  background: linear-gradient(120deg, rgba(129, 237, 155, 0.8), rgba(120, 192, 255, 0.7));
-}
-
-.team-graph-flag-toggle[data-state="on"] .team-graph-flag-toggle-knob {
-  transform: translateX(22px);
-  background: #0b1430;
-}
-
-.team-graph-flag-toggle.is-animating {
+.team-graph-flag-item.is-animating {
   animation: flagPulse 0.4s ease;
 }
 
@@ -585,6 +562,17 @@ main {
 
 .team-graph-cta-copy {
   display: grid;
+}
+
+.team-graph-cta-action {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.team-graph-cta-action .primary-button {
+  min-width: 130px;
+  justify-content: center;
 }
 
 .team-graph-result-meta {
@@ -895,14 +883,21 @@ main {
   }
   .team-graph-flag-action {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
   }
-  .team-graph-flag-toggle {
+  .team-graph-flag-button {
     width: 100%;
-    justify-content: space-between;
+    justify-content: center;
   }
   .team-graph-cta {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .team-graph-cta-action {
+    width: 100%;
+    margin-left: 0;
+  }
+  .team-graph-cta-action .primary-button {
+    width: 100%;
   }
 }

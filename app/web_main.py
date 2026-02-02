@@ -800,7 +800,17 @@ def build_team_diagram_payload(
         documents_by_path[item.markup_rel_path] = markup
     merge_documents: list[MarkupDocument] | None = None
     if merge_nodes_all_markups:
-        merge_source = merge_items or items
+        merge_source = merge_items
+        if merge_source is None:
+            index_data = load_index(context)
+            if index_data is not None:
+                merge_source = index_data.items
+        else:
+            index_data = load_index(context)
+            if index_data is not None and len(merge_source) < len(index_data.items):
+                merge_source = index_data.items
+        if merge_source is None:
+            merge_source = items
         merge_documents = []
         for item in merge_source:
             cached = documents_by_path.get(item.markup_rel_path)

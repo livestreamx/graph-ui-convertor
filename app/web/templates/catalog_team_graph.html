@@ -85,37 +85,44 @@
         </p>
       </div>
       <div class="team-graph-flag-grid">
-        <div class="team-graph-flag-item" data-flag-item>
-          <div class="team-graph-flag-info">
-            <div class="team-graph-flag-title">
-              Use all available markups when rendering merge nodes.
-            </div>
-            <div class="team-graph-flag-text">
-              Merge nodes are derived from the full catalog, while only selected teams render.
-            </div>
+        <div
+          class="team-graph-flag-item {% if merge_nodes_all_markups %}is-on{% endif %}"
+          data-flag-item
+        >
+          <div class="team-graph-flag-header">
+            <span
+              class="team-graph-flag-status"
+              data-flag-status
+              data-state="{% if merge_nodes_all_markups %}on{% else %}off{% endif %}"
+            >
+              {% if merge_nodes_all_markups %}Enabled{% else %}Disabled{% endif %}
+            </span>
+          </div>
+          <div class="team-graph-flag-title">
+            Use all available markups when rendering merge nodes.
+          </div>
+          <div class="team-graph-flag-text">
+            Merge nodes are derived from the full catalog, while only selected teams render.
           </div>
           <div class="team-graph-flag-action">
-            <input
-              class="team-graph-flag-input"
-              type="checkbox"
-              id="merge_nodes_all_markups"
-              name="merge_nodes_all_markups"
-              value="true"
-              form="team-graph-form"
-              {% if merge_nodes_all_markups %}checked{% endif %}
-            />
             <button
-              class="team-graph-flag-toggle"
+              class="primary-button team-graph-flag-button"
               type="button"
               data-flag-toggle="merge_nodes_all_markups"
-              aria-pressed="false"
+              data-state="{% if merge_nodes_all_markups %}on{% else %}off{% endif %}"
+              aria-pressed="{% if merge_nodes_all_markups %}true{% else %}false{% endif %}"
             >
-              <span class="team-graph-flag-toggle-label">Disabled</span>
-              <span class="team-graph-flag-toggle-track">
-                <span class="team-graph-flag-toggle-knob"></span>
-              </span>
+              {% if merge_nodes_all_markups %}Disable{% else %}Enable{% endif %}
             </button>
           </div>
+          <input
+            type="hidden"
+            id="merge_nodes_all_markups"
+            name="merge_nodes_all_markups"
+            value="true"
+            form="team-graph-form"
+            {% if not merge_nodes_all_markups %}disabled{% endif %}
+          />
         </div>
       </div>
     </div>
@@ -129,7 +136,9 @@
             Once merged, the summary and open/download actions appear below.
           </div>
         </div>
-        <button class="primary-button" type="submit" form="team-graph-form">Merge</button>
+        <div class="team-graph-cta-action">
+          <button class="primary-button" type="submit" form="team-graph-form">Merge</button>
+        </div>
       </div>
       <div class="team-graph-result">
         {% if diagram_ready %}
@@ -202,17 +211,19 @@
       sync();
 
       const toggles = document.querySelectorAll("[data-flag-toggle]");
-      const updateToggle = (button, checkbox) => {
-        const enabled = checkbox.checked === true;
+      const updateToggle = (button, input) => {
+        const enabled = input.disabled === false;
         button.dataset.state = enabled ? "on" : "off";
         button.setAttribute("aria-pressed", enabled ? "true" : "false");
-        const label = button.querySelector(".team-graph-flag-toggle-label");
-        if (label) {
-          label.textContent = enabled ? "Enabled" : "Disabled";
-        }
+        button.textContent = enabled ? "Disable" : "Enable";
         const card = button.closest("[data-flag-item]");
         if (card) {
           card.classList.toggle("is-on", enabled);
+          const status = card.querySelector("[data-flag-status]");
+          if (status) {
+            status.textContent = enabled ? "Enabled" : "Disabled";
+            status.dataset.state = enabled ? "on" : "off";
+          }
         }
       };
       toggles.forEach((toggle) => {
@@ -223,22 +234,25 @@
         if (!targetId) {
           return;
         }
-        const checkbox = document.getElementById(targetId);
-        if (!(checkbox instanceof HTMLInputElement)) {
+        const input = document.getElementById(targetId);
+        if (!(input instanceof HTMLInputElement)) {
           return;
         }
         const animate = () => {
-          toggle.classList.remove("is-animating");
-          void toggle.offsetWidth;
-          toggle.classList.add("is-animating");
+          const card = toggle.closest("[data-flag-item]");
+          if (!card) {
+            return;
+          }
+          card.classList.remove("is-animating");
+          void card.offsetWidth;
+          card.classList.add("is-animating");
         };
         toggle.addEventListener("click", () => {
-          checkbox.checked = !checkbox.checked;
-          updateToggle(toggle, checkbox);
+          input.disabled = !input.disabled;
+          updateToggle(toggle, input);
           animate();
         });
-        checkbox.addEventListener("change", () => updateToggle(toggle, checkbox));
-        updateToggle(toggle, checkbox);
+        updateToggle(toggle, input);
       });
     })();
   </script>
