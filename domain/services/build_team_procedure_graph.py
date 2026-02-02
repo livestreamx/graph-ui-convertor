@@ -35,7 +35,7 @@ class BuildTeamProcedureGraph:
             selected_graph,
             procedure_services,
             service_keys,
-        ) = self._collect_documents(documents, include_graph_nodes=True)
+        ) = self._collect_documents(documents, include_graph_nodes=False)
         procedure_graph = selected_graph
         for document in documents:
             team_label = self._resolve_team_label(document)

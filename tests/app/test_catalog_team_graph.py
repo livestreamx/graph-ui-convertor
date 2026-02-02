@@ -409,6 +409,125 @@ def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_marku
         stubber.deactivate()
 
 
+def test_catalog_team_graph_hides_unselected_merge_nodes_from_other_teams(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "entry",
+                "proc_name": "Entry",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"entry": ["shared"], "shared": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Loans",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-alpha", "merge_nodes_all_markups": "true"},
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+
+        frame_proc_ids: set[str] = set()
+        intersection_proc_ids: set[str] = set()
+        for element in elements:
+            cjm = element.get("customData", {}).get("cjm", {})
+            if not isinstance(cjm, dict):
+                continue
+            proc_id = cjm.get("procedure_id")
+            if not isinstance(proc_id, str):
+                continue
+            role = cjm.get("role")
+            if role == "frame":
+                frame_proc_ids.add(proc_id)
+            if role == "intersection_highlight":
+                intersection_proc_ids.add(proc_id)
+
+        assert frame_proc_ids == {"entry"}
+        assert not intersection_proc_ids
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     style_path = _repo_root() / "app" / "web" / "static" / "style.css"
     styles = style_path.read_text(encoding="utf-8")

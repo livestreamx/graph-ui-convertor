@@ -277,7 +277,9 @@ def test_build_team_procedure_graph_uses_merge_documents_procedure_graph() -> No
     )
 
 
-def test_build_team_procedure_graph_backfills_selected_graph_nodes_from_merge_documents() -> None:
+def test_build_team_procedure_graph_does_not_backfill_unselected_nodes_from_merge_documents() -> (
+    None
+):
     doc_alpha = MarkupDocument.model_validate(
         {
             "markup_type": "service",
@@ -315,17 +317,9 @@ def test_build_team_procedure_graph_backfills_selected_graph_nodes_from_merge_do
 
     merged = BuildTeamProcedureGraph().build([doc_alpha], merge_documents=[doc_alpha, doc_beta])
 
-    assert {proc.procedure_id for proc in merged.procedures} == {"entry", "shared"}
-    shared_meta = merged.procedure_meta["shared"]
-    assert shared_meta["team_name"] == "Alpha"
-    assert shared_meta["is_intersection"] is True
-    merge_services = shared_meta["merge_services"]
-    assert isinstance(merge_services, list)
-    assert any(
-        service.get("team_name") == "Beta" and service.get("service_name") == "Loans"
-        for service in merge_services
-    )
-    assert merged.procedure_graph["entry"] == ["shared"]
+    assert {proc.procedure_id for proc in merged.procedures} == {"entry"}
+    assert "shared" not in merged.procedure_meta
+    assert merged.procedure_graph.get("entry") == []
 
 
 def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted() -> None:
