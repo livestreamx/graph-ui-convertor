@@ -306,6 +306,8 @@ main {
   box-shadow: var(--shadow);
   transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease,
     background 0.25s ease;
+  outline: 1px solid rgba(255, 255, 255, 0.08);
+  outline-offset: -7px;
 }
 
 .team-graph-flag-item::after {
@@ -330,8 +332,9 @@ main {
 
 .team-graph-flag-item.is-on {
   border-color: rgba(129, 237, 155, 0.45);
-  background: linear-gradient(150deg, rgba(12, 24, 36, 0.96), rgba(6, 12, 26, 0.92));
-  box-shadow: 0 0 0 1px rgba(129, 237, 155, 0.2), var(--shadow);
+  background: linear-gradient(150deg, rgba(23, 56, 39, 0.7), rgba(9, 22, 19, 0.9));
+  box-shadow: 0 0 0 1px rgba(129, 237, 155, 0.22), var(--shadow);
+  outline-color: rgba(129, 237, 155, 0.34);
 }
 
 .team-graph-flag-header {
@@ -381,13 +384,13 @@ main {
 }
 
 .team-graph-flag-button[data-state="on"] {
-  background: rgba(129, 237, 155, 0.9);
-  color: #0b1a12;
-  border-color: rgba(129, 237, 155, 0.6);
+  background: #1a232c;
+  color: #eaf6ef;
+  border-color: rgba(129, 237, 155, 0.62);
 }
 
 .team-graph-flag-button[data-state="on"]:hover {
-  background: rgba(129, 237, 155, 1);
+  background: #22302b;
   transform: translateY(-1px);
 }
 
@@ -540,10 +543,10 @@ main {
 
 .team-graph-cta {
   margin-top: 12px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 12px 18px;
   padding: 14px 16px;
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -562,15 +565,16 @@ main {
 
 .team-graph-cta-copy {
   display: grid;
+  min-width: 0;
 }
 
 .team-graph-cta-action {
-  margin-left: auto;
+  justify-self: end;
   display: flex;
   align-items: center;
 }
 
-.team-graph-cta-action .primary-button {
+.team-graph-merge-button {
   min-width: 130px;
   justify-content: center;
 }
@@ -890,14 +894,14 @@ main {
     justify-content: center;
   }
   .team-graph-cta {
-    flex-direction: column;
+    grid-template-columns: 1fr;
     align-items: flex-start;
   }
   .team-graph-cta-action {
     width: 100%;
-    margin-left: 0;
+    justify-self: stretch;
   }
-  .team-graph-cta-action .primary-button {
+  .team-graph-merge-button {
     width: 100%;
   }
 }

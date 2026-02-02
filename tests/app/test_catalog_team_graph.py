@@ -229,3 +229,16 @@ def test_catalog_team_graph_merge_nodes_use_all_markups(
         assert "proc_shared_routing" in merge_ids
     finally:
         stubber.deactivate()
+
+
+def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
+    style_path = _repo_root() / "app" / "web" / "static" / "style.css"
+    styles = style_path.read_text(encoding="utf-8")
+
+    assert ".team-graph-cta-action" in styles
+    assert "justify-self: end;" in styles
+    assert ".team-graph-merge-button" in styles
+    assert ".team-graph-flag-item.is-on" in styles
+    assert "outline-color: rgba(129, 237, 155, 0.34);" in styles
+    assert '.team-graph-flag-button[data-state="on"]' in styles
+    assert "background: #1a232c;" in styles
