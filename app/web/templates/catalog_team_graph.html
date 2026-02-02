@@ -9,7 +9,7 @@
     </div>
   </section>
 
-  <section class="team-graph-page">
+  <section class="team-graph-page" id="team-graph-page">
     <div class="detail-card team-graph-card">
       <div class="team-graph-header">
         <div>
@@ -57,7 +57,17 @@
           </div>
         </div>
       </div>
-      <form class="team-graph-form" id="team-graph-form" action="/catalog/teams/graph" method="get">
+      <form
+        class="team-graph-form"
+        id="team-graph-form"
+        action="/catalog/teams/graph"
+        method="get"
+        hx-get="/catalog/teams/graph"
+        hx-target="#team-graph-page"
+        hx-select="#team-graph-page"
+        hx-swap="outerHTML"
+        hx-push-url="true"
+      >
         <label class="filter-control">
           <span>Select teams</span>
           <select id="team-graph-select" multiple size="8" form="team-graph-form">
@@ -202,21 +212,6 @@
 
   <script>
     (() => {
-      const form = document.getElementById("team-graph-form");
-      const select = document.getElementById("team-graph-select");
-      const input = document.getElementById("team-graph-input");
-      if (!form || !select || !input) {
-        return;
-      }
-      const sync = () => {
-        const values = Array.from(select.selectedOptions).map((option) => option.value);
-        input.value = values.join(",");
-      };
-      select.addEventListener("change", sync);
-      form.addEventListener("submit", sync);
-      sync();
-
-      const toggles = document.querySelectorAll("[data-flag-toggle]");
       const updateToggle = (button, input) => {
         const enabled = input.disabled === false;
         button.dataset.state = enabled ? "on" : "off";
@@ -232,34 +227,76 @@
           }
         }
       };
-      toggles.forEach((toggle) => {
-        if (!(toggle instanceof HTMLElement)) {
+
+      const initTeamGraphPage = () => {
+        const page = document.getElementById("team-graph-page");
+        if (!(page instanceof HTMLElement) || page.dataset.initialized === "true") {
           return;
         }
-        const targetId = toggle.getAttribute("data-flag-toggle");
-        if (!targetId) {
+
+        const form = page.querySelector("#team-graph-form");
+        const select = page.querySelector("#team-graph-select");
+        const input = page.querySelector("#team-graph-input");
+        if (
+          !(form instanceof HTMLFormElement) ||
+          !(select instanceof HTMLSelectElement) ||
+          !(input instanceof HTMLInputElement)
+        ) {
           return;
         }
-        const input = document.getElementById(targetId);
-        if (!(input instanceof HTMLInputElement)) {
-          return;
-        }
-        const animate = () => {
-          const card = toggle.closest("[data-flag-item]");
-          if (!card) {
+
+        const sync = () => {
+          const values = Array.from(select.selectedOptions).map((option) => option.value);
+          input.value = values.join(",");
+        };
+        select.addEventListener("change", sync);
+        form.addEventListener("submit", sync);
+        sync();
+
+        const toggles = page.querySelectorAll("[data-flag-toggle]");
+        toggles.forEach((toggle) => {
+          if (!(toggle instanceof HTMLElement)) {
             return;
           }
-          card.classList.remove("is-animating");
-          void card.offsetWidth;
-          card.classList.add("is-animating");
-        };
-        toggle.addEventListener("click", () => {
-          input.disabled = !input.disabled;
-          updateToggle(toggle, input);
-          animate();
+          const targetId = toggle.getAttribute("data-flag-toggle");
+          if (!targetId) {
+            return;
+          }
+          const toggleInput = page.querySelector(`#${targetId}`);
+          if (!(toggleInput instanceof HTMLInputElement)) {
+            return;
+          }
+          const animate = () => {
+            const card = toggle.closest("[data-flag-item]");
+            if (!card) {
+              return;
+            }
+            card.classList.remove("is-animating");
+            void card.offsetWidth;
+            card.classList.add("is-animating");
+          };
+          toggle.addEventListener("click", () => {
+            toggleInput.disabled = !toggleInput.disabled;
+            updateToggle(toggle, toggleInput);
+            animate();
+          });
+          updateToggle(toggle, toggleInput);
         });
-        updateToggle(toggle, input);
+
+        page.dataset.initialized = "true";
+      };
+
+      document.addEventListener("DOMContentLoaded", initTeamGraphPage);
+      document.body.addEventListener("htmx:afterSwap", (event) => {
+        if (!(event.target instanceof HTMLElement)) {
+          return;
+        }
+        if (event.target.id !== "team-graph-page") {
+          return;
+        }
+        initTeamGraphPage();
       });
+      initTeamGraphPage();
     })();
   </script>
 {% endblock %}

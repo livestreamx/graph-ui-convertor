@@ -145,6 +145,11 @@ def test_catalog_team_graph_api(
         assert "1 markup" in html_response.text
         assert "Feature flags" in html_response.text
         assert "Use all available markups when rendering merge nodes." in html_response.text
+        assert 'id="team-graph-page"' in html_response.text
+        assert 'hx-get="/catalog/teams/graph"' in html_response.text
+        assert 'hx-target="#team-graph-page"' in html_response.text
+        assert 'hx-select="#team-graph-page"' in html_response.text
+        assert 'hx-push-url="true"' in html_response.text
     finally:
         stubber.deactivate()
 
