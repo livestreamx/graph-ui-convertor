@@ -227,10 +227,11 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 2. Откройте каталог: `cjm catalog serve` и перейдите на `/catalog`.
 3. Используйте фильтры по критичности и команде (отображается `team_name`).
 4. В каталоге есть отдельный раздел для кросс-командных графов (кнопка Open builder): перейдите на
-   `/catalog/teams/graph`, выберите команды и нажмите Merge для общего графа процедур на основе
-   `procedure_graph`.
-5. В сборщике кросс-командного графа есть секция Flags. Флаг `merge_nodes_all_markups` включает
-   расчет узлов слияния по всем доступным разметкам, при этом рисуются только выбранные команды.
+   `/catalog/teams/graph`, выберите команды и нажмите Merge в блоке Open diagram для общего графа
+   процедур на основе `procedure_graph`.
+5. В сборщике кросс-командного графа есть секция Feature flags. Флаг `merge_nodes_all_markups`
+   включает расчет узлов слияния по всем доступным разметкам, при этом рисуются только выбранные
+   команды.
 6. При скачивании общего графа файл получает суффикс с `team_ids` (например,
    `team-graph_alpha_beta.excalidraw`).
 7. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.

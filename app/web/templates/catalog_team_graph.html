@@ -60,7 +60,7 @@
       <form class="team-graph-form" id="team-graph-form" action="/catalog/teams/graph" method="get">
         <label class="filter-control">
           <span>Select teams</span>
-          <select id="team-graph-select" multiple size="8">
+          <select id="team-graph-select" multiple size="8" form="team-graph-form">
             {% for team_key, team_label in team_options %}
               <option value="{{ team_key }}" {% if team_key in team_ids %}selected{% endif %}>
                 {{ team_label }}
@@ -74,36 +74,63 @@
           name="team_ids"
           value="{{ team_ids | join(',') }}"
         />
-        <div class="team-graph-flags">
-          <div class="team-graph-flags-title">Flags</div>
-          <label class="team-graph-flag">
+      </form>
+    </div>
+
+    <div class="detail-card team-graph-flags-card">
+      <div class="team-graph-flags-header">
+        <h3>Feature flags</h3>
+        <p class="team-graph-subtitle">
+          Tune how merge nodes are detected before building the diagram.
+        </p>
+      </div>
+      <div class="team-graph-flag-grid">
+        <div class="team-graph-flag-item" data-flag-item>
+          <div class="team-graph-flag-info">
+            <div class="team-graph-flag-title">
+              Use all available markups when rendering merge nodes.
+            </div>
+            <div class="team-graph-flag-text">
+              Merge nodes are derived from the full catalog, while only selected teams render.
+            </div>
+          </div>
+          <div class="team-graph-flag-action">
             <input
+              class="team-graph-flag-input"
               type="checkbox"
+              id="merge_nodes_all_markups"
               name="merge_nodes_all_markups"
               value="true"
+              form="team-graph-form"
               {% if merge_nodes_all_markups %}checked{% endif %}
             />
-            <span class="team-graph-flag-body">
-              <span class="team-graph-flag-title">
-                Use all available markups when rendering merge nodes.
+            <button
+              class="team-graph-flag-toggle"
+              type="button"
+              data-flag-toggle="merge_nodes_all_markups"
+              aria-pressed="false"
+            >
+              <span class="team-graph-flag-toggle-label">Disabled</span>
+              <span class="team-graph-flag-toggle-track">
+                <span class="team-graph-flag-toggle-knob"></span>
               </span>
-              <span class="team-graph-flag-text">
-                Merge nodes are derived from the full catalog, while only selected teams render.
-              </span>
-            </span>
-          </label>
-          <div class="team-graph-flag-hint">
-            Applies to merge nodes on the cross-team diagram.
+            </button>
           </div>
         </div>
-        <div class="team-graph-actions">
-          <button class="primary-button" type="submit">Merge</button>
-        </div>
-      </form>
+      </div>
     </div>
 
     <div class="detail-card team-graph-result-card">
       <h3>Open the diagram</h3>
+      <div class="team-graph-cta">
+        <div class="team-graph-cta-copy">
+          <div class="team-graph-cta-title">Merge selected teams</div>
+          <div class="team-graph-cta-text">
+            Once merged, the summary and open/download actions appear below.
+          </div>
+        </div>
+        <button class="primary-button" type="submit" form="team-graph-form">Merge</button>
+      </div>
       <div class="team-graph-result">
         {% if diagram_ready %}
           <div class="team-graph-result-header">
@@ -141,7 +168,7 @@
             <span class="team-graph-result-status team-graph-result-idle">Waiting for input</span>
           </div>
           <div class="team-graph-result-body">
-            Select teams and click Merge to generate a diagram.
+            Select teams and click Merge. The merged graph details and actions will appear here.
           </div>
         {% endif %}
       </div>
@@ -173,6 +200,46 @@
       select.addEventListener("change", sync);
       form.addEventListener("submit", sync);
       sync();
+
+      const toggles = document.querySelectorAll("[data-flag-toggle]");
+      const updateToggle = (button, checkbox) => {
+        const enabled = checkbox.checked === true;
+        button.dataset.state = enabled ? "on" : "off";
+        button.setAttribute("aria-pressed", enabled ? "true" : "false");
+        const label = button.querySelector(".team-graph-flag-toggle-label");
+        if (label) {
+          label.textContent = enabled ? "Enabled" : "Disabled";
+        }
+        const card = button.closest("[data-flag-item]");
+        if (card) {
+          card.classList.toggle("is-on", enabled);
+        }
+      };
+      toggles.forEach((toggle) => {
+        if (!(toggle instanceof HTMLElement)) {
+          return;
+        }
+        const targetId = toggle.getAttribute("data-flag-toggle");
+        if (!targetId) {
+          return;
+        }
+        const checkbox = document.getElementById(targetId);
+        if (!(checkbox instanceof HTMLInputElement)) {
+          return;
+        }
+        const animate = () => {
+          toggle.classList.remove("is-animating");
+          void toggle.offsetWidth;
+          toggle.classList.add("is-animating");
+        };
+        toggle.addEventListener("click", () => {
+          checkbox.checked = !checkbox.checked;
+          updateToggle(toggle, checkbox);
+          animate();
+        });
+        checkbox.addEventListener("change", () => updateToggle(toggle, checkbox));
+        updateToggle(toggle, checkbox);
+      });
     })();
   </script>
 {% endblock %}

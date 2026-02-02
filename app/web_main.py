@@ -789,6 +789,7 @@ def build_team_diagram_payload(
 ) -> dict[str, Any]:
     markup_root = Path(context.settings.catalog.s3.prefix or "")
     documents: list[MarkupDocument] = []
+    documents_by_path: dict[str, MarkupDocument] = {}
     for item in items:
         markup_path = markup_root / item.markup_rel_path
         try:
@@ -796,19 +797,23 @@ def build_team_diagram_payload(
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Markup file missing") from exc
         documents.append(markup)
+        documents_by_path[item.markup_rel_path] = markup
     merge_documents: list[MarkupDocument] | None = None
     if merge_nodes_all_markups:
-        if merge_items is None or merge_items is items:
-            merge_documents = documents
-        else:
-            merge_documents = []
-            for item in merge_items:
-                markup_path = markup_root / item.markup_rel_path
-                try:
-                    markup = context.markup_reader.load_by_path(markup_path)
-                except FileNotFoundError as exc:
-                    raise HTTPException(status_code=404, detail="Markup file missing") from exc
-                merge_documents.append(markup)
+        merge_source = merge_items or items
+        merge_documents = []
+        for item in merge_source:
+            cached = documents_by_path.get(item.markup_rel_path)
+            if cached is not None:
+                merge_documents.append(cached)
+                continue
+            markup_path = markup_root / item.markup_rel_path
+            try:
+                markup = context.markup_reader.load_by_path(markup_path)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=404, detail="Markup file missing") from exc
+            documents_by_path[item.markup_rel_path] = markup
+            merge_documents.append(markup)
     try:
         graph_document = BuildTeamProcedureGraph().build(documents, merge_documents=merge_documents)
     except ValueError as exc:

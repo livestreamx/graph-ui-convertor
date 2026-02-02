@@ -151,8 +151,12 @@ class BuildTeamProcedureGraph:
             service_label = self._resolve_service_label(document)
             service_key = self._service_key(team_label, service_label)
             service_keys.add(service_key)
-            for proc in document.procedures:
-                procedure_services.setdefault(proc.procedure_id, {})[service_key] = {
+            proc_ids = {proc.procedure_id for proc in document.procedures}
+            for parent, children in document.procedure_graph.items():
+                proc_ids.add(parent)
+                proc_ids.update(children)
+            for proc_id in proc_ids:
+                procedure_services.setdefault(proc_id, {})[service_key] = {
                     "team_name": team_label,
                     "service_name": service_label,
                     "team_id": document.team_id,
