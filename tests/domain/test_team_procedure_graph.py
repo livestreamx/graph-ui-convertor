@@ -1114,16 +1114,70 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     )
 
     unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_zones = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert unidraw_zones
+    assert all(zone.get("style", {}).get("sc") == "#000000" for zone in unidraw_zones)
+    assert all(zone.get("style", {}).get("ss") == "da" for zone in unidraw_zones)
+
+    largest_zone = max(
+        unidraw_zones,
+        key=lambda zone: zone["size"]["width"] * zone["size"]["height"],
+    )
+    zone_layers = [
+        int(zone["zIndex"]) for zone in unidraw_zones if isinstance(zone.get("zIndex"), int)
+    ]
+    assert zone_layers
+    assert largest_zone.get("zIndex") == min(zone_layers)
+
+    unidraw_label_panels = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "service_zone_label_panel"
+    ]
+    assert len(unidraw_label_panels) == 2
+    panel_colors = {
+        panel.get("cjm", {}).get("service_name"): panel.get("style", {}).get("fc")
+        for panel in unidraw_label_panels
+    }
+    assert panel_colors.get("Payments") == "#d9f5ff"
+    assert panel_colors.get("Refunds") == "#e3f7d9"
+    assert all(panel.get("style", {}).get("sc") == "#000000" for panel in unidraw_label_panels)
+
     unidraw_labels = [
         element
         for element in unidraw_scene.elements
         if element.get("cjm", {}).get("role") == "service_zone_label"
     ]
     assert unidraw_labels
+    assert all(label.get("style", {}).get("tc") == "#000000" for label in unidraw_labels)
     assert all(
         label.get("style", {}).get("tff") == UNIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY
         for label in unidraw_labels
     )
+
+    frame_layers = [
+        int(element["zIndex"])
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "frame" and isinstance(element.get("zIndex"), int)
+    ]
+    assert frame_layers
+    frame_front = min(frame_layers)
+    panel_layers = [
+        int(panel["zIndex"])
+        for panel in unidraw_label_panels
+        if isinstance(panel.get("zIndex"), int)
+    ]
+    label_layers = [
+        int(label["zIndex"]) for label in unidraw_labels if isinstance(label.get("zIndex"), int)
+    ]
+    assert len(panel_layers) == len(unidraw_label_panels)
+    assert len(label_layers) == len(unidraw_labels)
+    assert all(layer < frame_front for layer in panel_layers)
+    assert all(layer < frame_front for layer in label_layers)
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
@@ -1191,6 +1245,41 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
     )
     assert label.get("strokeColor") == "#ff2d2d"
     assert label.get("text") == "1"
+
+    unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_frame = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("type") == "frame" and element.get("cjm", {}).get("procedure_id") == "shared"
+    )
+    assert unidraw_frame.get("style", {}).get("fc") == "transparent"
+
+    unidraw_marker = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_index_marker"
+    )
+    assert unidraw_marker.get("style", {}).get("ss") == "s"
+
+    unidraw_highlight = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_highlight"
+    )
+    assert unidraw_highlight.get("style", {}).get("ss") == "da"
+
+    unidraw_label = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_index_label"
+    )
+    assert float(unidraw_label.get("style", {}).get("tfs", 0.0)) >= 24.0
+    marker_center_x = unidraw_marker["position"]["x"] + unidraw_marker["size"]["width"] / 2
+    marker_center_y = unidraw_marker["position"]["y"] + unidraw_marker["size"]["height"] / 2
+    label_center_x = unidraw_label["position"]["x"] + unidraw_label["size"]["width"] / 2
+    label_center_y = unidraw_label["position"]["y"] + unidraw_label["size"]["height"] / 2
+    assert abs(label_center_x - marker_center_x) < 0.5
+    assert abs(label_center_y - marker_center_y) < 0.5
 
 
 def test_procedure_graph_layout_zones_include_shared_procedures() -> None:

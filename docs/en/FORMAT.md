@@ -61,7 +61,8 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 - Cross-team graphs (`procedure_graph` with `is_intersection`) add a red "Merge nodes" panel.
   Group headers use the format `> [Team] Service x [Team] Service:`, followed by numbered lines
-  `(N) Procedure name`. Merge nodes are highlighted with a red dashed oval and a numbered badge.
+  `(N) Procedure name`. Merge nodes are highlighted with a red dashed oval and a numbered badge;
+  in Unidraw the merge number circle also uses a dashed outline.
 
 ## Color scheme (tags, blocks, arrows)
 
@@ -92,6 +93,10 @@ hex values are shown for exact matching.
 - Styles are stored in a compact `style` dict (`fc`, `sc`, `tff`, `tfs`, `ta`, etc.).
 - Text content is HTML (`<p>...</p>`).
 - Metadata is stored under `cjm` on each element.
+- Procedure intersections in Unidraw keep frame fill transparent; visual emphasis is done by
+  red dashed merge highlighting.
+- Service zones in Unidraw use a black dashed outer border; zone titles are rendered in black
+  text inside a filled header rectangle that keeps the original zone color.
 
 ## Metadata
 
