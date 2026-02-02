@@ -125,6 +125,11 @@ catalog:
   by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
   `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only
   the selected teams.
+- Step 3 renders a dashboard after Merge with three compact sections:
+  `Signal Coverage` (markup type distribution, unique graphs, bot/multi coverage),
+  `Service Integrity` (internal/external service intersections, split services, target-state share),
+  and `Risk Hotspots` (top linking procedures and overloaded services by cycles/blocks/merge nodes).
+  The layout is card-based to keep screenshots readable in demos.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

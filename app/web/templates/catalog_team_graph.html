@@ -221,6 +221,160 @@
               If the scene does not load, import the downloaded file manually.
             </div>
           {% endif %}
+          {% if team_dashboard %}
+            {% set total_procedures = team_dashboard.total_procedure_count %}
+            {% set total_services = team_dashboard.total_service_count %}
+            <section class="team-graph-dashboard">
+              <div class="team-graph-dashboard-section">
+                <div class="team-graph-dashboard-title">Signal Coverage</div>
+                <div class="team-graph-dashboard-grid">
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Unique graphs</div>
+                    <div class="team-graph-kpi-value">{{ team_dashboard.unique_graph_count }}</div>
+                    <div class="team-graph-kpi-note">Across selected markups</div>
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Graphs with bot procedures</div>
+                    <div class="team-graph-kpi-value">{{ team_dashboard.bot_graph_count }}</div>
+                    <div class="team-graph-kpi-note"><code>procedure_id</code> contains "bot"</div>
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Graphs with multi procedures</div>
+                    <div class="team-graph-kpi-value">{{ team_dashboard.multi_graph_count }}</div>
+                    <div class="team-graph-kpi-note"><code>procedure_id</code> contains "multi"</div>
+                  </article>
+                </div>
+                <div class="team-graph-split-grid">
+                  <article class="team-graph-data-card">
+                    <div class="team-graph-data-title">Markups by type</div>
+                    <div class="team-graph-chip-row">
+                      {% for stat in team_dashboard.markup_type_counts %}
+                        <span class="team-graph-chip">{{ stat.markup_type }} · {{ stat.count }}</span>
+                      {% endfor %}
+                    </div>
+                  </article>
+                  <article class="team-graph-data-card">
+                    <div class="team-graph-data-title">Procedure share</div>
+                    <div class="team-graph-inline-metric">
+                      Bot:
+                      <strong>
+                        {% if total_procedures %}
+                          {{ (team_dashboard.bot_procedure_count * 100 / total_procedures) | round(1) }}%
+                        {% else %}
+                          0%
+                        {% endif %}
+                      </strong>
+                      ({{ team_dashboard.bot_procedure_count }}/{{ total_procedures }})
+                    </div>
+                    <div class="team-graph-inline-metric">
+                      Multi:
+                      <strong>
+                        {% if total_procedures %}
+                          {{ (team_dashboard.multi_procedure_count * 100 / total_procedures) | round(1) }}%
+                        {% else %}
+                          0%
+                        {% endif %}
+                      </strong>
+                      ({{ team_dashboard.multi_procedure_count }}/{{ total_procedures }})
+                    </div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="team-graph-dashboard-section">
+                <div class="team-graph-dashboard-title">Service Integrity</div>
+                <div class="team-graph-dashboard-grid">
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Service markups with internal intersections</div>
+                    <div class="team-graph-kpi-value">
+                      {{ team_dashboard.internal_intersection_markup_count }}
+                    </div>
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Service markups intersecting external teams</div>
+                    <div class="team-graph-kpi-value">
+                      {{ team_dashboard.external_intersection_markup_count }}
+                    </div>
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Services split into disconnected graphs</div>
+                    <div class="team-graph-kpi-value">{{ team_dashboard.split_service_count }}</div>
+                    <div class="team-graph-kpi-note">Of {{ total_services }} services</div>
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-label">Target-state services</div>
+                    <div class="team-graph-kpi-value">
+                      {% if total_services %}
+                        {{ (team_dashboard.target_service_count * 100 / total_services) | round(1) }}%
+                      {% else %}
+                        0%
+                      {% endif %}
+                    </div>
+                    <div class="team-graph-kpi-note">
+                      {{ team_dashboard.target_service_count }}/{{ total_services }} without merges or splits
+                    </div>
+                  </article>
+                </div>
+                <article class="team-graph-data-card">
+                  <div class="team-graph-data-title">External team intersections</div>
+                  {% if team_dashboard.external_team_intersections %}
+                    <div class="team-graph-ranked-list">
+                      {% for item in team_dashboard.external_team_intersections %}
+                        <div class="team-graph-ranked-item">
+                          <span>{{ loop.index }}. {{ item.team_name }}</span>
+                          <span>{{ item.count }}</span>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="team-graph-empty">No intersections with teams outside the selection.</div>
+                  {% endif %}
+                </article>
+              </div>
+
+              <div class="team-graph-dashboard-section">
+                <div class="team-graph-dashboard-title">Risk Hotspots</div>
+                <div class="team-graph-split-grid">
+                  <article class="team-graph-data-card">
+                    <div class="team-graph-data-title">Top linking procedures</div>
+                    {% if team_dashboard.linking_procedures %}
+                      <div class="team-graph-ranked-list">
+                        {% for item in team_dashboard.linking_procedures %}
+                          <div class="team-graph-ranked-item team-graph-ranked-item-stack">
+                            <span class="team-graph-mono">{{ loop.index }}. {{ item.procedure_id }}</span>
+                            <span class="team-graph-ranked-note">
+                              used in {{ item.graph_count }} graphs · +{{ item.usage_in_other_graphs }} others ·
+                              in/out {{ item.incoming_edges }}/{{ item.outgoing_edges }}
+                            </span>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="team-graph-empty">No procedure-level data.</div>
+                    {% endif %}
+                  </article>
+                  <article class="team-graph-data-card">
+                    <div class="team-graph-data-title">Top overloaded services</div>
+                    {% if team_dashboard.overloaded_services %}
+                      <div class="team-graph-ranked-list">
+                        {% for item in team_dashboard.overloaded_services %}
+                          <div class="team-graph-ranked-item team-graph-ranked-item-stack">
+                            <span>{{ loop.index }}. {{ item.team_name }} · {{ item.service_name }}</span>
+                            <span class="team-graph-ranked-note">
+                              cycles {{ item.cycle_count }} · blocks {{ item.block_count }} · in-team merges
+                              {{ item.in_team_merge_nodes }} · procedures {{ item.procedure_count }}
+                            </span>
+                          </div>
+                        {% endfor %}
+                      </div>
+                    {% else %}
+                      <div class="team-graph-empty">No service-level data.</div>
+                    {% endif %}
+                  </article>
+                </div>
+              </div>
+            </section>
+          {% endif %}
         {% elif error_message %}
           <div class="team-graph-result-header">
             <span class="team-graph-result-status team-graph-result-error">Merge blocked</span>

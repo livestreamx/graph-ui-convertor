@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
@@ -29,6 +29,10 @@ from domain.catalog import CatalogIndex, CatalogItem
 from domain.models import ExcalidrawDocument, MarkupDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
+from domain.services.build_cross_team_graph_dashboard import (
+    BuildCrossTeamGraphDashboard,
+    CrossTeamGraphDashboard,
+)
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
@@ -242,41 +246,63 @@ def create_app(settings: AppSettings) -> FastAPI:
         open_mode = None
         team_query = ""
         error_message = None
+        team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
             items = filter_items_by_team_ids(index_data.items, team_ids)
             if not items:
                 error_message = "No scenes for selected teams."
             else:
-                diagram_format = resolve_diagram_format(context.settings)
-                diagram_label = resolve_diagram_label(diagram_format)
-                diagram_ext = resolve_diagram_extension(diagram_format)
-                diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
-                team_query = build_team_query(
-                    team_ids,
-                    merge_nodes_all_markups=merge_nodes_all_markups,
-                    merge_selected_markups=merge_selected_markups,
-                )
-                diagram_open_url = diagram_base_url
-                open_mode = "manual"
-                if is_same_origin(request, diagram_base_url):
-                    diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
-                    open_mode = "local_storage"
-                elif diagram_format == "excalidraw":
-                    payload = build_team_diagram_payload(
-                        context,
-                        items,
-                        diagram_format,
+                document_cache: dict[str, MarkupDocument] = {}
+                try:
+                    selected_documents = load_markup_documents(context, items, cache=document_cache)
+                    all_documents = selected_documents
+                    if len(items) < len(index_data.items):
+                        all_documents = load_markup_documents(
+                            context, index_data.items, cache=document_cache
+                        )
+                except HTTPException as exc:
+                    detail = str(exc.detail) if exc.detail is not None else "Unable to load markup."
+                    error_message = detail
+                else:
+                    team_dashboard = BuildCrossTeamGraphDashboard().build(
+                        selected_documents=selected_documents,
+                        all_documents=all_documents,
+                        selected_team_ids=team_ids,
+                    )
+                    diagram_format = resolve_diagram_format(context.settings)
+                    diagram_label = resolve_diagram_label(diagram_format)
+                    diagram_ext = resolve_diagram_extension(diagram_format)
+                    diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
+                    team_query = build_team_query(
+                        team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
-                        merge_items=index_data.items if merge_nodes_all_markups else None,
                     )
-                    diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
-                    if len(diagram_open_url) > context.settings.catalog.excalidraw_max_url_length:
-                        diagram_open_url = diagram_base_url
-                        open_mode = "manual"
-                    else:
-                        open_mode = "direct"
-                diagram_ready = True
+                    diagram_open_url = diagram_base_url
+                    open_mode = "manual"
+                    if is_same_origin(request, diagram_base_url):
+                        diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
+                        open_mode = "local_storage"
+                    elif diagram_format == "excalidraw":
+                        payload = build_team_diagram_payload(
+                            context,
+                            items,
+                            diagram_format,
+                            merge_nodes_all_markups=merge_nodes_all_markups,
+                            merge_selected_markups=merge_selected_markups,
+                            merge_items=index_data.items if merge_nodes_all_markups else None,
+                            document_cache=document_cache,
+                        )
+                        diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
+                        if (
+                            len(diagram_open_url)
+                            > context.settings.catalog.excalidraw_max_url_length
+                        ):
+                            diagram_open_url = diagram_base_url
+                            open_mode = "manual"
+                        else:
+                            open_mode = "direct"
+                    diagram_ready = True
         return templates.TemplateResponse(
             request,
             "catalog_team_graph.html",
@@ -297,6 +323,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "error_message": error_message,
                 "merge_nodes_all_markups": merge_nodes_all_markups,
                 "merge_selected_markups": merge_selected_markups,
+                "team_dashboard": team_dashboard,
             },
         )
 
@@ -799,18 +826,10 @@ def build_team_diagram_payload(
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
     merge_items: list[CatalogItem] | None = None,
+    document_cache: dict[str, MarkupDocument] | None = None,
 ) -> dict[str, Any]:
-    markup_root = Path(context.settings.catalog.s3.prefix or "")
-    documents: list[MarkupDocument] = []
-    documents_by_path: dict[str, MarkupDocument] = {}
-    for item in items:
-        markup_path = markup_root / item.markup_rel_path
-        try:
-            markup = context.markup_reader.load_by_path(markup_path)
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Markup file missing") from exc
-        documents.append(markup)
-        documents_by_path[item.markup_rel_path] = markup
+    cache = document_cache if document_cache is not None else {}
+    documents = load_markup_documents(context, items, cache=cache)
     merge_documents: list[MarkupDocument] | None = None
     if merge_nodes_all_markups:
         merge_source = merge_items
@@ -824,19 +843,7 @@ def build_team_diagram_payload(
                 merge_source = index_data.items
         if merge_source is None:
             merge_source = items
-        merge_documents = []
-        for item in merge_source:
-            cached = documents_by_path.get(item.markup_rel_path)
-            if cached is not None:
-                merge_documents.append(cached)
-                continue
-            markup_path = markup_root / item.markup_rel_path
-            try:
-                markup = context.markup_reader.load_by_path(markup_path)
-            except FileNotFoundError as exc:
-                raise HTTPException(status_code=404, detail="Markup file missing") from exc
-            documents_by_path[item.markup_rel_path] = markup
-            merge_documents.append(markup)
+        merge_documents = load_markup_documents(context, merge_source, cache=cache)
     try:
         graph_document = BuildTeamProcedureGraph().build(
             documents,
@@ -853,6 +860,31 @@ def build_team_diagram_payload(
     payload = cast(dict[str, Any], document.to_dict())
     enhance_scene_payload(payload, context)
     return payload
+
+
+def load_markup_documents(
+    context: CatalogContext,
+    items: Sequence[CatalogItem],
+    *,
+    cache: dict[str, MarkupDocument] | None = None,
+) -> list[MarkupDocument]:
+    markup_root = Path(context.settings.catalog.s3.prefix or "")
+    documents: list[MarkupDocument] = []
+    if cache is None:
+        cache = {}
+    for item in items:
+        cached = cache.get(item.markup_rel_path)
+        if cached is not None:
+            documents.append(cached)
+            continue
+        markup_path = markup_root / item.markup_rel_path
+        try:
+            markup = context.markup_reader.load_by_path(markup_path)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Markup file missing") from exc
+        cache[item.markup_rel_path] = markup
+        documents.append(markup)
+    return documents
 
 
 def build_team_query(

@@ -236,12 +236,17 @@ cjm catalog serve --config config/catalog/app.s3.yaml
    общим `procedure_id`, при выключении рендерятся as is отдельными компонентами.
    `merge_nodes_all_markups` включает расчет узлов слияния по всем доступным разметкам, при этом рисуются
    только выбранные команды.
-6. При скачивании общего графа файл получает суффикс с `team_ids` (например,
+6. На Step 3 после Merge отображается dashboard из трех секций:
+   `Signal Coverage` (распределение `markup_type`, уникальные графы, bot/multi coverage),
+   `Service Integrity` (внутренние/внешние пересечения услуг, расщепленные графы, доля целевого состояния)
+   и `Risk Hotspots` (топ связывающих процедур и перегруженных услуг по циклам/блокам/узлам слияния).
+   Блоки сверстаны карточками для удобного скриншота и объяснения метрик на встречах.
+7. При скачивании общего графа файл получает суффикс с `team_ids` (например,
    `team-graph_alpha_beta.excalidraw`).
-7. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
-8. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
-9. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
-10. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
-11. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
+8. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
+9. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
+10. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
+11. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
+12. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.
 
 В карточках и деталях каталога отображается `updated_at`;.

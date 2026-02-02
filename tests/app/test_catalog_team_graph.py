@@ -153,6 +153,10 @@ def test_catalog_team_graph_api(
         assert "Render merge nodes from all available markups" in html_response.text
         assert "Step 3. Merge graphs" in html_response.text
         assert "Step 4. Use diagram" in html_response.text
+        assert "Signal Coverage" in html_response.text
+        assert "Service Integrity" in html_response.text
+        assert "Risk Hotspots" in html_response.text
+        assert "Unique graphs" in html_response.text
         assert 'id="team-graph-page"' in html_response.text
         assert 'hx-get="/catalog/teams/graph"' in html_response.text
         assert 'hx-target="#team-graph-page"' in html_response.text
@@ -611,6 +615,8 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert "outline-color: rgba(129, 237, 155, 0.34);" in styles
     assert '.team-graph-flag-button[data-state="on"]' in styles
     assert "background: #1a232c;" in styles
+    assert ".team-graph-dashboard-section" in styles
+    assert ".team-graph-kpi-card" in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(
