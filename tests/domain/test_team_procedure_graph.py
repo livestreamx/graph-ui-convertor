@@ -277,6 +277,57 @@ def test_build_team_procedure_graph_uses_merge_documents_procedure_graph() -> No
     )
 
 
+def test_build_team_procedure_graph_backfills_selected_graph_nodes_from_merge_documents() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "proc_name": "Entry Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": [],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"entry": ["shared"], "shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([doc_alpha], merge_documents=[doc_alpha, doc_beta])
+
+    assert {proc.procedure_id for proc in merged.procedures} == {"entry", "shared"}
+    shared_meta = merged.procedure_meta["shared"]
+    assert shared_meta["team_name"] == "Alpha"
+    assert shared_meta["is_intersection"] is True
+    merge_services = shared_meta["merge_services"]
+    assert isinstance(merge_services, list)
+    assert any(
+        service.get("team_name") == "Beta" and service.get("service_name") == "Loans"
+        for service in merge_services
+    )
+    assert merged.procedure_graph["entry"] == ["shared"]
+
+
 def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted() -> None:
     documents = []
     for idx in range(5):

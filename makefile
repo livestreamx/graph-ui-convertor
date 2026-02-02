@@ -320,7 +320,7 @@ c4-render:
 	@echo "C4 diagrams rendered to $(C4_OUT_DIRS)"
 
 .PHONY: demo
-demo: c4-render s3-up s3-seed excalidraw-up catalog-up demo-smoke
+demo: s3-up s3-seed excalidraw-up catalog-up demo-smoke
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(CATALOG_URL)/catalog"
