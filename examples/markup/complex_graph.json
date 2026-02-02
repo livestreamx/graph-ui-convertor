@@ -114,10 +114,11 @@
   ],
   "procedure_graph": {
     "proc_alpha": ["proc_beta"],
-    "proc_beta": ["proc_gamma"],
+    "proc_beta": ["proc_gamma", "proc_delta"],
     "proc_gamma": ["proc_delta"],
     "proc_delta": ["proc_epsilon"],
-    "proc_epsilon": ["proc_zeta"]
+    "proc_epsilon": ["proc_zeta"],
+    "proc_zeta": []
   },
   "block_graph": {
     "alpha_start": ["alpha_collect"],

@@ -13,6 +13,8 @@ from domain.services.convert_markup_base import (
 from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_excalidraw_links
 from domain.services.excalidraw_title import apply_title_focus
 
+SERVICE_ZONE_LABEL_FONT_FAMILY = "Lilita One"
+
 
 class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
     def __init__(
@@ -108,6 +110,11 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         element["x"] = float(element.get("x", 0.0)) + dx
         element["y"] = float(element.get("y", 0.0)) + dy
 
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        if element.get("type") != "text":
+            return
+        element["fontFamily"] = SERVICE_ZONE_LABEL_FONT_FAMILY
+
     def _frame_element(
         self,
         element_id: str,
@@ -145,9 +152,23 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
+        extra = {
+            "strokeColor": stroke_color or "#1e1e1e",
+            "backgroundColor": background_color or "#cce5ff",
+            "fillStyle": fill_style or "hachure",
+            "seed": self._rand_seed(),
+            "version": 1,
+            "versionNonce": self._rand_seed(),
+            "strokeStyle": stroke_style or "solid",
+            "boundElements": [],
+        }
+        if roundness is not None:
+            extra["roundness"] = roundness
         return self._base_shape(
             element_id=element_id,
             type_name="rectangle",
@@ -156,16 +177,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=size.height,
             frame_id=frame_id,
             group_ids=group_ids,
-            extra={
-                "strokeColor": "#1e1e1e",
-                "backgroundColor": background_color or "#cce5ff",
-                "fillStyle": fill_style or "hachure",
-                "seed": self._rand_seed(),
-                "version": 1,
-                "versionNonce": self._rand_seed(),
-                "strokeStyle": stroke_style or "solid",
-                "boundElements": [],
-            },
+            extra=extra,
             metadata=metadata,
         )
 

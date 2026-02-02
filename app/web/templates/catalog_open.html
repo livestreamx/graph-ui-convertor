@@ -7,9 +7,15 @@
   </section>
   <script>
     (async () => {
-      const response = await fetch("{{ scene_api_url }}", { credentials: "same-origin" });
+      const sceneApiUrl = {{ scene_api_url | tojson }};
+      const diagramUrl = {{ diagram_url | tojson }};
+      const diagramStorageKey = {{ diagram_storage_key | tojson }};
+      const diagramStateKey = {{ diagram_state_key | tojson }};
+      const diagramVersionKey = {{ diagram_version_key | tojson }};
+
+      const response = await fetch(sceneApiUrl, { credentials: "same-origin" });
       if (!response.ok) {
-        window.location.href = "{{ diagram_url }}";
+        window.location.href = diagramUrl;
         return;
       }
       const scene = await response.json();
@@ -18,13 +24,13 @@
         appState: scene.appState || {},
       };
       try {
-        localStorage.setItem("{{ diagram_storage_key }}", JSON.stringify(payload.elements));
-        localStorage.setItem("{{ diagram_state_key }}", JSON.stringify(payload.appState));
-        localStorage.setItem("{{ diagram_version_key }}", JSON.stringify(Date.now()));
+        localStorage.setItem(diagramStorageKey, JSON.stringify(payload.elements));
+        localStorage.setItem(diagramStateKey, JSON.stringify(payload.appState));
+        localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
       } catch (err) {
         console.error(err);
       }
-      window.location.href = "{{ diagram_url }}";
+      window.location.href = diagramUrl;
     })();
   </script>
 {% endblock %}

@@ -50,6 +50,10 @@ class LayoutConfig:
     scenario_merge_gap: float = 12.0
     scenario_merge_min_height: float = 90.0
     scenario_min_height: float = 180.0
+    service_zone_padding_x: float = 40.0
+    service_zone_padding_y: float = 30.0
+    service_zone_label_font_size: float = 20.0
+    service_zone_label_gap: float = 12.0
 
 
 @dataclass(frozen=True)

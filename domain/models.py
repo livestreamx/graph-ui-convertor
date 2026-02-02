@@ -384,6 +384,21 @@ class SeparatorPlacement:
 
 
 @dataclass(frozen=True)
+class ServiceZonePlacement:
+    service_key: str
+    service_name: str
+    team_name: str | None
+    team_id: str | int | None
+    color: str
+    origin: Point
+    size: Size
+    label_origin: Point
+    label_size: Size
+    label_font_size: float
+    procedure_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ScenarioPlacement:
     origin: Point
     size: Size
@@ -409,6 +424,7 @@ class ScenarioPlacement:
     merge_padding: float | None = None
     merge_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
     merge_block_padding: float | None = None
+    merge_node_numbers: dict[str, list[int]] | None = None
 
 
 @dataclass(frozen=True)
@@ -430,6 +446,7 @@ class LayoutPlan:
     markers: list[MarkerPlacement]
     separators: list[SeparatorPlacement] = field(default_factory=list)
     scenarios: list[ScenarioPlacement] = field(default_factory=list)
+    service_zones: list[ServiceZonePlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

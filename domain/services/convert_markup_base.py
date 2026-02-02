@@ -28,6 +28,7 @@ from domain.ports.layout import LayoutEngine
 
 Metadata = dict[str, Any]
 Element = dict[str, Any]
+MERGE_ALERT_COLOR = "#ff2d2d"
 
 
 @dataclass
@@ -154,6 +155,9 @@ class MarkupToDiagramConverter(ABC):
 
     def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
         return 2 if is_cycle else None
+
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        return
 
     @abstractmethod
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
@@ -415,8 +419,8 @@ class MarkupToDiagramConverter(ABC):
                             base_metadata,
                         ),
                         group_ids=[merge_group],
-                        background_color="#fff6d6",
-                        stroke_color="#c9b27a",
+                        background_color=MERGE_ALERT_COLOR,
+                        stroke_color=MERGE_ALERT_COLOR,
                     )
                 )
                 if merge_blocks:
@@ -450,6 +454,7 @@ class MarkupToDiagramConverter(ABC):
                                 ),
                                 group_ids=[merge_group],
                                 font_size=block_font_size,
+                                text_color="#ffffff",
                             )
                         )
                         if block.underline:
@@ -467,7 +472,7 @@ class MarkupToDiagramConverter(ABC):
                                         {"role": "scenario_merge_underline", "scenario_index": idx},
                                         base_metadata,
                                     ),
-                                    stroke_color="#1e1e1e",
+                                    stroke_color="#ffffff",
                                     stroke_width=2.0,
                                     group_ids=[merge_group],
                                 )
@@ -489,6 +494,7 @@ class MarkupToDiagramConverter(ABC):
                             ),
                             group_ids=[merge_group],
                             font_size=merge_font_size,
+                            text_color="#ffffff",
                         )
                     )
             procedures_group = self._stable_id("scenario-procedures-group", str(idx))
@@ -1539,8 +1545,10 @@ class MarkupToDiagramConverter(ABC):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
         raise NotImplementedError
 

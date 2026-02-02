@@ -26,7 +26,7 @@ from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings, validate_unidraw_settings
 from domain.catalog import CatalogIndex, CatalogItem
-from domain.models import ExcalidrawDocument, Size, UnidrawDocument
+from domain.models import ExcalidrawDocument, MarkupDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
@@ -204,6 +204,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data = load_index(context)
@@ -249,14 +250,22 @@ def create_app(settings: AppSettings) -> FastAPI:
                 diagram_label = resolve_diagram_label(diagram_format)
                 diagram_ext = resolve_diagram_extension(diagram_format)
                 diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
-                team_query = build_team_query(team_ids)
+                team_query = build_team_query(
+                    team_ids, merge_nodes_all_markups=merge_nodes_all_markups
+                )
                 diagram_open_url = diagram_base_url
                 open_mode = "manual"
                 if is_same_origin(request, diagram_base_url):
                     diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
                     open_mode = "local_storage"
                 elif diagram_format == "excalidraw":
-                    payload = build_team_diagram_payload(context, items, diagram_format)
+                    payload = build_team_diagram_payload(
+                        context,
+                        items,
+                        diagram_format,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_items=index_data.items if merge_nodes_all_markups else None,
+                    )
                     diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
                     if len(diagram_open_url) > context.settings.catalog.excalidraw_max_url_length:
                         diagram_open_url = diagram_base_url
@@ -282,6 +291,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "selected_markups_count": selected_markups_count,
                 "team_query": team_query,
                 "error_message": error_message,
+                "merge_nodes_all_markups": merge_nodes_all_markups,
             },
         )
 
@@ -383,6 +393,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph_open(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
@@ -392,7 +403,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
-        team_query = build_team_query(team_ids)
+        team_query = build_team_query(team_ids, merge_nodes_all_markups=merge_nodes_all_markups)
         return templates.TemplateResponse(
             request,
             "catalog_open.html",
@@ -446,6 +457,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/teams/graph")
     def api_team_graph(
         team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -459,7 +471,13 @@ def create_app(settings: AppSettings) -> FastAPI:
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
         diagram_format = resolve_diagram_format(context.settings)
-        payload = build_team_diagram_payload(context, items, diagram_format)
+        payload = build_team_diagram_payload(
+            context,
+            items,
+            diagram_format,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_items=index_data.items if merge_nodes_all_markups else None,
+        )
         headers = {}
         if download:
             extension = resolve_diagram_extension(diagram_format)
@@ -766,9 +784,12 @@ def build_team_diagram_payload(
     context: CatalogContext,
     items: list[CatalogItem],
     diagram_format: str,
+    merge_nodes_all_markups: bool = False,
+    merge_items: list[CatalogItem] | None = None,
 ) -> dict[str, Any]:
     markup_root = Path(context.settings.catalog.s3.prefix or "")
-    documents = []
+    documents: list[MarkupDocument] = []
+    documents_by_path: dict[str, MarkupDocument] = {}
     for item in items:
         markup_path = markup_root / item.markup_rel_path
         try:
@@ -776,8 +797,35 @@ def build_team_diagram_payload(
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail="Markup file missing") from exc
         documents.append(markup)
+        documents_by_path[item.markup_rel_path] = markup
+    merge_documents: list[MarkupDocument] | None = None
+    if merge_nodes_all_markups:
+        merge_source = merge_items
+        if merge_source is None:
+            index_data = load_index(context)
+            if index_data is not None:
+                merge_source = index_data.items
+        else:
+            index_data = load_index(context)
+            if index_data is not None and len(merge_source) < len(index_data.items):
+                merge_source = index_data.items
+        if merge_source is None:
+            merge_source = items
+        merge_documents = []
+        for item in merge_source:
+            cached = documents_by_path.get(item.markup_rel_path)
+            if cached is not None:
+                merge_documents.append(cached)
+                continue
+            markup_path = markup_root / item.markup_rel_path
+            try:
+                markup = context.markup_reader.load_by_path(markup_path)
+            except FileNotFoundError as exc:
+                raise HTTPException(status_code=404, detail="Markup file missing") from exc
+            documents_by_path[item.markup_rel_path] = markup
+            merge_documents.append(markup)
     try:
-        graph_document = BuildTeamProcedureGraph().build(documents)
+        graph_document = BuildTeamProcedureGraph().build(documents, merge_documents=merge_documents)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     document: ExcalidrawDocument | UnidrawDocument
@@ -790,10 +838,13 @@ def build_team_diagram_payload(
     return payload
 
 
-def build_team_query(team_ids: list[str]) -> str:
+def build_team_query(team_ids: list[str], merge_nodes_all_markups: bool = False) -> str:
     if not team_ids:
         return ""
-    return urlencode({"team_ids": ",".join(team_ids)})
+    payload: dict[str, str] = {"team_ids": ",".join(team_ids)}
+    if merge_nodes_all_markups:
+        payload["merge_nodes_all_markups"] = "true"
+    return urlencode(payload)
 
 
 def normalize_team_ids(team_ids: list[str]) -> list[str]:

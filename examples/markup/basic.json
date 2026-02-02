@@ -73,6 +73,12 @@
       }
     }
   ],
+  "procedure_graph": {
+    "proc_shared_intake": ["proc_shared_routing"],
+    "proc_shared_routing": ["proc_resolution"],
+    "proc_resolution": ["proc_finalize"],
+    "proc_finalize": []
+  },
   "block_graph": {
     "intake_start": ["intake_collect"],
     "intake_collect": ["intake_validate"],

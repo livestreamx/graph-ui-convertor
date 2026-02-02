@@ -24,6 +24,7 @@ from domain.services.excalidraw_links import ExcalidrawLinkTemplates, ensure_uni
 
 _DEFAULT_TEXT_FONT_FAMILY = "Caveat, Segoe UI Emoji"
 _DEFAULT_SHAPE_FONT_FAMILY = "Neue Haas Unica, Segoe UI Emoji"
+SERVICE_ZONE_LABEL_FONT_FAMILY = "Neue Haas Unica Black, Neue Haas Unica, Segoe UI Emoji"
 _FRAME_TEXT_COLOR = "#CCCCCC"
 _SHAPE_TEXT_COLOR = "#3A3A3A"
 _DEFAULT_TEXT_COLOR = "#2b2b2b"
@@ -135,6 +136,13 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
                     tip_pos["x"] = float(tip_pos.get("x", 0.0)) + dx
                     tip_pos["y"] = float(tip_pos.get("y", 0.0)) + dy
 
+    def _apply_service_zone_label_style(self, element: Element) -> None:
+        if element.get("type") != "text":
+            return
+        style = element.get("style")
+        if isinstance(style, dict):
+            style["tff"] = SERVICE_ZONE_LABEL_FONT_FAMILY
+
     def _frame_element(
         self,
         element_id: str,
@@ -170,8 +178,10 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         group_ids: list[str],
         metadata: Metadata,
         background_color: str | None = None,
+        stroke_color: str | None = None,
         stroke_style: str | None = None,
         fill_style: str | None = None,
+        roundness: dict[str, Any] | None = None,
     ) -> Element:
         resolved_fill = _UNIDRAW_FILL_STYLE_HATCH if fill_style == "hachure" else fill_style
         return self._base_element(
@@ -183,7 +193,7 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
             group_ids=group_ids,
             extra={"shape": _SHAPE_RECTANGLE, "text": _EMPTY_PARAGRAPH},
             style=self._shape_style(
-                stroke_color="#1e1e1e",
+                stroke_color=stroke_color or "#1e1e1e",
                 background_color=background_color or "#cce5ff",
                 stroke_width=1.0,
                 stroke_style=stroke_style,

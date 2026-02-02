@@ -116,8 +116,12 @@ catalog:
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` supports comma-separated values).
-- The cross-team builder keeps selection details under the help tooltip next to Build graphs and
+- The cross-team builder keeps selection details under the help tooltip next to the heading and
   colors procedures by service; shared procedures are highlighted in light red.
+- The cross-team builder includes a Feature flags section with per-flag cards and an
+  Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
+  a light green tint while the toggle button switches to a dark style. `merge_nodes_all_markups`
+  makes merge nodes use all available markups while still rendering only the selected teams.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

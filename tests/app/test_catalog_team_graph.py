@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +15,19 @@ from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
 from tests.adapters.s3.s3_utils import add_get_object, stub_s3_catalog
+
+
+def _repo_root() -> Path:
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").exists():
+            return parent
+    raise RuntimeError("Repository root not found")
+
+
+def _load_fixture(name: str) -> dict[str, object]:
+    path = _repo_root() / "examples" / "markup" / name
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return cast(dict[str, object], payload)
 
 
 def test_catalog_team_graph_api(
@@ -123,10 +138,285 @@ def test_catalog_team_graph_api(
             params={"team_ids": "team-1,team-2"},
         )
         assert html_response.status_code == 200
-        assert "Build graphs" in html_response.text
+        assert "Merge" in html_response.text
         assert "Alpha" in html_response.text
         assert "Beta" in html_response.text
         assert "markups merged" in html_response.text
         assert "1 markup" in html_response.text
+        assert "Feature flags" in html_response.text
+        assert "Use all available markups when rendering merge nodes." in html_response.text
+        assert 'id="team-graph-page"' in html_response.text
+        assert 'hx-get="/catalog/teams/graph"' in html_response.text
+        assert 'hx-target="#team-graph-page"' in html_response.text
+        assert 'hx-select="#team-graph-page"' in html_response.text
+        assert 'hx-push-url="true"' in html_response.text
     finally:
         stubber.deactivate()
+
+
+def test_catalog_team_graph_merge_nodes_use_all_markups(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    payload_graphs = _load_fixture("graphs_set.json")
+    meta = payload_basic.get("finedog_unit_meta")
+    assert isinstance(meta, dict)
+    team_id = meta.get("team_id")
+    assert isinstance(team_id, str)
+
+    objects = {
+        "markup/basic.json": payload_basic,
+        "markup/graphs_set.json": payload_graphs,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": team_id, "merge_nodes_all_markups": "true"},
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+        merge_ids: set[str] = set()
+        for element in elements:
+            if element.get("customData", {}).get("cjm", {}).get("role") != "intersection_highlight":
+                continue
+            proc_id = element.get("customData", {}).get("cjm", {}).get("procedure_id")
+            if isinstance(proc_id, str):
+                merge_ids.add(proc_id)
+        assert "proc_shared_intake" in merge_ids
+        assert "proc_shared_routing" in merge_ids
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_open_preserves_merge_flag_in_scene_api_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    payload_graphs = _load_fixture("graphs_set.json")
+    objects = {
+        "markup/basic.json": payload_basic,
+        "markup/graphs_set.json": payload_graphs,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="/excalidraw",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/catalog/teams/graph/open",
+            params={"team_ids": "team-alpha", "merge_nodes_all_markups": "true"},
+        )
+        assert response.status_code == 200
+        assert "\\u0026merge_nodes_all_markups=true" in response.text
+        assert "amp;merge_nodes_all_markups" not in response.text
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_markups(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    payload_graphs = _load_fixture("graphs_set.json")
+
+    basic_meta = payload_basic.get("finedog_unit_meta")
+    assert isinstance(basic_meta, dict)
+    basic_team_id = basic_meta.get("team_id")
+    assert isinstance(basic_team_id, str)
+
+    basic_procedures = payload_basic.get("procedures")
+    graphs_procedures = payload_graphs.get("procedures")
+    assert isinstance(basic_procedures, list)
+    assert isinstance(graphs_procedures, list)
+    basic_proc_ids = {proc["proc_id"] for proc in basic_procedures if isinstance(proc, dict)}
+    graphs_proc_ids = {proc["proc_id"] for proc in graphs_procedures if isinstance(proc, dict)}
+    expected_merge_proc_ids = basic_proc_ids & graphs_proc_ids
+    graphs_only_proc_ids = graphs_proc_ids - basic_proc_ids
+    assert expected_merge_proc_ids
+    assert graphs_only_proc_ids
+
+    objects = {
+        "markup/basic.json": payload_basic,
+        "markup/graphs_set.json": payload_graphs,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": basic_team_id, "merge_nodes_all_markups": "true"},
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+
+        frame_proc_ids: set[str] = set()
+        intersection_proc_ids: set[str] = set()
+        for element in elements:
+            cjm = element.get("customData", {}).get("cjm", {})
+            if not isinstance(cjm, dict):
+                continue
+            role = cjm.get("role")
+            proc_id = cjm.get("procedure_id")
+            if not isinstance(proc_id, str):
+                continue
+            if role == "frame":
+                frame_proc_ids.add(proc_id)
+            if role == "intersection_highlight":
+                intersection_proc_ids.add(proc_id)
+
+        assert expected_merge_proc_ids.issubset(frame_proc_ids)
+        assert expected_merge_proc_ids.issubset(intersection_proc_ids)
+        assert frame_proc_ids.isdisjoint(graphs_only_proc_ids)
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
+    style_path = _repo_root() / "app" / "web" / "static" / "style.css"
+    styles = style_path.read_text(encoding="utf-8")
+
+    assert ".team-graph-cta-action" in styles
+    assert "justify-self: end;" in styles
+    assert ".team-graph-merge-button" in styles
+    assert ".team-graph-flag-item.is-on" in styles
+    assert "outline-color: rgba(129, 237, 155, 0.34);" in styles
+    assert '.team-graph-flag-button[data-state="on"]' in styles
+    assert "background: #1a232c;" in styles

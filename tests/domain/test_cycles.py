@@ -176,8 +176,8 @@ def test_example_procedure_graph_matches_linear_flow() -> None:
     payload = json.loads(example_path.read_text(encoding="utf-8"))
     graph = payload.get("procedure_graph", {})
     assert graph.get("proc_alpha") == ["proc_beta"]
-    assert graph.get("proc_beta") == ["proc_gamma"]
+    assert graph.get("proc_beta") == ["proc_gamma", "proc_delta"]
     assert graph.get("proc_gamma") == ["proc_delta"]
     assert graph.get("proc_delta") == ["proc_epsilon"]
     assert graph.get("proc_epsilon") == ["proc_zeta"]
-    assert "proc_zeta" not in graph
+    assert graph.get("proc_zeta") == []
