@@ -231,6 +231,75 @@ def test_catalog_team_graph_merge_nodes_use_all_markups(
         stubber.deactivate()
 
 
+def test_catalog_team_graph_open_preserves_merge_flag_in_scene_api_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    payload_graphs = _load_fixture("graphs_set.json")
+    objects = {
+        "markup/basic.json": payload_basic,
+        "markup/graphs_set.json": payload_graphs,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="/excalidraw",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/catalog/teams/graph/open",
+            params={"team_ids": "team-alpha", "merge_nodes_all_markups": "true"},
+        )
+        assert response.status_code == 200
+        assert "\\u0026merge_nodes_all_markups=true" in response.text
+        assert "amp;merge_nodes_all_markups" not in response.text
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_markups(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
