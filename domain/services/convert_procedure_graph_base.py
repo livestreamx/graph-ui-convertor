@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import Any
 
 from domain.models import (
@@ -54,15 +55,94 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
     def _procedure_edge_stroke_width(self, is_cycle: bool) -> float | None:
         return 1.0
 
-    def _merge_number_lookup(self, scenarios: list[ScenarioPlacement]) -> dict[str, int] | None:
-        merge_numbers: dict[str, int] = {}
+    def _merge_number_lookup(
+        self, scenarios: list[ScenarioPlacement]
+    ) -> dict[str, list[int]] | None:
+        merge_numbers: dict[str, list[int]] = {}
         for scenario in scenarios:
             numbers = getattr(scenario, "merge_node_numbers", None)
             if isinstance(numbers, dict):
                 for proc_id, index in numbers.items():
-                    if isinstance(proc_id, str) and isinstance(index, int):
-                        merge_numbers[proc_id] = index
-        return merge_numbers or None
+                    if not isinstance(proc_id, str):
+                        continue
+                    if isinstance(index, int):
+                        merge_numbers.setdefault(proc_id, []).append(index)
+                    elif isinstance(index, list | tuple):
+                        for value in index:
+                            if isinstance(value, int):
+                                merge_numbers.setdefault(proc_id, []).append(value)
+        if not merge_numbers:
+            return None
+        for proc_id, values in merge_numbers.items():
+            seen: set[int] = set()
+            ordered = []
+            for value in values:
+                if value in seen:
+                    continue
+                seen.add(value)
+                ordered.append(value)
+            merge_numbers[proc_id] = ordered
+        return merge_numbers
+
+    def _merge_marker_layout(
+        self,
+        frame: FramePlacement,
+        highlight_padding: float,
+        marker_diameter: float,
+        count: int,
+    ) -> list[tuple[Point, Point, Point]]:
+        if count <= 1:
+            pointer_start = Point(
+                x=frame.origin.x - highlight_padding * 3.5,
+                y=frame.origin.y - highlight_padding * 2.0,
+            )
+            pointer_end = Point(
+                x=frame.origin.x - highlight_padding * 0.4,
+                y=frame.origin.y + frame.size.height * 0.2,
+            )
+            marker_center = Point(
+                x=pointer_start.x - highlight_padding * 0.95,
+                y=pointer_start.y - highlight_padding * 0.95,
+            )
+            return [(pointer_start, marker_center, pointer_end)]
+
+        center = Point(
+            x=frame.origin.x + frame.size.width / 2,
+            y=frame.origin.y + frame.size.height / 2,
+        )
+        radius_x = frame.size.width / 2 + highlight_padding
+        radius_y = frame.size.height / 2 + highlight_padding
+        base_radius = max(radius_x, radius_y) + highlight_padding * 1.6
+        marker_offset = marker_diameter * 0.65 + highlight_padding * 0.6
+
+        angle_step = math.radians(20.0)
+        min_range = math.radians(36.0)
+        max_range = math.radians(120.0)
+        angle_range = min(max_range, max(min_range, angle_step * (count - 1)))
+        base_angle = math.radians(225.0)
+        start_angle = base_angle - angle_range / 2
+        if count > 1:
+            angle_step = angle_range / (count - 1)
+        angles = [start_angle + idx * angle_step for idx in range(count)]
+
+        layout: list[tuple[Point, Point, Point]] = []
+        for idx, angle in enumerate(angles):
+            spread = (idx - (count - 1) / 2) * (marker_diameter * 0.2)
+            pointer_radius = base_radius + spread
+            pointer_start = Point(
+                x=center.x + math.cos(angle) * pointer_radius,
+                y=center.y + math.sin(angle) * pointer_radius,
+            )
+            marker_center = Point(
+                x=center.x + math.cos(angle) * (pointer_radius + marker_offset),
+                y=center.y + math.sin(angle) * (pointer_radius + marker_offset),
+            )
+            pointer_end = Point(
+                x=center.x + math.cos(angle) * radius_x,
+                y=center.y + math.sin(angle) * radius_y,
+            )
+            layout.append((pointer_start, marker_center, pointer_end))
+        return layout
 
     def _apply_text_color(self, element: dict[str, Any], color: str) -> None:
         if "strokeColor" in element:
@@ -89,7 +169,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         registry: ElementRegistry,
         base_metadata: Metadata,
         proc_name_lookup: dict[str, str],
-        merge_numbers: dict[str, int] | None = None,
+        merge_numbers: dict[str, list[int]] | None = None,
     ) -> dict[str, str]:
         frame_ids: dict[str, str] = {}
         procedure_meta = document.procedure_meta or {}
@@ -149,98 +229,137 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                     stroke_width=2.0,
                 )
             )
-            pointer_meta = self._with_base_metadata(
-                {
-                    "procedure_id": frame.procedure_id,
-                    "role": "intersection_pointer",
-                },
-                base_metadata,
-            )
-            pointer_start = Point(
-                x=frame.origin.x - highlight_padding * 3.5,
-                y=frame.origin.y - highlight_padding * 2.0,
-            )
-            pointer_end = Point(
-                x=frame.origin.x - highlight_padding * 0.4,
-                y=frame.origin.y + frame.size.height * 0.2,
-            )
-            arrow = self._arrow_element(
-                start=pointer_start,
-                end=pointer_end,
-                label="merge",
-                metadata=pointer_meta,
-                end_binding=frame_id,
-                stroke_color=highlight_color,
-                stroke_width=3.0,
-                end_arrowhead="arrow",
-            )
-            registry.add(arrow)
-            self._register_edge_bindings(arrow, registry)
-            merge_index = merge_numbers.get(frame.procedure_id) if merge_numbers else None
-            if merge_index is not None:
-                marker_id = self._stable_id("intersection-index-marker", frame.procedure_id)
-                marker_meta = self._with_base_metadata(
+            merge_indices = merge_numbers.get(frame.procedure_id) if merge_numbers else None
+            if isinstance(merge_indices, list | tuple):
+                merge_indices = [value for value in merge_indices if isinstance(value, int)]
+            else:
+                merge_indices = None
+
+            marker_diameter = highlight_padding * 2.7
+            marker_radius = marker_diameter / 2
+            marker_layout = None
+            if merge_indices:
+                marker_layout = self._merge_marker_layout(
+                    frame, highlight_padding, marker_diameter, len(merge_indices)
+                )
+            if marker_layout and merge_indices:
+                for slot, merge_index in enumerate(merge_indices):
+                    pointer_start, marker_center, pointer_end = marker_layout[slot]
+                    pointer_meta = self._with_base_metadata(
+                        {
+                            "procedure_id": frame.procedure_id,
+                            "role": "intersection_pointer",
+                            "merge_index": merge_index,
+                        },
+                        base_metadata,
+                    )
+                    arrow = self._arrow_element(
+                        start=pointer_start,
+                        end=pointer_end,
+                        label="merge" if slot == 0 else "",
+                        metadata=pointer_meta,
+                        end_binding=frame_id,
+                        stroke_color=highlight_color,
+                        stroke_width=3.0,
+                        end_arrowhead="arrow",
+                    )
+                    registry.add(arrow)
+                    self._register_edge_bindings(arrow, registry)
+                    marker_id = self._stable_id(
+                        "intersection-index-marker",
+                        frame.procedure_id,
+                        str(slot),
+                        str(merge_index),
+                    )
+                    marker_meta = self._with_base_metadata(
+                        {
+                            "procedure_id": frame.procedure_id,
+                            "role": "intersection_index_marker",
+                            "merge_index": merge_index,
+                        },
+                        base_metadata,
+                    )
+                    marker_origin = Point(
+                        x=marker_center.x - marker_radius,
+                        y=marker_center.y - marker_radius,
+                    )
+                    marker = self._ellipse_element(
+                        element_id=marker_id,
+                        position=marker_origin,
+                        size=Size(marker_diameter, marker_diameter),
+                        frame_id=None,
+                        metadata=marker_meta,
+                        background_color="transparent",
+                        stroke_color=highlight_color,
+                        stroke_width=2.0,
+                    )
+                    if isinstance(marker, dict) and "roughness" in marker:
+                        marker["roughness"] = 1
+                    registry.add(marker)
+                    label_meta = self._with_base_metadata(
+                        {
+                            "procedure_id": frame.procedure_id,
+                            "role": "intersection_index_label",
+                            "merge_index": merge_index,
+                        },
+                        base_metadata,
+                    )
+                    label_font_size = getattr(
+                        getattr(self.layout_engine, "config", None),
+                        "service_zone_label_font_size",
+                        20.0,
+                    )
+                    index_label = self._text_element(
+                        element_id=self._stable_id(
+                            "intersection-index-label",
+                            frame.procedure_id,
+                            str(slot),
+                            str(merge_index),
+                        ),
+                        text=str(merge_index),
+                        center=marker_center,
+                        container_id=marker_id,
+                        frame_id=None,
+                        metadata=label_meta,
+                        max_width=marker_diameter,
+                        max_height=marker_diameter,
+                        font_size=label_font_size,
+                    )
+                    self._apply_text_color(index_label, highlight_color)
+                    if isinstance(index_label, dict):
+                        if "strokeWidth" in index_label:
+                            index_label["strokeWidth"] = 2.0
+                        if "roughness" in index_label:
+                            index_label["roughness"] = 1
+                    registry.add(index_label)
+            else:
+                pointer_meta = self._with_base_metadata(
                     {
                         "procedure_id": frame.procedure_id,
-                        "role": "intersection_index_marker",
-                        "merge_index": merge_index,
+                        "role": "intersection_pointer",
                     },
                     base_metadata,
                 )
-                marker_diameter = highlight_padding * 2.7
-                marker_radius = marker_diameter / 2
-                marker_center = Point(
-                    x=pointer_start.x - highlight_padding * 0.95,
-                    y=pointer_start.y - highlight_padding * 0.95,
+                pointer_start = Point(
+                    x=frame.origin.x - highlight_padding * 3.5,
+                    y=frame.origin.y - highlight_padding * 2.0,
                 )
-                marker_origin = Point(
-                    x=marker_center.x - marker_radius,
-                    y=marker_center.y - marker_radius,
+                pointer_end = Point(
+                    x=frame.origin.x - highlight_padding * 0.4,
+                    y=frame.origin.y + frame.size.height * 0.2,
                 )
-                marker = self._ellipse_element(
-                    element_id=marker_id,
-                    position=marker_origin,
-                    size=Size(marker_diameter, marker_diameter),
-                    frame_id=None,
-                    metadata=marker_meta,
-                    background_color="transparent",
+                arrow = self._arrow_element(
+                    start=pointer_start,
+                    end=pointer_end,
+                    label="merge",
+                    metadata=pointer_meta,
+                    end_binding=frame_id,
                     stroke_color=highlight_color,
-                    stroke_width=2.0,
+                    stroke_width=3.0,
+                    end_arrowhead="arrow",
                 )
-                if isinstance(marker, dict) and "roughness" in marker:
-                    marker["roughness"] = 1
-                registry.add(marker)
-                label_meta = self._with_base_metadata(
-                    {
-                        "procedure_id": frame.procedure_id,
-                        "role": "intersection_index_label",
-                        "merge_index": merge_index,
-                    },
-                    base_metadata,
-                )
-                label_font_size = getattr(
-                    getattr(self.layout_engine, "config", None),
-                    "service_zone_label_font_size",
-                    20.0,
-                )
-                index_label = self._text_element(
-                    element_id=self._stable_id("intersection-index-label", frame.procedure_id),
-                    text=str(merge_index),
-                    center=marker_center,
-                    container_id=marker_id,
-                    frame_id=None,
-                    metadata=label_meta,
-                    max_width=marker_diameter,
-                    max_height=marker_diameter,
-                    font_size=label_font_size,
-                )
-                self._apply_text_color(index_label, highlight_color)
-                if isinstance(index_label, dict):
-                    if "strokeWidth" in index_label:
-                        index_label["strokeWidth"] = 2.0
-                    if "roughness" in index_label:
-                        index_label["roughness"] = 1
-                registry.add(index_label)
+                registry.add(arrow)
+                self._register_edge_bindings(arrow, registry)
         return frame_ids
 
     def _build_procedure_stats(

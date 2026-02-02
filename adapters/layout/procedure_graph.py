@@ -606,7 +606,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedure_map: Mapping[str, Procedure],
         procedure_meta: Mapping[str, Mapping[str, object]],
         order_index: Mapping[str, int],
-    ) -> tuple[list[ScenarioProceduresBlock], str | None, float | None, dict[str, int] | None]:
+    ) -> tuple[
+        list[ScenarioProceduresBlock], str | None, float | None, dict[str, list[int]] | None
+    ]:
         merge_ids = [
             proc_id
             for proc_id in component
@@ -642,7 +644,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         groups: dict[tuple[tuple[str, str], ...], _MergeGroup] = {}
         for proc_id in merge_ids:
             meta = procedure_meta.get(proc_id, {})
-            entries = self._procedure_service_entries(meta)
+            entries = self._procedure_merge_entries(meta)
             service_tokens: list[tuple[str, str]] = []
             for entry in entries:
                 team_name = str(entry.get("team_name") or "Unknown team")
@@ -669,7 +671,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             ordered_groups.append((order, label, proc_ids))
         ordered_groups.sort(key=lambda item: (item[0], item[1].lower()))
 
-        merge_numbers: dict[str, int] = {}
+        merge_numbers: dict[str, list[int]] = {}
         merge_index = 1
         multiple_groups = len(ordered_groups) > 1
         for idx, (_, label, proc_ids) in enumerate(ordered_groups):
@@ -694,7 +696,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 proc = procedure_map.get(proc_id)
                 proc_name = proc.procedure_name if proc and proc.procedure_name else proc_id
                 item_lines.append(f"({merge_index}) {proc_name}")
-                merge_numbers[proc_id] = merge_index
+                merge_numbers.setdefault(proc_id, []).append(merge_index)
                 merge_index += 1
             wrapped = self._wrap_lines(item_lines, content_width - item_padding * 2, font_size)
             blocks.append(
@@ -808,6 +810,17 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 "service_color": meta.get("procedure_color"),
             }
         ]
+
+    def _procedure_merge_entries(
+        self,
+        meta: Mapping[str, object],
+    ) -> list[Mapping[str, object]]:
+        merge_services = meta.get("merge_services")
+        if isinstance(merge_services, list) and merge_services:
+            entries = [service for service in merge_services if isinstance(service, Mapping)]
+            if entries:
+                return entries
+        return self._procedure_service_entries(meta)
 
     def _normalize_service_entry(
         self,

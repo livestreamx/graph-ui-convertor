@@ -19,7 +19,11 @@ _INTERSECTION_COLOR = "#ffd6d6"
 
 
 class BuildTeamProcedureGraph:
-    def build(self, documents: Sequence[MarkupDocument]) -> MarkupDocument:
+    def build(
+        self,
+        documents: Sequence[MarkupDocument],
+        merge_documents: Sequence[MarkupDocument] | None = None,
+    ) -> MarkupDocument:
         procedures: list[Procedure] = []
         procedure_payloads: dict[str, dict[str, Any]] = {}
         procedure_order: list[str] = []
@@ -65,16 +69,7 @@ class BuildTeamProcedureGraph:
                     if child not in procedure_graph[parent]:
                         procedure_graph[parent].append(child)
 
-        service_key_list = sorted(service_keys, key=lambda value: value.lower())
-        service_colors = {
-            key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
-            for idx, key in enumerate(service_key_list)
-        }
-        for service_map in procedure_services.values():
-            for service_key, payload in service_map.items():
-                color = service_colors.get(service_key)
-                if color:
-                    payload["service_color"] = color
+        service_colors = self._apply_service_colors(procedure_services, service_keys)
         for proc_id in procedure_order:
             payload = procedure_payloads[proc_id]
             procedures.append(Procedure.model_validate(payload))
@@ -116,6 +111,11 @@ class BuildTeamProcedureGraph:
                     "services": [],
                 }
 
+        if merge_documents is not None:
+            merge_services, merge_service_keys = self._collect_merge_services(merge_documents)
+            self._apply_service_colors(merge_services, merge_service_keys)
+            self._apply_merge_metadata(procedure_meta, merge_services)
+
         for proc in procedures:
             procedure_graph.setdefault(proc.procedure_id, [])
 
@@ -139,6 +139,65 @@ class BuildTeamProcedureGraph:
             procedure_graph=procedure_graph,
             procedure_meta=procedure_meta,
         )
+
+    def _collect_merge_services(
+        self,
+        documents: Sequence[MarkupDocument],
+    ) -> tuple[dict[str, dict[str, dict[str, object]]], set[str]]:
+        procedure_services: dict[str, dict[str, dict[str, object]]] = {}
+        service_keys: set[str] = set()
+        for document in documents:
+            team_label = self._resolve_team_label(document)
+            service_label = self._resolve_service_label(document)
+            service_key = self._service_key(team_label, service_label)
+            service_keys.add(service_key)
+            for proc in document.procedures:
+                procedure_services.setdefault(proc.procedure_id, {})[service_key] = {
+                    "team_name": team_label,
+                    "service_name": service_label,
+                    "team_id": document.team_id,
+                    "finedog_unit_id": document.finedog_unit_id,
+                }
+        return procedure_services, service_keys
+
+    def _apply_service_colors(
+        self,
+        procedure_services: dict[str, dict[str, dict[str, object]]],
+        service_keys: set[str],
+    ) -> dict[str, str]:
+        service_key_list = sorted(service_keys, key=lambda value: value.lower())
+        service_colors = {
+            key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
+            for idx, key in enumerate(service_key_list)
+        }
+        for service_map in procedure_services.values():
+            for service_key, payload in service_map.items():
+                color = service_colors.get(service_key)
+                if color:
+                    payload["service_color"] = color
+        return service_colors
+
+    def _apply_merge_metadata(
+        self,
+        procedure_meta: dict[str, dict[str, object]],
+        merge_services: dict[str, dict[str, dict[str, object]]],
+    ) -> None:
+        for proc_id, service_map in merge_services.items():
+            if proc_id not in procedure_meta:
+                continue
+            services = sorted(
+                service_map.values(),
+                key=lambda item: (
+                    str(item.get("team_name", "") or "").lower(),
+                    str(item.get("service_name", "") or "").lower(),
+                ),
+            )
+            if services:
+                procedure_meta[proc_id]["merge_services"] = services
+            merge_keys = set(service_map.keys())
+            if len(merge_keys) > 1 or procedure_meta.get(proc_id, {}).get("is_intersection"):
+                procedure_meta[proc_id]["is_intersection"] = True
+                procedure_meta[proc_id]["procedure_color"] = _INTERSECTION_COLOR
 
     def _resolve_team_label(self, document: MarkupDocument) -> str:
         if document.team_name:

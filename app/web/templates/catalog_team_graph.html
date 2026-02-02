@@ -19,7 +19,6 @@
           </p>
         </div>
         <div class="team-graph-header-actions">
-          <button class="primary-button" type="submit" form="team-graph-form">Build graphs</button>
           <div class="team-graph-help">
             <button class="team-graph-help-button" type="button" aria-label="Teams in graph">?</button>
             <div class="team-graph-help-popover">
@@ -84,11 +83,21 @@
               value="true"
               {% if merge_nodes_all_markups %}checked{% endif %}
             />
-            <span>Use all available markups when rendering merge nodes.</span>
+            <span class="team-graph-flag-body">
+              <span class="team-graph-flag-title">
+                Use all available markups when rendering merge nodes.
+              </span>
+              <span class="team-graph-flag-text">
+                Merge nodes are derived from the full catalog, while only selected teams render.
+              </span>
+            </span>
           </label>
           <div class="team-graph-flag-hint">
             Applies to merge nodes on the cross-team diagram.
           </div>
+        </div>
+        <div class="team-graph-actions">
+          <button class="primary-button" type="submit">Merge</button>
         </div>
       </form>
     </div>
@@ -132,7 +141,7 @@
             <span class="team-graph-result-status team-graph-result-idle">Waiting for input</span>
           </div>
           <div class="team-graph-result-body">
-            Select teams and click Build graphs to generate a diagram.
+            Select teams and click Merge to generate a diagram.
           </div>
         {% endif %}
       </div>

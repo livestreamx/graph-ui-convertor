@@ -123,7 +123,7 @@ def test_catalog_team_graph_api(
             params={"team_ids": "team-1,team-2"},
         )
         assert html_response.status_code == 200
-        assert "Build graphs" in html_response.text
+        assert "Merge" in html_response.text
         assert "Alpha" in html_response.text
         assert "Beta" in html_response.text
         assert "markups merged" in html_response.text

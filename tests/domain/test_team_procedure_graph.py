@@ -177,6 +177,62 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
+def test_build_team_procedure_graph_uses_merge_documents_for_intersections() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([doc_alpha], merge_documents=[doc_alpha, doc_beta])
+
+    meta = merged.procedure_meta["shared"]
+    assert meta["is_intersection"] is True
+    assert meta["procedure_color"] == "#ffd6d6"
+    services = meta["services"]
+    assert isinstance(services, list)
+    assert len(services) == 1
+    merge_services = meta["merge_services"]
+    assert isinstance(merge_services, list)
+    assert any(
+        service.get("team_name") == "Alpha" and service.get("service_name") == "Payments"
+        for service in merge_services
+    )
+    assert any(
+        service.get("team_name") == "Beta" and service.get("service_name") == "Loans"
+        for service in merge_services
+    )
+
+
 def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted() -> None:
     documents = []
     for idx in range(5):
@@ -438,6 +494,45 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     assert "Узлы слияния" in merge_text
     assert "> [Alpha] Payments x [Beta] Loans:" in merge_text
     assert "(1) Shared Flow" in merge_text
+
+
+def test_procedure_graph_layout_uses_merge_services_for_groups() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "is_intersection": True,
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                    ],
+                    "merge_services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Loans"},
+                    ],
+                }
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+
+    assert plan.scenarios
+    merge_text = plan.scenarios[0].merge_text or ""
+    assert "> [Alpha] Payments x [Beta] Loans:" in merge_text
 
 
 def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:

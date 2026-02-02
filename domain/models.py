@@ -424,7 +424,7 @@ class ScenarioPlacement:
     merge_padding: float | None = None
     merge_blocks: tuple[ScenarioProceduresBlock, ...] | None = None
     merge_block_padding: float | None = None
-    merge_node_numbers: dict[str, int] | None = None
+    merge_node_numbers: dict[str, list[int]] | None = None
 
 
 @dataclass(frozen=True)
