@@ -3,7 +3,7 @@
 {% block content %}
   <section class="detail-header">
     <a class="ghost-button" href="/catalog">Back to catalog</a>
-    <div class="detail-title">Cross-team procedure graphs</div>
+    <div class="detail-title">Cross-team graphs builder</div>
     <div class="detail-meta">
       <span>Build combined procedure graphs across selected teams.</span>
     </div>
@@ -13,7 +13,7 @@
     <div class="detail-card team-graph-card">
       <div class="team-graph-header">
         <div>
-          <h3>Build graphs</h3>
+          <h3>Step 1. Select teams</h3>
           <p class="team-graph-subtitle">
             Select teams to merge their <code>procedure_graph</code> into a single overview.
           </p>
@@ -69,7 +69,6 @@
         hx-push-url="true"
       >
         <label class="filter-control">
-          <span>Select teams</span>
           <select id="team-graph-select" multiple size="8" form="team-graph-form">
             {% for team_key, team_label in team_options %}
               <option value="{{ team_key }}" {% if team_key in team_ids %}selected{% endif %}>
@@ -89,12 +88,51 @@
 
     <div class="detail-card team-graph-flags-card">
       <div class="team-graph-flags-header">
-        <h3>Feature flags</h3>
+        <h3>Step 2. Feature flags</h3>
         <p class="team-graph-subtitle">
-          Tune how merge nodes are detected before building the diagram.
+          Tune how selected markups render and how merge nodes are detected.
         </p>
       </div>
       <div class="team-graph-flag-grid">
+        <div
+          class="team-graph-flag-item {% if merge_selected_markups %}is-on{% endif %}"
+          data-flag-item
+        >
+          <div class="team-graph-flag-header">
+            <span
+              class="team-graph-flag-status"
+              data-flag-status
+              data-state="{% if merge_selected_markups %}on{% else %}off{% endif %}"
+            >
+              {% if merge_selected_markups %}Enabled{% else %}Disabled{% endif %}
+            </span>
+          </div>
+          <div class="team-graph-flag-title">
+            Merge markups by shared nodes
+          </div>
+          <div class="team-graph-flag-text">
+            How selected graphs render their components in according to shared nodes.
+          </div>
+          <div class="team-graph-flag-action">
+            <button
+              class="primary-button team-graph-flag-button"
+              type="button"
+              data-flag-toggle="merge_selected_markups"
+              data-state="{% if merge_selected_markups %}on{% else %}off{% endif %}"
+              aria-pressed="{% if merge_selected_markups %}true{% else %}false{% endif %}"
+            >
+              {% if merge_selected_markups %}Disable{% else %}Enable{% endif %}
+            </button>
+          </div>
+          <input
+            type="hidden"
+            id="merge_selected_markups"
+            name="merge_selected_markups"
+            value="true"
+            form="team-graph-form"
+            {% if not merge_selected_markups %}disabled{% endif %}
+          />
+        </div>
         <div
           class="team-graph-flag-item {% if merge_nodes_all_markups %}is-on{% endif %}"
           data-flag-item
@@ -109,7 +147,7 @@
             </span>
           </div>
           <div class="team-graph-flag-title">
-            Use all available markups when rendering merge nodes.
+            Render merge nodes from all available markups
           </div>
           <div class="team-graph-flag-text">
             Merge nodes are derived from the full catalog, while only selected teams render.
@@ -138,14 +176,14 @@
     </div>
 
     <div class="detail-card team-graph-result-card">
-      <h3>Open the diagram</h3>
+      <h3>Step 3. Merge graphs</h3>
       <div class="team-graph-cta">
-        <div class="team-graph-cta-copy">
-          <div class="team-graph-cta-title">Merge selected teams</div>
-          <div class="team-graph-cta-text">
-            Once merged, the summary and open/download actions appear below.
+          <div class="team-graph-cta-copy">
+            <div class="team-graph-cta-title">Merge selected teams</div>
+            <div class="team-graph-cta-text">
+              Once merged, the summary appears here and actions become available in Step 4.
+            </div>
           </div>
-        </div>
         <div class="team-graph-cta-action">
           <button
             class="primary-button team-graph-merge-button"
@@ -197,6 +235,10 @@
           </div>
         {% endif %}
       </div>
+    </div>
+
+    <div class="detail-card team-graph-actions-card">
+      <h3>Step 4. Use diagram</h3>
       {% if diagram_ready %}
         <div class="button-row">
           <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">
@@ -206,6 +248,8 @@
             Download {{ diagram_ext }}
           </a>
         </div>
+      {% else %}
+        <p class="team-graph-subtitle">Merge graphs in Step 3 to enable open/download actions.</p>
       {% endif %}
     </div>
   </section>

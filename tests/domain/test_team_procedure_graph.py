@@ -177,6 +177,63 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
+def test_build_team_procedure_graph_can_keep_duplicate_procedures_as_is() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Common Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Common Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=False,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    assert len(proc_ids) == 2
+    assert len(set(proc_ids)) == 2
+    assert all(proc_id.startswith("shared::doc") for proc_id in proc_ids)
+    for proc_id in proc_ids:
+        meta = merged.procedure_meta[proc_id]
+        assert meta["is_intersection"] is True
+        assert meta["procedure_color"] == "#ffd6d6"
+        services = meta["services"]
+        assert isinstance(services, list)
+        assert len(services) == 1
+        merge_services = meta["merge_services"]
+        assert isinstance(merge_services, list)
+        assert len(merge_services) == 2
+
+
 def test_build_team_procedure_graph_uses_merge_documents_for_intersections() -> None:
     doc_alpha = MarkupDocument.model_validate(
         {

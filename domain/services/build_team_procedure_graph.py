@@ -23,20 +23,37 @@ class BuildTeamProcedureGraph:
         self,
         documents: Sequence[MarkupDocument],
         merge_documents: Sequence[MarkupDocument] | None = None,
+        merge_selected_markups: bool = True,
     ) -> MarkupDocument:
         procedures: list[Procedure] = []
         procedure_meta: dict[str, dict[str, object]] = {}
         team_labels: set[str] = set()
         team_ids: set[str | int] = set()
         team_names: set[str] = set()
-        (
-            procedure_payloads,
-            procedure_order,
-            selected_graph,
-            procedure_services,
-            service_keys,
-        ) = self._collect_documents(documents, include_graph_nodes=False)
-        procedure_graph = selected_graph
+        procedure_payloads: dict[str, dict[str, Any]]
+        procedure_order: list[str]
+        procedure_graph: dict[str, list[str]]
+        procedure_services: dict[str, dict[str, dict[str, object]]]
+        service_keys: set[str]
+        source_proc_by_scoped: dict[str, str] | None = None
+        if merge_selected_markups:
+            (
+                procedure_payloads,
+                procedure_order,
+                selected_graph,
+                procedure_services,
+                service_keys,
+            ) = self._collect_documents(documents, include_graph_nodes=False)
+            procedure_graph = selected_graph
+        else:
+            (
+                procedure_payloads,
+                procedure_order,
+                procedure_graph,
+                procedure_services,
+                service_keys,
+                source_proc_by_scoped,
+            ) = self._collect_documents_as_is(documents, include_graph_nodes=False)
         for document in documents:
             team_label = self._resolve_team_label(document)
             if team_label:
@@ -48,7 +65,7 @@ class BuildTeamProcedureGraph:
 
         service_colors = self._apply_service_colors(procedure_services, service_keys)
 
-        if merge_documents is not None:
+        if merge_documents is not None and merge_selected_markups:
             (
                 merge_payloads,
                 merge_order,
@@ -110,10 +127,18 @@ class BuildTeamProcedureGraph:
                     "services": [],
                 }
 
-        if merge_documents is not None:
-            merge_services, merge_service_keys = self._collect_merge_services(merge_documents)
+        merge_scope = merge_documents if merge_documents is not None else documents
+        if merge_scope:
+            merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
             self._apply_service_colors(merge_services, merge_service_keys)
-            self._apply_merge_metadata(procedure_meta, merge_services)
+            if merge_selected_markups:
+                self._apply_merge_metadata(procedure_meta, merge_services)
+            elif source_proc_by_scoped is not None:
+                self._apply_merge_metadata_for_scoped(
+                    procedure_meta,
+                    merge_services,
+                    source_proc_by_scoped,
+                )
 
         for proc in procedures:
             procedure_graph.setdefault(proc.procedure_id, [])
@@ -200,6 +225,85 @@ class BuildTeamProcedureGraph:
             service_keys,
         )
 
+    def _collect_documents_as_is(
+        self,
+        documents: Sequence[MarkupDocument],
+        *,
+        include_graph_nodes: bool,
+    ) -> tuple[
+        dict[str, dict[str, Any]],
+        list[str],
+        dict[str, list[str]],
+        dict[str, dict[str, dict[str, object]]],
+        set[str],
+        dict[str, str],
+    ]:
+        procedure_payloads: dict[str, dict[str, Any]] = {}
+        procedure_order: list[str] = []
+        procedure_graph: dict[str, list[str]] = {}
+        procedure_services: dict[str, dict[str, dict[str, object]]] = {}
+        service_keys: set[str] = set()
+        source_proc_by_scoped: dict[str, str] = {}
+
+        source_counts: dict[str, int] = {}
+        for document in documents:
+            for proc_id in self._document_procedure_ids(document):
+                source_counts[proc_id] = source_counts.get(proc_id, 0) + 1
+
+        for doc_idx, document in enumerate(documents):
+            scoped_id_map: dict[str, str] = {}
+            for proc_id in self._document_procedure_ids(document):
+                if source_counts.get(proc_id, 0) > 1:
+                    scoped_id = f"{proc_id}::doc{doc_idx + 1}"
+                else:
+                    scoped_id = proc_id
+                scoped_id_map[proc_id] = scoped_id
+                source_proc_by_scoped[scoped_id] = proc_id
+
+            team_label = self._resolve_team_label(document)
+            service_label = self._resolve_service_label(document)
+            service_key = self._service_key(team_label, service_label)
+            service_payload: dict[str, object] = {
+                "team_name": team_label,
+                "service_name": service_label,
+                "team_id": document.team_id,
+                "finedog_unit_id": document.finedog_unit_id,
+            }
+            service_keys.add(service_key)
+
+            for proc in document.procedures:
+                proc_id = scoped_id_map.get(proc.procedure_id, proc.procedure_id)
+                procedure_order.append(proc_id)
+                payload = self._procedure_payload(proc)
+                payload["procedure_id"] = proc_id
+                procedure_payloads[proc_id] = payload
+                procedure_services.setdefault(proc_id, {})[service_key] = dict(service_payload)
+
+            for parent, children in document.procedure_graph.items():
+                parent_id = scoped_id_map.get(parent, parent)
+                procedure_graph.setdefault(parent_id, [])
+                if include_graph_nodes:
+                    procedure_services.setdefault(parent_id, {})[service_key] = dict(
+                        service_payload
+                    )
+                for child in children:
+                    child_id = scoped_id_map.get(child, child)
+                    if child_id not in procedure_graph[parent_id]:
+                        procedure_graph[parent_id].append(child_id)
+                    if include_graph_nodes:
+                        procedure_services.setdefault(child_id, {})[service_key] = dict(
+                            service_payload
+                        )
+
+        return (
+            procedure_payloads,
+            procedure_order,
+            procedure_graph,
+            procedure_services,
+            service_keys,
+            source_proc_by_scoped,
+        )
+
     def _filter_procedure_graph(
         self,
         procedure_graph: dict[str, list[str]],
@@ -261,6 +365,32 @@ class BuildTeamProcedureGraph:
                 procedure_meta[proc_id]["is_intersection"] = True
                 procedure_meta[proc_id]["procedure_color"] = _INTERSECTION_COLOR
 
+    def _apply_merge_metadata_for_scoped(
+        self,
+        procedure_meta: dict[str, dict[str, object]],
+        merge_services: dict[str, dict[str, dict[str, object]]],
+        source_proc_by_scoped: dict[str, str],
+    ) -> None:
+        for scoped_proc_id, source_proc_id in source_proc_by_scoped.items():
+            if scoped_proc_id not in procedure_meta:
+                continue
+            service_map = merge_services.get(source_proc_id)
+            if not service_map:
+                continue
+            services = sorted(
+                service_map.values(),
+                key=lambda item: (
+                    str(item.get("team_name", "") or "").lower(),
+                    str(item.get("service_name", "") or "").lower(),
+                ),
+            )
+            if services:
+                procedure_meta[scoped_proc_id]["merge_services"] = services
+            merge_keys = set(service_map.keys())
+            if len(merge_keys) > 1 or procedure_meta.get(scoped_proc_id, {}).get("is_intersection"):
+                procedure_meta[scoped_proc_id]["is_intersection"] = True
+                procedure_meta[scoped_proc_id]["procedure_color"] = _INTERSECTION_COLOR
+
     def _resolve_team_label(self, document: MarkupDocument) -> str:
         if document.team_name:
             return str(document.team_name)
@@ -275,6 +405,26 @@ class BuildTeamProcedureGraph:
 
     def _service_key(self, team_label: str, service_label: str) -> str:
         return f"{team_label}::{service_label}"
+
+    def _document_procedure_ids(self, document: MarkupDocument) -> list[str]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for proc in document.procedures:
+            proc_id = proc.procedure_id
+            if proc_id in seen:
+                continue
+            seen.add(proc_id)
+            ordered.append(proc_id)
+        for parent, children in document.procedure_graph.items():
+            if parent not in seen:
+                seen.add(parent)
+                ordered.append(parent)
+            for child in children:
+                if child in seen:
+                    continue
+                seen.add(child)
+                ordered.append(child)
+        return ordered
 
     def _format_team_title(self, team_list: Sequence[str]) -> str:
         if not team_list:

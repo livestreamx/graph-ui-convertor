@@ -205,6 +205,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data = load_index(context)
@@ -251,7 +252,9 @@ def create_app(settings: AppSettings) -> FastAPI:
                 diagram_ext = resolve_diagram_extension(diagram_format)
                 diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
                 team_query = build_team_query(
-                    team_ids, merge_nodes_all_markups=merge_nodes_all_markups
+                    team_ids,
+                    merge_nodes_all_markups=merge_nodes_all_markups,
+                    merge_selected_markups=merge_selected_markups,
                 )
                 diagram_open_url = diagram_base_url
                 open_mode = "manual"
@@ -264,6 +267,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         items,
                         diagram_format,
                         merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
                         merge_items=index_data.items if merge_nodes_all_markups else None,
                     )
                     diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
@@ -292,6 +296,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_query": team_query,
                 "error_message": error_message,
                 "merge_nodes_all_markups": merge_nodes_all_markups,
+                "merge_selected_markups": merge_selected_markups,
             },
         )
 
@@ -394,6 +399,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
@@ -403,7 +409,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
-        team_query = build_team_query(team_ids, merge_nodes_all_markups=merge_nodes_all_markups)
+        team_query = build_team_query(
+            team_ids,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+        )
         return templates.TemplateResponse(
             request,
             "catalog_open.html",
@@ -458,6 +468,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def api_team_graph(
         team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -476,6 +487,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             items,
             diagram_format,
             merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
             merge_items=index_data.items if merge_nodes_all_markups else None,
         )
         headers = {}
@@ -785,6 +797,7 @@ def build_team_diagram_payload(
     items: list[CatalogItem],
     diagram_format: str,
     merge_nodes_all_markups: bool = False,
+    merge_selected_markups: bool = False,
     merge_items: list[CatalogItem] | None = None,
 ) -> dict[str, Any]:
     markup_root = Path(context.settings.catalog.s3.prefix or "")
@@ -825,7 +838,11 @@ def build_team_diagram_payload(
             documents_by_path[item.markup_rel_path] = markup
             merge_documents.append(markup)
     try:
-        graph_document = BuildTeamProcedureGraph().build(documents, merge_documents=merge_documents)
+        graph_document = BuildTeamProcedureGraph().build(
+            documents,
+            merge_documents=merge_documents,
+            merge_selected_markups=merge_selected_markups,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     document: ExcalidrawDocument | UnidrawDocument
@@ -838,12 +855,18 @@ def build_team_diagram_payload(
     return payload
 
 
-def build_team_query(team_ids: list[str], merge_nodes_all_markups: bool = False) -> str:
+def build_team_query(
+    team_ids: list[str],
+    merge_nodes_all_markups: bool = False,
+    merge_selected_markups: bool = False,
+) -> str:
     if not team_ids:
         return ""
     payload: dict[str, str] = {"team_ids": ",".join(team_ids)}
     if merge_nodes_all_markups:
         payload["merge_nodes_all_markups"] = "true"
+    if merge_selected_markups:
+        payload["merge_selected_markups"] = "true"
     return urlencode(payload)
 
 

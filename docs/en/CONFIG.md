@@ -120,8 +120,11 @@ catalog:
   colors procedures by service; shared procedures are highlighted in light red.
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
-  a light green tint while the toggle button switches to a dark style. `merge_nodes_all_markups`
-  makes merge nodes use all available markups while still rendering only the selected teams.
+  a light green tint while the toggle button switches to a dark style.
+  `merge_selected_markups` is disabled by default and controls whether selected markups are merged
+  by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
+  `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only
+  the selected teams.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

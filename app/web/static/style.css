@@ -291,6 +291,7 @@ main {
 
 .team-graph-flag-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-top: 12px;
 }
@@ -883,6 +884,9 @@ main {
     font-size: 12px;
   }
   .team-graph-form {
+    grid-template-columns: 1fr;
+  }
+  .team-graph-flag-grid {
     grid-template-columns: 1fr;
   }
   .team-graph-flag-action {
