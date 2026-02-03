@@ -311,11 +311,12 @@
                   {% if team_dashboard.graph_groups %}
                     <div class="team-graph-graphs-list">
                       {% for item in team_dashboard.graph_groups %}
-                        <div class="team-graph-graphs-item">
+                        {% set entities = item.label.split(' + ') %}
+                        <div class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}">
                           <span class="team-graph-graph-entities">
-                            {% for entity in item.label.split(' + ') %}
+                            {% for entity in entities %}
                               {% set parts = entity.split(' / ', 1) %}
-                              <span class="team-graph-graph-entity">
+                              <span class="team-graph-graph-entity" data-team="{{ parts[0] }}">
                                 <span class="team-graph-graph-entity-team">{{ parts[0] }}</span>
                                 <span class="team-graph-graph-entity-service">
                                   {% if parts|length > 1 %}
@@ -325,6 +326,9 @@
                                   {% endif %}
                                 </span>
                               </span>
+                              {% if not loop.last %}
+                                <span class="team-graph-graph-separator" aria-hidden="true">x</span>
+                              {% endif %}
                             {% endfor %}
                           </span>
                           <span class="team-graph-overlap-total">{{ item.graph_count }} graph{% if item.graph_count != 1 %}s{% endif %}</span>
@@ -696,7 +700,7 @@
         }
       };
 
-      const initTeamGraphPage = () => {
+        const initTeamGraphPage = () => {
         const page = document.getElementById("team-graph-page");
         if (!(page instanceof HTMLElement) || page.dataset.initialized === "true") {
           return;
@@ -759,6 +763,36 @@
             overlapToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
           });
         }
+
+        const graphEntities = Array.from(
+          page.querySelectorAll(".team-graph-graph-entity[data-team]"),
+        ).filter((node) => node instanceof HTMLElement);
+        const teamNames = Array.from(
+          new Set(
+            graphEntities
+              .map((node) => node.getAttribute("data-team") || "")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        ).sort((left, right) => left.localeCompare(right));
+        const teamHueByName = new Map();
+        teamNames.forEach((teamName, index) => {
+          teamHueByName.set(teamName, Math.round((index * 137.508) % 360));
+        });
+        graphEntities.forEach((node) => {
+          const teamName = (node.getAttribute("data-team") || "").trim();
+          if (!teamName) {
+            return;
+          }
+          const hue = teamHueByName.get(teamName);
+          if (typeof hue !== "number") {
+            return;
+          }
+          node.style.setProperty("--team-chip-border", `hsla(${hue}, 82%, 66%, 0.45)`);
+          node.style.setProperty("--team-chip-bg", `hsla(${hue}, 80%, 44%, 0.12)`);
+          node.style.setProperty("--team-chip-team-bg", `hsla(${hue}, 88%, 62%, 0.24)`);
+          node.style.setProperty("--team-chip-team-text", `hsl(${hue} 100% 85%)`);
+        });
 
         page.dataset.initialized = "true";
       };
