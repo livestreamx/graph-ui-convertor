@@ -119,10 +119,25 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert [(item.team_name, item.count) for item in dashboard.external_team_intersections] == [
         ("Gamma", 3)
     ]
+    overlap = dashboard.external_team_intersections[0]
+    assert overlap.external_depends_on_selected_count == 1
+    assert overlap.selected_depends_on_external_count == 2
+    assert (
+        overlap.external_depends_on_selected_count + overlap.selected_depends_on_external_count
+        == overlap.count
+    )
     assert [
         (item.service_name, item.count)
         for item in dashboard.external_team_intersections[0].services
     ] == [("Wallet", 3)]
+    service_overlap = dashboard.external_team_intersections[0].services[0]
+    assert service_overlap.external_depends_on_selected_count == 1
+    assert service_overlap.selected_depends_on_external_count == 2
+    assert (
+        service_overlap.external_depends_on_selected_count
+        + service_overlap.selected_depends_on_external_count
+        == service_overlap.count
+    )
     assert dashboard.split_service_count == 1
     assert dashboard.target_service_count == 0
     assert dashboard.total_service_count == 3

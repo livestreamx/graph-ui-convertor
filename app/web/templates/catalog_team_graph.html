@@ -311,8 +311,26 @@
                   {% if team_dashboard.graph_groups %}
                     <div class="team-graph-graphs-list">
                       {% for item in team_dashboard.graph_groups %}
-                        <div class="team-graph-graphs-item">
-                          <span>{{ item.label }}</span>
+                        {% set entities = item.label.split(' + ') %}
+                        <div class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}">
+                          <span class="team-graph-graph-entities">
+                            {% for entity in entities %}
+                              {% set parts = entity.split(' / ', 1) %}
+                              <span class="team-graph-graph-entity" data-team="{{ parts[0] }}">
+                                <span class="team-graph-graph-entity-team">{{ parts[0] }}</span>
+                                <span class="team-graph-graph-entity-service">
+                                  {% if parts|length > 1 %}
+                                    {{ parts[1] }}
+                                  {% else %}
+                                    {{ entity }}
+                                  {% endif %}
+                                </span>
+                              </span>
+                              {% if not loop.last %}
+                                <span class="team-graph-graph-separator" aria-hidden="true">x</span>
+                              {% endif %}
+                            {% endfor %}
+                          </span>
                           <span class="team-graph-overlap-total">{{ item.graph_count }} graph{% if item.graph_count != 1 %}s{% endif %}</span>
                         </div>
                       {% endfor %}
@@ -520,7 +538,7 @@
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
                           <div class="team-graph-help-title">External team overlaps</div>
-                          <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections. Click <b>More info</b> to inspect per-service merge counts.</div>
+                          <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections with a split by dependency direction: external team depends on selected teams, and selected teams depend on external team. Both directions are shown for teams and services, and their sum equals total.</div>
                         </div>
                       </div>
                       <button
@@ -535,17 +553,27 @@
                   </div>
                   {% if team_dashboard.external_team_intersections %}
                     <div class="team-graph-ranked-list team-graph-overlap-list" data-overlap-list>
+                      <div class="team-graph-overlap-row team-graph-overlap-row-header">
+                        <span>Team</span>
+                        <span>External &rarr; selected</span>
+                        <span>Selected &rarr; external</span>
+                        <span>Total</span>
+                      </div>
                       {% for item in team_dashboard.external_team_intersections %}
                         <div class="team-graph-overlap-team">
-                          <div class="team-graph-ranked-item">
-                            <span>{{ loop.index }}. {{ item.team_name }}</span>
-                            <span class="team-graph-overlap-total">total {{ item.count }}</span>
+                          <div class="team-graph-overlap-row">
+                            <span class="team-graph-overlap-main-label">{{ loop.index }}. {{ item.team_name }}</span>
+                            <span class="team-graph-overlap-value">{{ item.external_depends_on_selected_count }}</span>
+                            <span class="team-graph-overlap-value">{{ item.selected_depends_on_external_count }}</span>
+                            <span class="team-graph-overlap-value">{{ item.count }}</span>
                           </div>
                           {% if item.services %}
                             <div class="team-graph-overlap-entities">
                               {% for service in item.services %}
-                                <div class="team-graph-ranked-item">
+                                <div class="team-graph-overlap-row team-graph-overlap-row-service">
                                   <span class="team-graph-overlap-service">{{ service.service_name }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.external_depends_on_selected_count }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.selected_depends_on_external_count }}</span>
                                   <span class="team-graph-overlap-count">{{ service.count }}</span>
                                 </div>
                               {% endfor %}
@@ -672,7 +700,7 @@
         }
       };
 
-      const initTeamGraphPage = () => {
+        const initTeamGraphPage = () => {
         const page = document.getElementById("team-graph-page");
         if (!(page instanceof HTMLElement) || page.dataset.initialized === "true") {
           return;
@@ -735,6 +763,36 @@
             overlapToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
           });
         }
+
+        const graphEntities = Array.from(
+          page.querySelectorAll(".team-graph-graph-entity[data-team]"),
+        ).filter((node) => node instanceof HTMLElement);
+        const teamNames = Array.from(
+          new Set(
+            graphEntities
+              .map((node) => node.getAttribute("data-team") || "")
+              .map((value) => value.trim())
+              .filter((value) => value.length > 0),
+          ),
+        ).sort((left, right) => left.localeCompare(right));
+        const teamHueByName = new Map();
+        teamNames.forEach((teamName, index) => {
+          teamHueByName.set(teamName, Math.round((index * 137.508) % 360));
+        });
+        graphEntities.forEach((node) => {
+          const teamName = (node.getAttribute("data-team") || "").trim();
+          if (!teamName) {
+            return;
+          }
+          const hue = teamHueByName.get(teamName);
+          if (typeof hue !== "number") {
+            return;
+          }
+          node.style.setProperty("--team-chip-border", `hsla(${hue}, 82%, 66%, 0.45)`);
+          node.style.setProperty("--team-chip-bg", `hsla(${hue}, 80%, 44%, 0.12)`);
+          node.style.setProperty("--team-chip-team-bg", `hsla(${hue}, 88%, 62%, 0.24)`);
+          node.style.setProperty("--team-chip-team-text", `hsl(${hue} 100% 85%)`);
+        });
 
         page.dataset.initialized = "true";
       };

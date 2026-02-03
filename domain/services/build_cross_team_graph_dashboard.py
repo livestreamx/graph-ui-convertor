@@ -25,6 +25,8 @@ class MarkupTypeStat:
 class TeamIntersectionStat:
     team_name: str
     count: int
+    external_depends_on_selected_count: int = 0
+    selected_depends_on_external_count: int = 0
     services: tuple[ServiceIntersectionStat, ...] = ()
 
 
@@ -32,6 +34,8 @@ class TeamIntersectionStat:
 class ServiceIntersectionStat:
     service_name: str
     count: int
+    external_depends_on_selected_count: int = 0
+    selected_depends_on_external_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -246,13 +250,15 @@ class BuildCrossTeamGraphDashboard:
         internal_intersection_entities: set[str] = set()
         external_intersection_entities: set[str] = set()
         external_team_counter: Counter[str] = Counter()
+        external_team_external_depends_counter: Counter[str] = Counter()
+        external_team_selected_depends_counter: Counter[str] = Counter()
         external_team_services: dict[str, Counter[str]] = {}
+        external_team_services_external_depends: dict[str, Counter[str]] = {}
+        external_team_services_selected_depends: dict[str, Counter[str]] = {}
         for snapshot in selected_snapshots:
             has_internal = False
             has_external = False
-            for service_key, merge_count in pair_merge_counts.get(snapshot.service_key, {}).items():
-                if merge_count <= 0:
-                    continue
+            for service_key in pair_merge_counts.get(snapshot.service_key, {}):
                 service = all_services.get(service_key)
                 if service is None:
                     continue
@@ -264,11 +270,42 @@ class BuildCrossTeamGraphDashboard:
                     continue
                 if service.team_id in selected_team_set:
                     continue
+                shared_proc_ids = pair_merge_nodes.get(
+                    _sorted_pair(snapshot.service_key, service_key),
+                    set(),
+                )
+                if not shared_proc_ids:
+                    continue
+                selected_service = all_services.get(snapshot.service_key)
+                if selected_service is None:
+                    continue
+                external_depends_count, selected_depends_count = (
+                    self._split_external_overlap_dependency_counts(
+                        shared_proc_ids,
+                        selected_service=selected_service,
+                        external_service=service,
+                        selected_state=all_service_states.get(snapshot.service_key),
+                        external_state=all_service_states.get(service_key),
+                    )
+                )
+                merge_count = external_depends_count + selected_depends_count
+                if merge_count <= 0:
+                    continue
                 has_external = True
                 external_team_counter[service.team_name] += merge_count
+                external_team_external_depends_counter[service.team_name] += external_depends_count
+                external_team_selected_depends_counter[service.team_name] += selected_depends_count
                 external_team_services.setdefault(service.team_name, Counter())[
                     service.service_name
                 ] += merge_count
+                external_team_services_external_depends.setdefault(
+                    service.team_name,
+                    Counter(),
+                )[service.service_name] += external_depends_count
+                external_team_services_selected_depends.setdefault(
+                    service.team_name,
+                    Counter(),
+                )[service.service_name] += selected_depends_count
             service = all_services.get(snapshot.service_key)
             entity_label = _entity_label(
                 snapshot.team_name,
@@ -312,8 +349,23 @@ class BuildCrossTeamGraphDashboard:
             TeamIntersectionStat(
                 team_name=name,
                 count=count,
+                external_depends_on_selected_count=external_team_external_depends_counter.get(
+                    name, 0
+                ),
+                selected_depends_on_external_count=external_team_selected_depends_counter.get(
+                    name, 0
+                ),
                 services=tuple(
-                    ServiceIntersectionStat(service_name=service_name, count=service_count)
+                    ServiceIntersectionStat(
+                        service_name=service_name,
+                        count=service_count,
+                        external_depends_on_selected_count=external_team_services_external_depends.get(
+                            name, Counter()
+                        ).get(service_name, 0),
+                        selected_depends_on_external_count=external_team_services_selected_depends.get(
+                            name, Counter()
+                        ).get(service_name, 0),
+                    )
                     for service_name, service_count in sorted(
                         external_team_services.get(name, Counter()).items(),
                         key=lambda item: (-item[1], item[0].lower()),
@@ -544,6 +596,58 @@ class BuildCrossTeamGraphDashboard:
         )
         return stats[:top_limit]
 
+    def _split_external_overlap_dependency_counts(
+        self,
+        shared_proc_ids: set[str],
+        *,
+        selected_service: _GraphAggregate,
+        external_service: _GraphAggregate,
+        selected_state: ServiceNodeState | None,
+        external_state: ServiceNodeState | None,
+    ) -> tuple[int, int]:
+        external_depends_on_selected = 0
+        selected_depends_on_external = 0
+        selected_defined_proc_ids = set(selected_service.block_ids_by_procedure.keys())
+        external_defined_proc_ids = set(external_service.block_ids_by_procedure.keys())
+
+        for proc_id in shared_proc_ids:
+            selected_defines_proc = proc_id in selected_defined_proc_ids
+            external_defines_proc = proc_id in external_defined_proc_ids
+            if selected_defines_proc and not external_defines_proc:
+                external_depends_on_selected += 1
+                continue
+            if external_defines_proc and not selected_defines_proc:
+                selected_depends_on_external += 1
+                continue
+
+            if selected_state is not None and external_state is not None:
+                selected_is_start = selected_state.is_start(proc_id)
+                selected_is_end = selected_state.is_end(proc_id)
+                external_is_start = external_state.is_start(proc_id)
+                external_is_end = external_state.is_end(proc_id)
+                if external_is_end and selected_is_start:
+                    external_depends_on_selected += 1
+                    continue
+                if selected_is_end and external_is_start:
+                    selected_depends_on_external += 1
+                    continue
+
+                selected_degree = selected_state.incoming_by_proc.get(
+                    proc_id, 0
+                ) + selected_state.outgoing_by_proc.get(proc_id, 0)
+                external_degree = external_state.incoming_by_proc.get(
+                    proc_id, 0
+                ) + external_state.outgoing_by_proc.get(proc_id, 0)
+                if external_degree < selected_degree:
+                    external_depends_on_selected += 1
+                else:
+                    selected_depends_on_external += 1
+                continue
+
+            selected_depends_on_external += 1
+
+        return external_depends_on_selected, selected_depends_on_external
+
     def _build_overloaded_services(
         self,
         services: Mapping[str, _GraphAggregate],
@@ -698,3 +802,7 @@ def _extract_service_keys(services: object) -> set[str]:
             )
         )
     return result
+
+
+def _sorted_pair(left: str, right: str) -> tuple[str, str]:
+    return (left, right) if left <= right else (right, left)
