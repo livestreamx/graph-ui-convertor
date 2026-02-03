@@ -177,6 +177,125 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
+def test_build_team_procedure_graph_merges_singleton_shared_nodes_even_when_flag_is_off() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Common Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Common Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=False,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    assert proc_ids == ["shared"]
+    meta = merged.procedure_meta["shared"]
+    assert meta["is_intersection"] is True
+    assert meta["procedure_color"] == "#ffd6d6"
+    services = meta["services"]
+    assert isinstance(services, list)
+    assert len(services) == 2
+    merge_services = meta["merge_services"]
+    assert isinstance(merge_services, list)
+    assert len(merge_services) == 2
+
+
+def test_build_team_procedure_graph_does_not_merge_terminal_to_start_nodes_when_flag_is_off() -> (
+    None
+):
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry_alpha",
+                    "proc_name": "Entry Alpha",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                },
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["a3"],
+                    "end_block_ids": ["a4::end"],
+                    "branches": {"a3": ["a4"]},
+                },
+            ],
+            "procedure_graph": {"entry_alpha": ["shared"], "shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["b1"],
+                    "end_block_ids": ["b2::end"],
+                    "branches": {"b1": ["b2"]},
+                },
+                {
+                    "proc_id": "tail_beta",
+                    "proc_name": "Tail Beta",
+                    "start_block_ids": ["b3"],
+                    "end_block_ids": ["b4::end"],
+                    "branches": {"b3": ["b4"]},
+                },
+            ],
+            "procedure_graph": {"shared": ["tail_beta"], "tail_beta": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=False,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    assert len(proc_ids) == 4
+    shared_proc_ids = [proc_id for proc_id in proc_ids if proc_id.startswith("shared::doc")]
+    assert len(shared_proc_ids) == 2
+    for proc_id in shared_proc_ids:
+        assert merged.procedure_meta[proc_id]["is_intersection"] is not True
+
+
 def test_build_team_procedure_graph_uses_merge_documents_for_intersections() -> None:
     doc_alpha = MarkupDocument.model_validate(
         {
@@ -1057,16 +1176,70 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     )
 
     unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_zones = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert unidraw_zones
+    assert all(zone.get("style", {}).get("sc") == "#000000" for zone in unidraw_zones)
+    assert all(zone.get("style", {}).get("ss") == "da" for zone in unidraw_zones)
+
+    largest_zone = max(
+        unidraw_zones,
+        key=lambda zone: zone["size"]["width"] * zone["size"]["height"],
+    )
+    zone_layers = [
+        int(zone["zIndex"]) for zone in unidraw_zones if isinstance(zone.get("zIndex"), int)
+    ]
+    assert zone_layers
+    assert largest_zone.get("zIndex") == min(zone_layers)
+
+    unidraw_label_panels = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "service_zone_label_panel"
+    ]
+    assert len(unidraw_label_panels) == 2
+    panel_colors = {
+        panel.get("cjm", {}).get("service_name"): panel.get("style", {}).get("fc")
+        for panel in unidraw_label_panels
+    }
+    assert panel_colors.get("Payments") == "#d9f5ff"
+    assert panel_colors.get("Refunds") == "#e3f7d9"
+    assert all(panel.get("style", {}).get("sc") == "#000000" for panel in unidraw_label_panels)
+
     unidraw_labels = [
         element
         for element in unidraw_scene.elements
         if element.get("cjm", {}).get("role") == "service_zone_label"
     ]
     assert unidraw_labels
+    assert all(label.get("style", {}).get("tc") == "#000000" for label in unidraw_labels)
     assert all(
         label.get("style", {}).get("tff") == UNIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY
         for label in unidraw_labels
     )
+
+    frame_layers = [
+        int(element["zIndex"])
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "frame" and isinstance(element.get("zIndex"), int)
+    ]
+    assert frame_layers
+    frame_front = min(frame_layers)
+    panel_layers = [
+        int(panel["zIndex"])
+        for panel in unidraw_label_panels
+        if isinstance(panel.get("zIndex"), int)
+    ]
+    label_layers = [
+        int(label["zIndex"]) for label in unidraw_labels if isinstance(label.get("zIndex"), int)
+    ]
+    assert len(panel_layers) == len(unidraw_label_panels)
+    assert len(label_layers) == len(unidraw_labels)
+    assert all(layer < frame_front for layer in panel_layers)
+    assert all(layer < frame_front for layer in label_layers)
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
@@ -1134,6 +1307,41 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
     )
     assert label.get("strokeColor") == "#ff2d2d"
     assert label.get("text") == "1"
+
+    unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_frame = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("type") == "frame" and element.get("cjm", {}).get("procedure_id") == "shared"
+    )
+    assert unidraw_frame.get("style", {}).get("fc") == "transparent"
+
+    unidraw_marker = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_index_marker"
+    )
+    assert unidraw_marker.get("style", {}).get("ss") == "s"
+
+    unidraw_highlight = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_highlight"
+    )
+    assert unidraw_highlight.get("style", {}).get("ss") == "da"
+
+    unidraw_label = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "intersection_index_label"
+    )
+    assert float(unidraw_label.get("style", {}).get("tfs", 0.0)) >= 24.0
+    marker_center_x = unidraw_marker["position"]["x"] + unidraw_marker["size"]["width"] / 2
+    marker_center_y = unidraw_marker["position"]["y"] + unidraw_marker["size"]["height"] / 2
+    label_center_x = unidraw_label["position"]["x"] + unidraw_label["size"]["width"] / 2
+    label_center_y = unidraw_label["position"]["y"] + unidraw_label["size"]["height"] / 2
+    assert abs(label_center_x - marker_center_x) < 0.5
+    assert abs(label_center_y - marker_center_y) < 0.5
 
 
 def test_procedure_graph_layout_zones_include_shared_procedures() -> None:

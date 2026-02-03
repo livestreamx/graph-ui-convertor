@@ -246,10 +246,24 @@ main {
   z-index: 10;
 }
 
+.team-graph-help-popover-wide {
+  width: min(360px, 88vw);
+}
+
 .team-graph-help:hover .team-graph-help-popover,
 .team-graph-help:focus-within .team-graph-help-popover {
   display: grid;
   gap: 10px;
+}
+
+.team-graph-help-inline {
+  display: inline-flex;
+}
+
+.team-graph-help-button-sm {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
 }
 
 .team-graph-help-title {
@@ -291,6 +305,7 @@ main {
 
 .team-graph-flag-grid {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
   margin-top: 12px;
 }
@@ -591,6 +606,301 @@ main {
   padding-left: 10px;
 }
 
+.team-graph-dashboard {
+  margin-top: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.team-graph-dashboard-section {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 14px;
+  background: linear-gradient(140deg, rgba(8, 14, 30, 0.92), rgba(13, 20, 39, 0.9));
+  display: grid;
+  gap: 12px;
+}
+
+.team-graph-dashboard-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 15px;
+  letter-spacing: 0.02em;
+}
+
+.team-graph-dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.team-graph-kpi-card,
+.team-graph-data-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(10, 16, 34, 0.8);
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.team-graph-kpi-card {
+  position: relative;
+}
+
+.team-graph-kpi-head,
+.team-graph-data-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.team-graph-kpi-label,
+.team-graph-data-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+}
+
+.team-graph-kpi-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.team-graph-kpi-note {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.team-graph-split-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  align-items: start;
+}
+
+.team-graph-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.team-graph-chip {
+  position: relative;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.team-graph-chip-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(360px, 80vw);
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(7, 12, 26, 0.98);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 8;
+}
+
+.team-graph-chip-drilldown:hover .team-graph-chip-list,
+.team-graph-chip-drilldown:focus-within .team-graph-chip-list {
+  display: grid;
+  gap: 5px;
+}
+
+.team-graph-chip-list-item {
+  display: block;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.team-graph-inline-metric {
+  position: relative;
+  font-size: 12px;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 0;
+  border-top: 1px dashed rgba(255, 255, 255, 0.16);
+}
+
+.team-graph-inline-metric:first-of-type {
+  border-top: 0;
+}
+
+.team-graph-inline-metric-label {
+  color: var(--muted);
+}
+
+.team-graph-inline-metric-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 16px;
+}
+
+.team-graph-inline-metric-note {
+  color: var(--muted);
+}
+
+.team-graph-hover-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 10px;
+  right: 10px;
+  max-height: 180px;
+  overflow-y: auto;
+  border-radius: 12px;
+  border: 1px solid var(--stroke);
+  background: rgba(7, 12, 26, 0.98);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  z-index: 8;
+}
+
+.team-graph-hover-list-inline {
+  left: 0;
+  right: 0;
+}
+
+.team-graph-hover-item {
+  font-size: 12px;
+  color: var(--text);
+  padding: 2px 0;
+}
+
+.team-graph-kpi-card-drilldown:hover .team-graph-hover-list,
+.team-graph-kpi-card-drilldown:focus-within .team-graph-hover-list,
+.team-graph-inline-metric-drilldown:hover .team-graph-hover-list,
+.team-graph-inline-metric-drilldown:focus-within .team-graph-hover-list {
+  display: grid;
+  gap: 4px;
+}
+
+.team-graph-ranked-list {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.team-graph-overlap-toggle {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+.team-graph-overlap-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.team-graph-overlap-list {
+  overflow: hidden;
+}
+
+.team-graph-overlap-team {
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-top: 6px;
+}
+
+.team-graph-overlap-team:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.team-graph-overlap-entities {
+  max-height: 0;
+  opacity: 0;
+  overflow-y: auto;
+  margin-top: 0;
+  transition: max-height 0.24s ease, opacity 0.2s ease, margin-top 0.2s ease;
+}
+
+.team-graph-overlap-list.is-expanded .team-graph-overlap-entities {
+  max-height: 170px;
+  opacity: 1;
+  margin-top: 4px;
+}
+
+.team-graph-overlap-total,
+.team-graph-overlap-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.team-graph-overlap-service {
+  padding-left: 14px;
+}
+
+.team-graph-ranked-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.team-graph-ranked-item-stack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.team-graph-ranked-note {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.team-graph-graphs-details-card {
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.team-graph-graphs-caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.team-graph-graphs-list {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-graphs-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.team-graph-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.team-graph-mono {
+  font-family: "IBM Plex Mono", monospace;
+}
+
 .cross-team-grid {
   display: grid;
   gap: 16px;
@@ -885,6 +1195,9 @@ main {
   .team-graph-form {
     grid-template-columns: 1fr;
   }
+  .team-graph-flag-grid {
+    grid-template-columns: 1fr;
+  }
   .team-graph-flag-action {
     flex-direction: column;
     align-items: stretch;
@@ -903,5 +1216,9 @@ main {
   }
   .team-graph-merge-button {
     width: 100%;
+  }
+  .team-graph-dashboard-grid,
+  .team-graph-split-grid {
+    grid-template-columns: 1fr;
   }
 }

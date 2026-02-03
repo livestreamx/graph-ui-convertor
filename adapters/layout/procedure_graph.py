@@ -942,8 +942,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         service_order = self._sorted_service_infos(service_info_by_key)
         padding_x = self.config.service_zone_padding_x
         padding_y = self.config.service_zone_padding_y
-        label_gap = self.config.service_zone_label_gap
         label_font_size = self.config.service_zone_label_font_size
+        label_gap = self.config.service_zone_label_gap + max(10.0, label_font_size * 0.5)
+        label_padding_y = max(6.0, label_font_size * 0.25)
         drafts: dict[str, _ZoneDraft] = {}
         procedures_by_service: dict[str, list[str]] = {}
         for proc_id, keys in proc_service_keys.items():
@@ -967,7 +968,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             label_lines = self._wrap_lines(
                 [info.service_name], label_width if label_width > 0 else 1.0, label_font_size
             )
-            label_height = len(label_lines) * label_font_size * 1.35
+            label_height = len(label_lines) * label_font_size * 1.35 + label_padding_y * 2
             top_padding = padding_y + label_height + label_gap
             origin = Point(min_x - padding_x, min_y - top_padding)
             size = Size(
