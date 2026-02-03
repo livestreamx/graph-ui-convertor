@@ -7,6 +7,11 @@ from dataclasses import dataclass, field
 from domain.models import MarkupDocument
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.graph_metrics import compute_graph_metrics
+from domain.services.shared_node_merge_rules import (
+    ServiceNodeState,
+    build_service_node_state,
+    collect_pair_merge_nodes,
+)
 
 
 @dataclass(frozen=True)
@@ -20,7 +25,13 @@ class MarkupTypeStat:
 class TeamIntersectionStat:
     team_name: str
     count: int
-    entities: tuple[str, ...] = ()
+    services: tuple[ServiceIntersectionStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class ServiceIntersectionStat:
+    service_name: str
+    count: int
 
 
 @dataclass(frozen=True)
@@ -57,6 +68,7 @@ class CrossTeamGraphDashboard:
     multi_procedures: tuple[str, ...]
     employee_procedure_count: int
     employee_procedures: tuple[str, ...]
+    unique_procedure_count: int
     total_procedure_count: int
     internal_intersection_markup_count: int
     internal_intersection_entities: tuple[str, ...]
@@ -142,6 +154,11 @@ class BuildCrossTeamGraphDashboard:
         )
         markup_type_counts = tuple(self._build_markup_type_counts(selected_documents))
         total_procedure_count = sum(len(document.procedures) for document in selected_documents)
+        unique_procedure_ids = {
+            procedure.procedure_id
+            for document in selected_documents
+            for procedure in document.procedures
+        }
         bot_procedures = sorted(
             {
                 procedure.procedure_id
@@ -210,35 +227,40 @@ class BuildCrossTeamGraphDashboard:
         )
 
         selected_snapshots = self._collect_service_snapshots(selected_service_docs)
-        selected_proc_to_services = self._build_proc_to_services(selected_services)
-        all_proc_to_services = self._build_proc_to_services(all_services)
+        all_service_states = self._build_service_node_states(all_services)
+        pair_merge_nodes = collect_pair_merge_nodes(
+            all_service_states,
+            merge_selected_markups=merge_selected_markups,
+        )
+        pair_merge_counts = self._build_pair_merge_counts(pair_merge_nodes)
+        selected_service_keys = set(selected_services.keys())
 
         internal_intersection_entities: set[str] = set()
         external_intersection_entities: set[str] = set()
         external_team_counter: Counter[str] = Counter()
-        external_team_entities: dict[str, set[str]] = {}
+        external_team_services: dict[str, Counter[str]] = {}
         for snapshot in selected_snapshots:
             has_internal = False
             has_external = False
-            external_teams_for_markup: set[str] = set()
-            for proc_id in snapshot.procedure_ids:
-                for service_key in selected_proc_to_services.get(proc_id, set()):
-                    if service_key != snapshot.service_key:
-                        has_internal = True
-                        break
-                for service_key in all_proc_to_services.get(proc_id, set()):
-                    if service_key == snapshot.service_key:
-                        continue
-                    service = all_services.get(service_key)
-                    if service is None:
-                        continue
-                    if service.team_id in selected_team_set:
-                        continue
-                    has_external = True
-                    external_teams_for_markup.add(service.team_name)
-                    external_team_entities.setdefault(service.team_name, set()).add(
-                        _entity_label(service.team_name, service.service_name)
-                    )
+            for service_key, merge_count in pair_merge_counts.get(snapshot.service_key, {}).items():
+                if merge_count <= 0:
+                    continue
+                service = all_services.get(service_key)
+                if service is None:
+                    continue
+                is_selected_service = (
+                    service_key in selected_service_keys and service.team_id in selected_team_set
+                )
+                if is_selected_service:
+                    has_internal = True
+                    continue
+                if service.team_id in selected_team_set:
+                    continue
+                has_external = True
+                external_team_counter[service.team_name] += merge_count
+                external_team_services.setdefault(service.team_name, Counter())[
+                    service.service_name
+                ] += merge_count
             service = all_services.get(snapshot.service_key)
             entity_label = _entity_label(
                 snapshot.team_name,
@@ -248,8 +270,6 @@ class BuildCrossTeamGraphDashboard:
                 internal_intersection_entities.add(entity_label)
             if has_external:
                 external_intersection_entities.add(entity_label)
-            for team_name in external_teams_for_markup:
-                external_team_counter[team_name] += 1
 
         split_service_count = 0
         target_service_count = 0
@@ -263,11 +283,7 @@ class BuildCrossTeamGraphDashboard:
                 split_service_count += 1
                 split_entities.append(entity_label)
             has_merge_with_other_service = any(
-                any(
-                    other_service != service.key
-                    for other_service in all_proc_to_services.get(proc_id, set())
-                )
-                for proc_id in service.procedure_ids
+                count > 0 for count in pair_merge_counts.get(service.key, {}).values()
             )
             if not has_split_graph and not has_merge_with_other_service:
                 target_service_count += 1
@@ -277,14 +293,24 @@ class BuildCrossTeamGraphDashboard:
             self._build_linking_procedures(selected_graphs, top_limit=top_limit)
         )
         overloaded_services = tuple(
-            self._build_overloaded_services(selected_services, top_limit=top_limit)
+            self._build_overloaded_services(
+                selected_services,
+                merge_selected_markups=merge_selected_markups,
+                top_limit=top_limit,
+            )
         )
 
         external_team_intersections = tuple(
             TeamIntersectionStat(
                 team_name=name,
                 count=count,
-                entities=tuple(sorted(external_team_entities.get(name, set()), key=str.lower)),
+                services=tuple(
+                    ServiceIntersectionStat(service_name=service_name, count=service_count)
+                    for service_name, service_count in sorted(
+                        external_team_services.get(name, Counter()).items(),
+                        key=lambda item: (-item[1], item[0].lower()),
+                    )
+                ),
             )
             for name, count in sorted(
                 external_team_counter.items(),
@@ -306,6 +332,7 @@ class BuildCrossTeamGraphDashboard:
             multi_procedures=tuple(multi_procedures),
             employee_procedure_count=employee_procedure_count,
             employee_procedures=tuple(employee_procedures),
+            unique_procedure_count=len(unique_procedure_ids),
             total_procedure_count=total_procedure_count,
             internal_intersection_markup_count=len(internal_intersection_entities),
             internal_intersection_entities=tuple(
@@ -408,15 +435,31 @@ class BuildCrossTeamGraphDashboard:
             for markup_type, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         ]
 
-    def _build_proc_to_services(
+    def _build_service_node_states(
         self,
         services: Mapping[str, _GraphAggregate],
-    ) -> dict[str, set[str]]:
-        proc_to_services: dict[str, set[str]] = {}
-        for service in services.values():
-            for proc_id in service.procedure_ids:
-                proc_to_services.setdefault(proc_id, set()).add(service.key)
-        return proc_to_services
+    ) -> dict[str, ServiceNodeState]:
+        return {
+            service.key: build_service_node_state(
+                service.key,
+                service.procedure_ids,
+                service.adjacency,
+            )
+            for service in services.values()
+        }
+
+    def _build_pair_merge_counts(
+        self,
+        pair_merge_nodes: Mapping[tuple[str, str], set[str]],
+    ) -> dict[str, dict[str, int]]:
+        pair_counts: dict[str, dict[str, int]] = {}
+        for (left, right), proc_ids in pair_merge_nodes.items():
+            merge_count = len(proc_ids)
+            if merge_count <= 0:
+                continue
+            pair_counts.setdefault(left, {})[right] = merge_count
+            pair_counts.setdefault(right, {})[left] = merge_count
+        return pair_counts
 
     def _build_linking_procedures(
         self,
@@ -462,25 +505,29 @@ class BuildCrossTeamGraphDashboard:
         self,
         services: Mapping[str, _GraphAggregate],
         *,
+        merge_selected_markups: bool,
         top_limit: int,
     ) -> list[ServiceLoadStat]:
-        proc_to_services: dict[str, set[str]] = {}
-        team_to_services: dict[str, set[str]] = {}
-        for service in services.values():
-            team_to_services.setdefault(service.team_id, set()).add(service.key)
-            for proc_id in service.procedure_ids:
-                proc_to_services.setdefault(proc_id, set()).add(service.key)
+        team_by_service_key: dict[str, str] = {
+            service.key: service.team_id for service in services.values()
+        }
+        merge_node_ids_by_service: dict[str, set[str]] = {}
+        states = self._build_service_node_states(services)
+        pair_merge_nodes = collect_pair_merge_nodes(
+            states,
+            merge_selected_markups=merge_selected_markups,
+        )
+        for (left_key, right_key), proc_ids in pair_merge_nodes.items():
+            if team_by_service_key.get(left_key) != team_by_service_key.get(right_key):
+                continue
+            merge_node_ids_by_service.setdefault(left_key, set()).update(proc_ids)
+            merge_node_ids_by_service.setdefault(right_key, set()).update(proc_ids)
 
         stats: list[ServiceLoadStat] = []
         for service in services.values():
             adjacency = service.to_adjacency()
             graph_metrics = compute_graph_metrics(adjacency)
-            team_keys = team_to_services.get(service.team_id, set())
-            in_team_merge_nodes = 0
-            for proc_id in service.procedure_ids:
-                other_services = proc_to_services.get(proc_id, set()) - {service.key}
-                if any(other_service in team_keys for other_service in other_services):
-                    in_team_merge_nodes += 1
+            in_team_merge_nodes = len(merge_node_ids_by_service.get(service.key, set()))
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,

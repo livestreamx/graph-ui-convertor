@@ -106,6 +106,7 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert dashboard.bot_graph_count == 1
     assert dashboard.multi_graph_count == 1
     assert dashboard.total_procedure_count == 8
+    assert dashboard.unique_procedure_count == 7
     assert dashboard.bot_procedure_count == 2
     assert dashboard.multi_procedure_count == 1
     assert dashboard.employee_procedure_count == 5
@@ -115,6 +116,10 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert [(item.team_name, item.count) for item in dashboard.external_team_intersections] == [
         ("Gamma", 3)
     ]
+    assert [
+        (item.service_name, item.count)
+        for item in dashboard.external_team_intersections[0].services
+    ] == [("Wallet", 3)]
     assert dashboard.split_service_count == 1
     assert dashboard.target_service_count == 0
     assert dashboard.total_service_count == 3

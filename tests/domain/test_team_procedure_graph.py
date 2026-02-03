@@ -177,7 +177,7 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
-def test_build_team_procedure_graph_can_keep_duplicate_procedures_as_is() -> None:
+def test_build_team_procedure_graph_merges_singleton_shared_nodes_even_when_flag_is_off() -> None:
     doc_alpha = MarkupDocument.model_validate(
         {
             "markup_type": "service",
@@ -219,19 +219,81 @@ def test_build_team_procedure_graph_can_keep_duplicate_procedures_as_is() -> Non
     )
 
     proc_ids = [proc.procedure_id for proc in merged.procedures]
-    assert len(proc_ids) == 2
-    assert len(set(proc_ids)) == 2
-    assert all(proc_id.startswith("shared::doc") for proc_id in proc_ids)
-    for proc_id in proc_ids:
-        meta = merged.procedure_meta[proc_id]
-        assert meta["is_intersection"] is True
-        assert meta["procedure_color"] == "#ffd6d6"
-        services = meta["services"]
-        assert isinstance(services, list)
-        assert len(services) == 1
-        merge_services = meta["merge_services"]
-        assert isinstance(merge_services, list)
-        assert len(merge_services) == 2
+    assert proc_ids == ["shared"]
+    meta = merged.procedure_meta["shared"]
+    assert meta["is_intersection"] is True
+    assert meta["procedure_color"] == "#ffd6d6"
+    services = meta["services"]
+    assert isinstance(services, list)
+    assert len(services) == 2
+    merge_services = meta["merge_services"]
+    assert isinstance(merge_services, list)
+    assert len(merge_services) == 2
+
+
+def test_build_team_procedure_graph_does_not_merge_terminal_to_start_nodes_when_flag_is_off() -> (
+    None
+):
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry_alpha",
+                    "proc_name": "Entry Alpha",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                },
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["a3"],
+                    "end_block_ids": ["a4::end"],
+                    "branches": {"a3": ["a4"]},
+                },
+            ],
+            "procedure_graph": {"entry_alpha": ["shared"], "shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["b1"],
+                    "end_block_ids": ["b2::end"],
+                    "branches": {"b1": ["b2"]},
+                },
+                {
+                    "proc_id": "tail_beta",
+                    "proc_name": "Tail Beta",
+                    "start_block_ids": ["b3"],
+                    "end_block_ids": ["b4::end"],
+                    "branches": {"b3": ["b4"]},
+                },
+            ],
+            "procedure_graph": {"shared": ["tail_beta"], "tail_beta": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=False,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    assert len(proc_ids) == 4
+    shared_proc_ids = [proc_id for proc_id in proc_ids if proc_id.startswith("shared::doc")]
+    assert len(shared_proc_ids) == 2
+    for proc_id in shared_proc_ids:
+        assert merged.procedure_meta[proc_id]["is_intersection"] is not True
 
 
 def test_build_team_procedure_graph_uses_merge_documents_for_intersections() -> None:

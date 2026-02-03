@@ -226,7 +226,7 @@
             {% set total_services = team_dashboard.total_service_count %}
             <section class="team-graph-dashboard">
               <div class="team-graph-dashboard-section">
-                <div class="team-graph-dashboard-title">Signal Coverage</div>
+                <div class="team-graph-dashboard-title">Graphs info</div>
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
@@ -287,6 +287,19 @@
                         {% endfor %}
                       </div>
                     {% endif %}
+                  </article>
+                  <article class="team-graph-kpi-card">
+                    <div class="team-graph-kpi-head">
+                      <div class="team-graph-kpi-label">Unique procedures</div>
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Unique procedures help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">Unique procedures</div>
+                          <div class="team-graph-help-hint">Unique <code>procedure_id</code> count across all selected markups.</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="team-graph-kpi-value">{{ team_dashboard.unique_procedure_count }}</div>
                   </article>
                 </div>
                 <div class="team-graph-split-grid">
@@ -483,20 +496,22 @@
                 <article class="team-graph-data-card">
                   <div class="team-graph-data-head">
                     <div class="team-graph-data-title">External team overlaps</div>
-                    <button
-                      class="ghost-button team-graph-overlap-toggle"
-                      type="button"
-                      data-overlap-toggle
-                      aria-expanded="false"
-                    >
-                      Show entities
-                    </button>
-                    <div class="team-graph-help team-graph-help-inline">
-                      <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
-                      <div class="team-graph-help-popover team-graph-help-popover-wide">
-                        <div class="team-graph-help-title">External team overlaps</div>
-                        <div class="team-graph-help-hint">Teams outside selection, ranked by number of selected entities that overlap with them. Click <b>Show entities</b> to inspect concrete external entities for each team.</div>
+                    <div class="team-graph-overlap-actions">
+                      <div class="team-graph-help team-graph-help-inline">
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
+                        <div class="team-graph-help-popover team-graph-help-popover-wide">
+                          <div class="team-graph-help-title">External team overlaps</div>
+                          <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections. Click <b>More info</b> to inspect per-service merge counts.</div>
+                        </div>
                       </div>
+                      <button
+                        class="ghost-button team-graph-overlap-toggle"
+                        type="button"
+                        data-overlap-toggle
+                        aria-expanded="false"
+                      >
+                        More info
+                      </button>
                     </div>
                   </div>
                   {% if team_dashboard.external_team_intersections %}
@@ -505,12 +520,15 @@
                         <div class="team-graph-overlap-team">
                           <div class="team-graph-ranked-item">
                             <span>{{ loop.index }}. {{ item.team_name }}</span>
-                            <span>{{ item.count }}</span>
+                            <span class="team-graph-overlap-total">total {{ item.count }}</span>
                           </div>
-                          {% if item.entities %}
+                          {% if item.services %}
                             <div class="team-graph-overlap-entities">
-                              {% for entity in item.entities %}
-                                <div class="team-graph-hover-item">{{ entity }}</div>
+                              {% for service in item.services %}
+                                <div class="team-graph-ranked-item">
+                                  <span class="team-graph-overlap-service">{{ service.service_name }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.count }}</span>
+                                </div>
                               {% endfor %}
                             </div>
                           {% endif %}
@@ -696,7 +714,6 @@
           overlapToggle.addEventListener("click", () => {
             const expanded = overlapList.classList.toggle("is-expanded");
             overlapToggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-            overlapToggle.textContent = expanded ? "Hide entities" : "Show entities";
           });
         }
 

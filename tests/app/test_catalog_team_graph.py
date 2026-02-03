@@ -153,12 +153,14 @@ def test_catalog_team_graph_api(
         assert "Render merge nodes from all available markups" in html_response.text
         assert "Step 3. Merge graphs" in html_response.text
         assert "Step 4. Use diagram" in html_response.text
-        assert "Signal Coverage" in html_response.text
+        assert "Graphs info" in html_response.text
         assert "Entity Integrity" in html_response.text
         assert "Risk Hotspots" in html_response.text
         assert "Graphs" in html_response.text
+        assert "Unique procedures" in html_response.text
         assert "Multichannel procedures" in html_response.text
         assert "Employee procedures" in html_response.text
+        assert "More info" in html_response.text
         assert 'id="team-graph-page"' in html_response.text
         assert 'hx-get="/catalog/teams/graph"' in html_response.text
         assert 'hx-target="#team-graph-page"' in html_response.text
@@ -244,8 +246,8 @@ def test_catalog_team_graph_merge_nodes_use_all_markups(
             proc_id = element.get("customData", {}).get("cjm", {}).get("procedure_id")
             if isinstance(proc_id, str):
                 merge_ids.add(proc_id)
-        assert "proc_shared_intake" in merge_ids
         assert "proc_shared_routing" in merge_ids
+        assert "proc_shared_intake" not in merge_ids
     finally:
         stubber.deactivate()
 
@@ -411,7 +413,7 @@ def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_marku
     assert isinstance(graphs_procedures, list)
     basic_proc_ids = {proc["proc_id"] for proc in basic_procedures if isinstance(proc, dict)}
     graphs_proc_ids = {proc["proc_id"] for proc in graphs_procedures if isinstance(proc, dict)}
-    expected_merge_proc_ids = basic_proc_ids & graphs_proc_ids
+    expected_merge_proc_ids = (basic_proc_ids & graphs_proc_ids) - {"proc_shared_intake"}
     graphs_only_proc_ids = graphs_proc_ids - basic_proc_ids
     assert expected_merge_proc_ids
     assert graphs_only_proc_ids
@@ -644,14 +646,21 @@ def test_catalog_team_graph_default_does_not_merge_selected_markups(
         },
         "procedures": [
             {
+                "proc_id": "entry-alpha",
+                "proc_name": "Entry alpha",
+                "start_block_ids": ["a0"],
+                "end_block_ids": ["a1"],
+                "branches": {"a0": ["a1"]},
+            },
+            {
                 "proc_id": "shared",
                 "proc_name": "Shared",
                 "start_block_ids": ["a"],
                 "end_block_ids": ["b"],
                 "branches": {"a": ["b"]},
-            }
+            },
         ],
-        "procedure_graph": {"shared": []},
+        "procedure_graph": {"entry-alpha": ["shared"], "shared": []},
     }
     payload_beta = {
         "markup_type": "service",
@@ -667,9 +676,16 @@ def test_catalog_team_graph_default_does_not_merge_selected_markups(
                 "start_block_ids": ["c"],
                 "end_block_ids": ["d"],
                 "branches": {"c": ["d"]},
-            }
+            },
+            {
+                "proc_id": "tail-beta",
+                "proc_name": "Tail beta",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f"],
+                "branches": {"e": ["f"]},
+            },
         ],
-        "procedure_graph": {"shared": []},
+        "procedure_graph": {"shared": ["tail-beta"], "tail-beta": []},
     }
     objects = {
         "markup/alpha.json": payload_alpha,
@@ -722,9 +738,14 @@ def test_catalog_team_graph_default_does_not_merge_selected_markups(
             for element in elements
             if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
         ]
-        assert len(frame_ids) == 2
+        assert len(frame_ids) == 4
         assert all(isinstance(proc_id, str) for proc_id in frame_ids)
-        assert len(set(frame_ids)) == 2
+        shared_ids = [
+            proc_id
+            for proc_id in frame_ids
+            if isinstance(proc_id, str) and proc_id.startswith("shared::doc")
+        ]
+        assert len(shared_ids) == 2
     finally:
         stubber.deactivate()
 

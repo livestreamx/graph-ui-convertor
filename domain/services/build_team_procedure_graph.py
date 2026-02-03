@@ -4,6 +4,11 @@ from collections.abc import Sequence
 from typing import Any
 
 from domain.models import MarkupDocument, Procedure, merge_end_types
+from domain.services.shared_node_merge_rules import (
+    ServiceNodeState,
+    build_service_node_state,
+    collect_merge_node_ids,
+)
 
 _SERVICE_COLORS = [
     "#d9f5ff",
@@ -131,13 +136,22 @@ class BuildTeamProcedureGraph:
         if merge_scope:
             merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
             self._apply_service_colors(merge_services, merge_service_keys)
+            merge_node_ids = self._resolve_merge_node_ids(
+                merge_scope,
+                merge_selected_markups=merge_selected_markups,
+            )
             if merge_selected_markups:
-                self._apply_merge_metadata(procedure_meta, merge_services)
+                self._apply_merge_metadata(
+                    procedure_meta,
+                    merge_services,
+                    merge_node_ids=merge_node_ids,
+                )
             elif source_proc_by_scoped is not None:
                 self._apply_merge_metadata_for_scoped(
                     procedure_meta,
                     merge_services,
                     source_proc_by_scoped,
+                    merge_node_ids=merge_node_ids,
                 )
 
         for proc in procedures:
@@ -244,6 +258,10 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         service_keys: set[str] = set()
         source_proc_by_scoped: dict[str, str] = {}
+        merge_node_ids = self._resolve_merge_node_ids(
+            documents,
+            merge_selected_markups=False,
+        )
 
         source_counts: dict[str, int] = {}
         for document in documents:
@@ -253,7 +271,7 @@ class BuildTeamProcedureGraph:
         for doc_idx, document in enumerate(documents):
             scoped_id_map: dict[str, str] = {}
             for proc_id in self._document_procedure_ids(document):
-                if source_counts.get(proc_id, 0) > 1:
+                if source_counts.get(proc_id, 0) > 1 and proc_id not in merge_node_ids:
                     scoped_id = f"{proc_id}::doc{doc_idx + 1}"
                 else:
                     scoped_id = proc_id
@@ -273,10 +291,16 @@ class BuildTeamProcedureGraph:
 
             for proc in document.procedures:
                 proc_id = scoped_id_map.get(proc.procedure_id, proc.procedure_id)
-                procedure_order.append(proc_id)
                 payload = self._procedure_payload(proc)
                 payload["procedure_id"] = proc_id
-                procedure_payloads[proc_id] = payload
+                if proc_id not in procedure_payloads:
+                    procedure_order.append(proc_id)
+                    procedure_payloads[proc_id] = payload
+                else:
+                    procedure_payloads[proc_id] = self._merge_procedure_payload(
+                        procedure_payloads[proc_id], proc
+                    )
+                    procedure_payloads[proc_id]["procedure_id"] = proc_id
                 procedure_services.setdefault(proc_id, {})[service_key] = dict(service_payload)
 
             for parent, children in document.procedure_graph.items():
@@ -347,9 +371,13 @@ class BuildTeamProcedureGraph:
         self,
         procedure_meta: dict[str, dict[str, object]],
         merge_services: dict[str, dict[str, dict[str, object]]],
+        *,
+        merge_node_ids: set[str],
     ) -> None:
         for proc_id, service_map in merge_services.items():
             if proc_id not in procedure_meta:
+                continue
+            if proc_id not in merge_node_ids:
                 continue
             services = sorted(
                 service_map.values(),
@@ -370,9 +398,13 @@ class BuildTeamProcedureGraph:
         procedure_meta: dict[str, dict[str, object]],
         merge_services: dict[str, dict[str, dict[str, object]]],
         source_proc_by_scoped: dict[str, str],
+        *,
+        merge_node_ids: set[str],
     ) -> None:
         for scoped_proc_id, source_proc_id in source_proc_by_scoped.items():
             if scoped_proc_id not in procedure_meta:
+                continue
+            if source_proc_id not in merge_node_ids:
                 continue
             service_map = merge_services.get(source_proc_id)
             if not service_map:
@@ -390,6 +422,46 @@ class BuildTeamProcedureGraph:
             if len(merge_keys) > 1 or procedure_meta.get(scoped_proc_id, {}).get("is_intersection"):
                 procedure_meta[scoped_proc_id]["is_intersection"] = True
                 procedure_meta[scoped_proc_id]["procedure_color"] = _INTERSECTION_COLOR
+
+    def _resolve_merge_node_ids(
+        self,
+        documents: Sequence[MarkupDocument],
+        *,
+        merge_selected_markups: bool,
+    ) -> set[str]:
+        states = self._build_service_node_states(documents)
+        return collect_merge_node_ids(
+            states,
+            merge_selected_markups=merge_selected_markups,
+        )
+
+    def _build_service_node_states(
+        self,
+        documents: Sequence[MarkupDocument],
+    ) -> dict[str, ServiceNodeState]:
+        procedure_ids_by_service: dict[str, set[str]] = {}
+        adjacency_by_service: dict[str, dict[str, set[str]]] = {}
+        for document in documents:
+            team_label = self._resolve_team_label(document)
+            service_label = self._resolve_service_label(document)
+            service_key = self._service_key(team_label, service_label)
+            procedure_ids = procedure_ids_by_service.setdefault(service_key, set())
+            procedure_ids.update(self._document_procedure_ids(document))
+            adjacency = adjacency_by_service.setdefault(service_key, {})
+            for source, targets in document.procedure_graph.items():
+                adjacency.setdefault(source, set()).update(targets)
+                for target in targets:
+                    adjacency.setdefault(target, set())
+
+        states: dict[str, ServiceNodeState] = {}
+        for service_key, procedure_ids in procedure_ids_by_service.items():
+            adjacency = adjacency_by_service.get(service_key, {})
+            states[service_key] = build_service_node_state(
+                service_key,
+                procedure_ids,
+                adjacency,
+            )
+        return states
 
     def _resolve_team_label(self, document: MarkupDocument) -> str:
         if document.team_name:

@@ -237,10 +237,12 @@ cjm catalog serve --config config/catalog/app.s3.yaml
    `merge_nodes_all_markups` включает расчет узлов слияния по всем доступным разметкам, при этом рисуются
    только выбранные команды.
 6. На Step 3 после Merge отображается dashboard из трех секций:
-   `Signal Coverage` (распределение `markup_type`, уникальные графы, bot/multi coverage),
+   `Graphs info` (распределение `markup_type`, уникальные графы, уникальные процедуры, bot/multi coverage),
    `Service Integrity` (внутренние/внешние пересечения услуг, расщепленные графы, доля целевого состояния)
    и `Risk Hotspots` (топ связывающих процедур и перегруженных услуг по циклам/блокам/узлам слияния).
    Блоки сверстаны карточками для удобного скриншота и объяснения метрик на встречах.
+   В `External team overlaps` каждая внешняя команда показывает `total` по пересечениям, а по
+   кнопке `More info` раскрываются пересечения с внешними услугами и их счетчики.
 7. При скачивании общего графа файл получает суффикс с `team_ids` (например,
    `team-graph_alpha_beta.excalidraw`).
 8. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.

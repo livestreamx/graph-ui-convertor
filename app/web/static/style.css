@@ -803,6 +803,13 @@ main {
   font-size: 11px;
 }
 
+.team-graph-overlap-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .team-graph-overlap-list {
   overflow: hidden;
 }
@@ -829,6 +836,16 @@ main {
   max-height: 170px;
   opacity: 1;
   margin-top: 4px;
+}
+
+.team-graph-overlap-total,
+.team-graph-overlap-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.team-graph-overlap-service {
+  padding-left: 14px;
 }
 
 .team-graph-ranked-item {
