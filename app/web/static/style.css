@@ -568,6 +568,11 @@ main {
   background: linear-gradient(120deg, rgba(8, 13, 28, 0.88), rgba(16, 20, 40, 0.9));
 }
 
+.team-graph-result-card {
+  position: relative;
+  overflow: hidden;
+}
+
 .team-graph-cta-title {
   font-weight: 600;
 }
@@ -592,6 +597,101 @@ main {
 .team-graph-merge-button {
   min-width: 130px;
   justify-content: center;
+}
+
+.team-graph-merge-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  background: rgba(255, 179, 71, 0.5);
+}
+
+.team-graph-merge-button:disabled:hover {
+  transform: none;
+  background: rgba(255, 179, 71, 0.5);
+}
+
+.team-graph-cta-warning {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ffd7d7;
+  background: rgba(255, 120, 120, 0.12);
+}
+
+.team-graph-merge-loader {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(90deg, rgba(31, 41, 74, 0.72), rgba(66, 30, 26, 0.58), rgba(31, 41, 74, 0.72));
+  background-size: 220% 100%;
+  color: var(--text);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 0.25s ease, transform 0.25s ease, max-height 0.25s ease, margin 0.25s ease;
+}
+
+.team-graph-merge-loader.htmx-request {
+  opacity: 1;
+  max-height: 140px;
+  pointer-events: auto;
+  transform: translateY(0);
+  animation: mergeLoaderWave 2s linear infinite;
+}
+
+.team-graph-merge-loader-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-strong);
+  animation: mergeLoaderSpin 0.8s linear infinite;
+}
+
+.team-graph-merge-loader-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.team-graph-merge-loader-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.team-graph-merge-loader-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+@keyframes mergeLoaderSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mergeLoaderWave {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 220% 50%;
+  }
 }
 
 .team-graph-result-meta {

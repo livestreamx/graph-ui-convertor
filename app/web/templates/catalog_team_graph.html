@@ -67,6 +67,7 @@
         hx-select="#team-graph-page"
         hx-swap="outerHTML"
         hx-push-url="true"
+        hx-indicator="#team-graph-merge-loader"
       >
         <label class="filter-control">
           <select id="team-graph-select" multiple size="8" form="team-graph-form">
@@ -189,9 +190,28 @@
             class="primary-button team-graph-merge-button"
             type="submit"
             form="team-graph-form"
+            data-merge-button
+            {% if not team_ids %}disabled aria-disabled="true"{% endif %}
           >
             Merge
           </button>
+        </div>
+      </div>
+      <div
+        class="team-graph-cta-warning {% if team_ids %}is-hidden{% endif %}"
+        data-team-required-message
+        role="status"
+        aria-live="polite"
+      >
+        Select at least one team to enable Merge.
+      </div>
+      <div class="team-graph-merge-loader" id="team-graph-merge-loader" aria-live="polite">
+        <div class="team-graph-merge-loader-spinner" aria-hidden="true"></div>
+        <div class="team-graph-merge-loader-copy">
+          <div class="team-graph-merge-loader-title">Merging selected graphs</div>
+          <div class="team-graph-merge-loader-text">
+            Mapping shared nodes and building a cross-team dashboard...
+          </div>
         </div>
       </div>
       <div class="team-graph-result">
@@ -723,9 +743,24 @@
           return;
         }
 
+        const mergeButton = page.querySelector("[data-merge-button]");
+        const teamRequiredMessage = page.querySelector("[data-team-required-message]");
+
+        const updateMergeAvailability = (selectedCount) => {
+          const hasSelection = selectedCount > 0;
+          if (mergeButton instanceof HTMLButtonElement) {
+            mergeButton.disabled = !hasSelection;
+            mergeButton.setAttribute("aria-disabled", hasSelection ? "false" : "true");
+          }
+          if (teamRequiredMessage instanceof HTMLElement) {
+            teamRequiredMessage.classList.toggle("is-hidden", hasSelection);
+          }
+        };
+
         const sync = () => {
           const values = Array.from(select.selectedOptions).map((option) => option.value);
           input.value = values.join(",");
+          updateMergeAvailability(values.length);
         };
         select.addEventListener("change", sync);
         form.addEventListener("submit", sync);

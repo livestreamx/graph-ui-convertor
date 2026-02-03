@@ -171,6 +171,15 @@ def test_catalog_team_graph_api(
         assert 'hx-target="#team-graph-page"' in html_response.text
         assert 'hx-select="#team-graph-page"' in html_response.text
         assert 'hx-push-url="true"' in html_response.text
+        assert 'hx-indicator="#team-graph-merge-loader"' in html_response.text
+        assert "team-graph-cta-warning is-hidden" in html_response.text
+        assert 'id="team-graph-merge-loader"' in html_response.text
+
+        no_selection_response = client_api.get("/catalog/teams/graph")
+        assert no_selection_response.status_code == 200
+        assert "data-merge-button" in no_selection_response.text
+        assert 'disabled aria-disabled="true"' in no_selection_response.text
+        assert "Select at least one team to enable Merge." in no_selection_response.text
     finally:
         stubber.deactivate()
 
@@ -626,6 +635,8 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert "background: #1a232c;" in styles
     assert ".team-graph-dashboard-section" in styles
     assert ".team-graph-kpi-card" in styles
+    assert ".team-graph-merge-loader.htmx-request" in styles
+    assert ".team-graph-merge-button:disabled" in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(
