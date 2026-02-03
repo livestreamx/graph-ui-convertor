@@ -130,6 +130,10 @@ catalog:
   `Service Integrity` (internal/external service intersections, split services, target-state share),
   and `Risk Hotspots` (top linking procedures and overloaded services by cycles/blocks/merge nodes).
   The layout is card-based to keep screenshots readable in demos.
+  Graph/intersection drilldowns share one `team / service` output format with team color chips,
+  including `Multi graphs` and entity details in `Top linking procedures`.
+  `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
+  easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,
   `external → selected` (outside team depends on selected teams), and `selected → external`
   (selected teams depend on the outside team). The two directional counters always add up to

@@ -884,6 +884,10 @@ main {
   padding: 2px 0;
 }
 
+.team-graph-hover-item-entities .team-graph-graph-entities {
+  gap: 4px;
+}
+
 .team-graph-kpi-card-drilldown:hover .team-graph-hover-list,
 .team-graph-kpi-card-drilldown:focus-within .team-graph-hover-list,
 .team-graph-inline-metric-drilldown:hover .team-graph-hover-list,
@@ -1054,6 +1058,13 @@ main {
   gap: 6px;
 }
 
+.team-graph-data-context {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .team-graph-ranked-table-row {
   display: grid;
   grid-template-columns: minmax(170px, 2fr) repeat(4, minmax(74px, 1fr));
@@ -1113,6 +1124,10 @@ main {
   display: grid;
   gap: 4px;
   font-size: 12px;
+}
+
+.team-graph-ranked-details-list-entity .team-graph-graph-entities {
+  gap: 4px;
 }
 
 .team-graph-ranked-details-list-mono {

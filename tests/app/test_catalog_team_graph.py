@@ -164,6 +164,11 @@ def test_catalog_team_graph_api(
         assert "data-overlap-team-toggle" in html_response.text
         assert 'data-team="Alpha"' in html_response.text
         assert 'data-team="Beta"' in html_response.text
+        assert "team-graph-ranked-details-list-entity" in html_response.text
+        assert "Used in entities:" in html_response.text
+        assert "Data quality note" not in html_response.text
+        assert "Ranking priority: cross-entity reuse" in html_response.text
+        assert "Ranking priority: cycles" in html_response.text
         assert "team-graph-graphs-row-header" in html_response.text
         assert "team-graph-graphs-count-value" in html_response.text
         assert "--team-chip-border" in html_response.text

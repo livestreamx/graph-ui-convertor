@@ -14,6 +14,18 @@
   </span>
 {% endmacro %}
 
+{% macro render_graph_label_entities(label, extra_class="", force_colorize=false) %}
+  {% set entities = label.split(' + ') %}
+  <span class="team-graph-graph-entities {{ extra_class }}">
+    {% for entity in entities %}
+      {{ render_team_service_entity(entity, "team-graph-graph-entity-sm", colorize=force_colorize or entities|length > 1) }}
+      {% if not loop.last %}
+        <span class="team-graph-graph-separator" aria-hidden="true">x</span>
+      {% endif %}
+    {% endfor %}
+  </span>
+{% endmacro %}
+
 {% block content %}
   <section class="detail-header">
     <a class="ghost-button" href="/catalog">Back to catalog</a>
@@ -291,7 +303,9 @@
                     {% if team_dashboard.bot_graphs %}
                       <div class="team-graph-hover-list">
                         {% for item in team_dashboard.bot_graphs %}
-                          <div class="team-graph-hover-item">{{ item }}</div>
+                          <div class="team-graph-hover-item team-graph-hover-item-entities">
+                            {{ render_graph_label_entities(item) }}
+                          </div>
                         {% endfor %}
                       </div>
                     {% endif %}
@@ -311,7 +325,9 @@
                     {% if team_dashboard.multi_graphs %}
                       <div class="team-graph-hover-list">
                         {% for item in team_dashboard.multi_graphs %}
-                          <div class="team-graph-hover-item">{{ item }}</div>
+                          <div class="team-graph-hover-item team-graph-hover-item-entities">
+                            {{ render_graph_label_entities(item) }}
+                          </div>
                         {% endfor %}
                       </div>
                     {% endif %}
@@ -350,14 +366,7 @@
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
                         <div class="team-graph-graphs-row team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
-                          <span class="team-graph-graph-entities">
-                            {% for entity in entities %}
-                              {{ render_team_service_entity(entity, colorize=entities|length > 1) }}
-                              {% if not loop.last %}
-                                <span class="team-graph-graph-separator" aria-hidden="true">x</span>
-                              {% endif %}
-                            {% endfor %}
-                          </span>
+                          {{ render_graph_label_entities(item.label) }}
                           <span class="team-graph-graphs-count">
                             <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
                             <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
@@ -512,7 +521,7 @@
                       <div class="team-graph-hover-list">
                         {% for item in team_dashboard.external_intersection_entities %}
                           <div class="team-graph-hover-item">
-                            {{ render_team_service_entity(item, "team-graph-graph-entity-sm", true) }}
+                            {{ render_team_service_entity(item, "team-graph-graph-entity-sm") }}
                           </div>
                         {% endfor %}
                       </div>
@@ -674,18 +683,19 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top linking procedures help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top linking procedures</div>
-                        <div class="team-graph-help-hint">Rank by reuse across graphs and by total in/out dependencies. Click a row to view exact graph labels.</div>
+                        <div class="team-graph-help-hint">Rank by cross-entity reuse and dependency fan-in/fan-out in merged <code>procedure_graph</code> data. Click a row to inspect entities where the procedure appears.</div>
                       </div>
                     </div>
                   </div>
+                  <div class="team-graph-data-context">Ranking priority: cross-entity reuse &rarr; total dependencies (incoming + outgoing) &rarr; incoming &rarr; outgoing. Based only on selected markups, deterministic for the same input.</div>
                   {% if team_dashboard.linking_procedures %}
                     <div class="team-graph-ranked-table">
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Procedure</span>
-                        <span>Graphs</span>
-                        <span>+Other graphs</span>
-                        <span>Incoming</span>
-                        <span>Outgoing</span>
+                        <span>Entities</span>
+                        <span>Cross-entity</span>
+                        <span>Inbound deps</span>
+                        <span>Outbound deps</span>
                       </div>
                       {% for item in team_dashboard.linking_procedures %}
                         <details class="team-graph-ranked-table-item">
@@ -697,10 +707,12 @@
                             <span>{{ item.outgoing_edges }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
-                            <div class="team-graph-ranked-details-label">Used in graphs:</div>
+                            <div class="team-graph-ranked-details-label">Used in entities:</div>
                             <div class="team-graph-ranked-details-list">
                               {% for graph_label in item.graph_labels %}
-                                <span>{{ graph_label }}</span>
+                                <span class="team-graph-ranked-details-list-entity">
+                                  {{ render_graph_label_entities(graph_label, force_colorize=true) }}
+                                </span>
                               {% endfor %}
                             </div>
                           </div>
@@ -718,10 +730,11 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top overloaded entities</div>
-                        <div class="team-graph-help-hint">Rank by cycles, block count, in-team merge nodes, then procedure count. Click a row for detailed breakdown.</div>
+                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: cycles, block volume, in-team merge-node density, then procedure count. Click a row for evidence details.</div>
                       </div>
                     </div>
                   </div>
+                  <div class="team-graph-data-context">Ranking priority: cycles &rarr; blocks &rarr; in-team merge nodes &rarr; procedures. These metrics are computed directly from graph structure and block lists.</div>
                   {% if team_dashboard.overloaded_services %}
                     <div class="team-graph-ranked-table team-graph-ranked-table-services">
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
@@ -734,7 +747,7 @@
                       {% for item in team_dashboard.overloaded_services %}
                         <details class="team-graph-ranked-table-item">
                           <summary class="team-graph-ranked-table-row">
-                            <span>{{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm") }}</span>
+                            <span>{{ loop.index }}. {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm") }}</span>
                             <span>{{ item.cycle_count }}</span>
                             <span>{{ item.block_count }}</span>
                             <span>{{ item.in_team_merge_nodes }}</span>
@@ -932,11 +945,13 @@
         const graphEntities = Array.from(
           page.querySelectorAll(".team-graph-graph-entity[data-team]"),
         ).filter((node) => node instanceof HTMLElement);
+        const normalizeTeamName = (value) =>
+          value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
         const teamNames = Array.from(
           new Set(
             graphEntities
               .map((node) => node.getAttribute("data-team") || "")
-              .map((value) => value.trim())
+              .map((value) => normalizeTeamName(value))
               .filter((value) => value.length > 0),
           ),
         ).sort((left, right) => left.localeCompare(right));
@@ -945,7 +960,7 @@
           teamHueByName.set(teamName, Math.round((index * 137.508) % 360));
         });
         graphEntities.forEach((node) => {
-          const teamName = (node.getAttribute("data-team") || "").trim();
+          const teamName = normalizeTeamName(node.getAttribute("data-team") || "");
           if (!teamName) {
             return;
           }
