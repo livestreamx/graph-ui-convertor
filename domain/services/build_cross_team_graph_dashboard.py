@@ -362,21 +362,48 @@ class BuildCrossTeamGraphDashboard:
             selected_documents,
             merge_selected_markups=merge_selected_markups,
         )
-        graph_keys: set[str] = set()
+        components = _collect_graph_components(graph_document)
         graph_keys_by_procedure_id: dict[str, set[str]] = {}
-        for proc_id, payload in (graph_document.procedure_meta or {}).items():
-            services = payload.get("services")
-            keys = _extract_service_keys(services)
-            if not keys:
-                keys = {
-                    _entity_label(
-                        str(payload.get("team_name") or "Unknown team"),
-                        str(payload.get("service_name") or "Unknown entity"),
-                    )
-                }
-            graph_keys.update(keys)
-            graph_keys_by_procedure_id.setdefault(proc_id, set()).update(keys)
-        return sorted(graph_keys, key=str.lower), graph_keys_by_procedure_id
+
+        component_payloads: list[tuple[str, list[str]]] = []
+        for component_nodes in components:
+            service_labels: set[str] = set()
+            for proc_id in component_nodes:
+                payload = (graph_document.procedure_meta or {}).get(proc_id, {})
+                services = payload.get("services")
+                keys = _extract_service_keys(services)
+                if not keys:
+                    keys = {
+                        _entity_label(
+                            str(payload.get("team_name") or "Unknown team"),
+                            str(payload.get("service_name") or "Unknown entity"),
+                        )
+                    }
+                service_labels.update(keys)
+            if len(service_labels) > 1:
+                service_labels.discard(_entity_label("Unknown team", "Unknown entity"))
+            sorted_services = sorted(service_labels, key=str.lower)
+            if len(sorted_services) <= 1:
+                base_label = sorted_services[0] if sorted_services else "Unknown graph"
+            else:
+                base_label = " + ".join(sorted_services)
+            component_payloads.append((base_label, sorted(component_nodes, key=str.lower)))
+
+        base_label_counts: Counter[str] = Counter(base for base, _ in component_payloads)
+        base_label_index: Counter[str] = Counter()
+        graph_keys: list[str] = []
+        for base_label, proc_ids in sorted(
+            component_payloads,
+            key=lambda item: (item[0].lower(), item[1][0].lower() if item[1] else ""),
+        ):
+            base_label_index[base_label] += 1
+            label = base_label
+            if base_label_counts[base_label] > 1:
+                label = f"{base_label} #{base_label_index[base_label]}"
+            graph_keys.append(label)
+            for proc_id in proc_ids:
+                graph_keys_by_procedure_id.setdefault(proc_id, set()).add(label)
+        return graph_keys, graph_keys_by_procedure_id
 
     def _collect_graphs(self, documents: Sequence[MarkupDocument]) -> dict[str, _GraphAggregate]:
         graphs: dict[str, _GraphAggregate] = {}
@@ -594,6 +621,40 @@ def _count_weak_components(nodes: set[str], adjacency: Mapping[str, set[str]]) -
                 continue
             visited.add(current)
             stack.extend(undirected.get(current, set()) - visited)
+    return components
+
+
+def _collect_graph_components(document: MarkupDocument) -> list[set[str]]:
+    nodes: set[str] = {procedure.procedure_id for procedure in document.procedures}
+    for source, targets in document.procedure_graph.items():
+        nodes.add(source)
+        nodes.update(targets)
+    if not nodes:
+        return []
+
+    undirected: dict[str, set[str]] = {node: set() for node in nodes}
+    for source, targets in document.procedure_graph.items():
+        undirected.setdefault(source, set())
+        for target in targets:
+            undirected.setdefault(target, set())
+            undirected[source].add(target)
+            undirected[target].add(source)
+
+    visited: set[str] = set()
+    components: list[set[str]] = []
+    for node in sorted(undirected, key=str.lower):
+        if node in visited:
+            continue
+        stack = [node]
+        component: set[str] = set()
+        while stack:
+            current = stack.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            component.add(current)
+            stack.extend(sorted(undirected.get(current, set()) - visited, key=str.lower))
+        components.append(component)
     return components
 
 

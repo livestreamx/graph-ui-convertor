@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from domain.models import MarkupDocument, Procedure
 from domain.services.build_cross_team_graph_dashboard import BuildCrossTeamGraphDashboard
 
@@ -102,8 +105,8 @@ def test_build_cross_team_graph_dashboard() -> None:
         ("service", 3),
         ("operations", 1),
     ]
-    assert dashboard.unique_graph_count == 3
-    assert dashboard.bot_graph_count == 1
+    assert dashboard.unique_graph_count == 4
+    assert dashboard.bot_graph_count == 2
     assert dashboard.multi_graph_count == 1
     assert dashboard.total_procedure_count == 8
     assert dashboard.unique_procedure_count == 7
@@ -166,5 +169,19 @@ def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
         selected_team_ids=["team-alpha"],
     )
 
-    assert dashboard.unique_graph_count == 1
-    assert dashboard.unique_graphs == ("Alpha / Payments",)
+    assert dashboard.unique_graph_count == 2
+    assert dashboard.unique_graphs == ("Alpha / Payments #1", "Alpha / Payments #2")
+
+
+def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
+    fixture_path = Path("examples/markup/graphs_set.json")
+    document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=[document],
+        all_documents=[document],
+        selected_team_ids=[str(document.team_id)],
+    )
+
+    assert dashboard.unique_graph_count == len(document.procedures)
+    assert dashboard.multi_graph_count == 1
