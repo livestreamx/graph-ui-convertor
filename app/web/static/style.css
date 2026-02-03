@@ -938,15 +938,42 @@ main {
 
 .team-graph-graphs-list {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+}
+
+.team-graph-graphs-row {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.6fr) minmax(92px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.team-graph-graphs-row > span:first-child {
+  justify-self: start;
+  text-align: left;
+}
+
+.team-graph-graphs-row > span:last-child {
+  justify-self: end;
+  text-align: right;
+}
+
+.team-graph-graphs-row-header {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+  padding-bottom: 6px;
 }
 
 .team-graph-graphs-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
+  align-items: start;
   font-size: 13px;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .team-graph-graph-entities {
@@ -985,6 +1012,35 @@ main {
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+.team-graph-graphs-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border-left: 1px dashed rgba(255, 255, 255, 0.18);
+  padding-left: 10px;
+}
+
+.team-graph-graphs-count-value {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.team-graph-graphs-count-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 880px) {
+  .team-graph-graphs-row {
+    grid-template-columns: minmax(120px, 1fr) minmax(72px, auto);
+    gap: 8px;
+  }
+
+  .team-graph-graphs-row-header {
+    font-size: 10px;
+  }
 }
 
 .team-graph-empty {

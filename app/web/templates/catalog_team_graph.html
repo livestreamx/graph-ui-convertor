@@ -307,12 +307,15 @@
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-graphs-caption">Graph list</div>
                   {% if team_dashboard.graph_groups %}
                     <div class="team-graph-graphs-list">
+                      <div class="team-graph-graphs-row team-graph-graphs-row-header">
+                        <span>Graphs</span>
+                        <span>Count</span>
+                      </div>
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
-                        <div class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}">
+                        <div class="team-graph-graphs-row team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}">
                           <span class="team-graph-graph-entities">
                             {% for entity in entities %}
                               {% set parts = entity.split(' / ', 1) %}
@@ -331,7 +334,10 @@
                               {% endif %}
                             {% endfor %}
                           </span>
-                          <span class="team-graph-overlap-total">{{ item.graph_count }} graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                          <span class="team-graph-graphs-count">
+                            <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
+                            <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                          </span>
                         </div>
                       {% endfor %}
                     </div>

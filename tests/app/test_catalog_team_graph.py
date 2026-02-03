@@ -163,6 +163,8 @@ def test_catalog_team_graph_api(
         assert "More info" in html_response.text
         assert 'data-team="Alpha"' in html_response.text
         assert 'data-team="Beta"' in html_response.text
+        assert "team-graph-graphs-row-header" in html_response.text
+        assert "team-graph-graphs-count-value" in html_response.text
         assert "--team-chip-border" in html_response.text
         assert 'id="team-graph-page"' in html_response.text
         assert 'hx-get="/catalog/teams/graph"' in html_response.text
