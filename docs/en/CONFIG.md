@@ -130,8 +130,10 @@ catalog:
   `Service Integrity` (internal/external service intersections, split services, target-state share),
   and `Risk Hotspots` (top linking procedures and overloaded services by cycles/blocks/merge nodes).
   The layout is card-based to keep screenshots readable in demos.
-- In `External team overlaps`, each team row shows a `total` sum of merge intersections; expanded
-  `More info` shows per-service merge counts for that team.
+- In `External team overlaps`, each team row shows three counters: `total`,
+  `external → selected` (outside team depends on selected teams), and `selected → external`
+  (selected teams depend on the outside team). The two directional counters always add up to
+  `total`. Expanded `More info` shows per-service merge counts for that team.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

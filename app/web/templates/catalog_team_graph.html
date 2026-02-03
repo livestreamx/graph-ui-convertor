@@ -312,7 +312,21 @@
                     <div class="team-graph-graphs-list">
                       {% for item in team_dashboard.graph_groups %}
                         <div class="team-graph-graphs-item">
-                          <span>{{ item.label }}</span>
+                          <span class="team-graph-graph-entities">
+                            {% for entity in item.label.split(' + ') %}
+                              {% set parts = entity.split(' / ', 1) %}
+                              <span class="team-graph-graph-entity">
+                                <span class="team-graph-graph-entity-team">{{ parts[0] }}</span>
+                                <span class="team-graph-graph-entity-service">
+                                  {% if parts|length > 1 %}
+                                    {{ parts[1] }}
+                                  {% else %}
+                                    {{ entity }}
+                                  {% endif %}
+                                </span>
+                              </span>
+                            {% endfor %}
+                          </span>
                           <span class="team-graph-overlap-total">{{ item.graph_count }} graph{% if item.graph_count != 1 %}s{% endif %}</span>
                         </div>
                       {% endfor %}
@@ -520,7 +534,7 @@
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
                           <div class="team-graph-help-title">External team overlaps</div>
-                          <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections. Click <b>More info</b> to inspect per-service merge counts.</div>
+                          <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections with a split by dependency direction: external team depends on selected teams, and selected teams depend on external team. Both directions are shown for teams and services, and their sum equals total.</div>
                         </div>
                       </div>
                       <button
@@ -535,17 +549,27 @@
                   </div>
                   {% if team_dashboard.external_team_intersections %}
                     <div class="team-graph-ranked-list team-graph-overlap-list" data-overlap-list>
+                      <div class="team-graph-overlap-row team-graph-overlap-row-header">
+                        <span>Team</span>
+                        <span>External &rarr; selected</span>
+                        <span>Selected &rarr; external</span>
+                        <span>Total</span>
+                      </div>
                       {% for item in team_dashboard.external_team_intersections %}
                         <div class="team-graph-overlap-team">
-                          <div class="team-graph-ranked-item">
-                            <span>{{ loop.index }}. {{ item.team_name }}</span>
-                            <span class="team-graph-overlap-total">total {{ item.count }}</span>
+                          <div class="team-graph-overlap-row">
+                            <span class="team-graph-overlap-main-label">{{ loop.index }}. {{ item.team_name }}</span>
+                            <span class="team-graph-overlap-value">{{ item.external_depends_on_selected_count }}</span>
+                            <span class="team-graph-overlap-value">{{ item.selected_depends_on_external_count }}</span>
+                            <span class="team-graph-overlap-value">{{ item.count }}</span>
                           </div>
                           {% if item.services %}
                             <div class="team-graph-overlap-entities">
                               {% for service in item.services %}
-                                <div class="team-graph-ranked-item">
+                                <div class="team-graph-overlap-row team-graph-overlap-row-service">
                                   <span class="team-graph-overlap-service">{{ service.service_name }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.external_depends_on_selected_count }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.selected_depends_on_external_count }}</span>
                                   <span class="team-graph-overlap-count">{{ service.count }}</span>
                                 </div>
                               {% endfor %}
