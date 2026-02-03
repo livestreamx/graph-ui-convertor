@@ -228,7 +228,7 @@
               <div class="team-graph-dashboard-section">
                 <div class="team-graph-dashboard-title">Graphs info</div>
                 <div class="team-graph-dashboard-grid">
-                  <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
+                  <article class="team-graph-kpi-card">
                     <div class="team-graph-kpi-head">
                       <div class="team-graph-kpi-label">Graphs</div>
                       <div class="team-graph-help team-graph-help-inline">
@@ -240,13 +240,7 @@
                       </div>
                     </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.unique_graph_count }}</div>
-                    {% if team_dashboard.unique_graphs %}
-                      <div class="team-graph-hover-list">
-                        {% for item in team_dashboard.unique_graphs %}
-                          <div class="team-graph-hover-item">{{ item }}</div>
-                        {% endfor %}
-                      </div>
-                    {% endif %}
+                    <div class="team-graph-kpi-note">Detailed list is shown below.</div>
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
@@ -302,6 +296,31 @@
                     <div class="team-graph-kpi-value">{{ team_dashboard.unique_procedure_count }}</div>
                   </article>
                 </div>
+                <article class="team-graph-data-card team-graph-graphs-details-card">
+                  <div class="team-graph-data-head">
+                    <div class="team-graph-data-title">Graphs and intersections details</div>
+                    <div class="team-graph-help team-graph-help-inline">
+                      <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Graphs and intersections details help">?</button>
+                      <div class="team-graph-help-popover team-graph-help-popover-wide">
+                        <div class="team-graph-help-title">Graphs and intersections details</div>
+                        <div class="team-graph-help-hint">Grouped by markup or by unique merged-markup combination, ranked by graph count.</div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="team-graph-graphs-caption">Graph list</div>
+                  {% if team_dashboard.graph_groups %}
+                    <div class="team-graph-graphs-list">
+                      {% for item in team_dashboard.graph_groups %}
+                        <div class="team-graph-graphs-item">
+                          <span>{{ item.label }}</span>
+                          <span class="team-graph-overlap-total">{{ item.graph_count }} graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  {% else %}
+                    <div class="team-graph-empty">No graphs detected for selected markups.</div>
+                  {% endif %}
+                </article>
                 <div class="team-graph-split-grid">
                   <article class="team-graph-data-card">
                     <div class="team-graph-data-head">

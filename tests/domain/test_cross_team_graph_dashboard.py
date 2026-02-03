@@ -171,6 +171,9 @@ def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
 
     assert dashboard.unique_graph_count == 2
     assert dashboard.unique_graphs == ("Alpha / Payments #1", "Alpha / Payments #2")
+    assert [(item.label, item.graph_count) for item in dashboard.graph_groups] == [
+        ("Alpha / Payments", 2)
+    ]
 
 
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
@@ -185,3 +188,4 @@ def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None
 
     assert dashboard.unique_graph_count == len(document.procedures)
     assert dashboard.multi_graph_count == 1
+    assert sum(item.graph_count for item in dashboard.graph_groups) == dashboard.unique_graph_count

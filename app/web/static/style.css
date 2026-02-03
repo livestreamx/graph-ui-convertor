@@ -867,6 +867,31 @@ main {
   font-size: 12px;
 }
 
+.team-graph-graphs-details-card {
+  margin-top: 10px;
+  gap: 10px;
+}
+
+.team-graph-graphs-caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.team-graph-graphs-list {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-graphs-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
 .team-graph-empty {
   color: var(--muted);
   font-size: 12px;

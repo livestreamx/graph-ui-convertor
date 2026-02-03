@@ -44,6 +44,12 @@ class ProcedureLinkStat:
 
 
 @dataclass(frozen=True)
+class GraphGroupStat:
+    label: str
+    graph_count: int
+
+
+@dataclass(frozen=True)
 class ServiceLoadStat:
     team_name: str
     service_name: str
@@ -58,6 +64,7 @@ class CrossTeamGraphDashboard:
     markup_type_counts: tuple[MarkupTypeStat, ...]
     unique_graph_count: int
     unique_graphs: tuple[str, ...]
+    graph_groups: tuple[GraphGroupStat, ...]
     bot_graph_count: int
     bot_graphs: tuple[str, ...]
     multi_graph_count: int
@@ -148,6 +155,7 @@ class BuildCrossTeamGraphDashboard:
         (
             unique_graph_labels,
             graph_keys_by_procedure_id,
+            graph_groups,
         ) = self._extract_graph_view(
             selected_documents,
             merge_selected_markups=merge_selected_markups,
@@ -322,6 +330,7 @@ class BuildCrossTeamGraphDashboard:
             markup_type_counts=markup_type_counts,
             unique_graph_count=len(unique_graph_labels),
             unique_graphs=tuple(unique_graph_labels),
+            graph_groups=graph_groups,
             bot_graph_count=len(bot_graph_labels),
             bot_graphs=tuple(bot_graph_labels),
             multi_graph_count=len(multi_graph_labels),
@@ -357,7 +366,7 @@ class BuildCrossTeamGraphDashboard:
         selected_documents: Sequence[MarkupDocument],
         *,
         merge_selected_markups: bool,
-    ) -> tuple[list[str], dict[str, set[str]]]:
+    ) -> tuple[list[str], dict[str, set[str]], tuple[GraphGroupStat, ...]]:
         graph_document = BuildTeamProcedureGraph().build(
             selected_documents,
             merge_selected_markups=merge_selected_markups,
@@ -403,7 +412,14 @@ class BuildCrossTeamGraphDashboard:
             graph_keys.append(label)
             for proc_id in proc_ids:
                 graph_keys_by_procedure_id.setdefault(proc_id, set()).add(label)
-        return graph_keys, graph_keys_by_procedure_id
+        graph_groups = tuple(
+            GraphGroupStat(label=label, graph_count=count)
+            for label, count in sorted(
+                base_label_counts.items(),
+                key=lambda item: (-item[1], item[0].lower()),
+            )
+        )
+        return graph_keys, graph_keys_by_procedure_id, graph_groups
 
     def _collect_graphs(self, documents: Sequence[MarkupDocument]) -> dict[str, _GraphAggregate]:
         graphs: dict[str, _GraphAggregate] = {}
