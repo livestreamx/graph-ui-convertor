@@ -148,12 +148,23 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert top_proc.usage_in_other_graphs == 2
     assert top_proc.incoming_edges == 3
     assert top_proc.outgoing_edges == 1
+    assert top_proc.graph_labels == (
+        "Alpha / Loans",
+        "Alpha / Payments",
+        "Beta / Cards",
+    )
 
     top_service = dashboard.overloaded_services[0]
     assert top_service.team_name == "Beta"
     assert top_service.service_name == "Cards"
     assert top_service.cycle_count == 1
     assert top_service.block_count == 4
+    assert top_service.procedure_ids == ("loop_proc", "shared_core")
+    assert top_service.merge_node_ids == ()
+    assert top_service.weak_component_count == 1
+    assert top_service.cycle_path
+    assert set(top_service.cycle_path) == {"shared_core", "loop_proc"}
+    assert top_service.cycle_path[0] == top_service.cycle_path[-1]
 
 
 def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:

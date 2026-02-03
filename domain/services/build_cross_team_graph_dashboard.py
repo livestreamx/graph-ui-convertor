@@ -45,6 +45,7 @@ class ProcedureLinkStat:
     usage_in_other_graphs: int
     incoming_edges: int
     outgoing_edges: int
+    graph_labels: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,6 +62,10 @@ class ServiceLoadStat:
     block_count: int
     in_team_merge_nodes: int
     procedure_count: int
+    procedure_ids: tuple[str, ...] = ()
+    merge_node_ids: tuple[str, ...] = ()
+    weak_component_count: int = 0
+    cycle_path: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -565,8 +570,9 @@ class BuildCrossTeamGraphDashboard:
         proc_to_graphs: dict[str, set[str]] = {}
         merged_adjacency: dict[str, set[str]] = {}
         for graph in graphs.values():
+            graph_label = _entity_label(graph.team_name, graph.service_name)
             for proc_id in graph.procedure_ids:
-                proc_to_graphs.setdefault(proc_id, set()).add(graph.key)
+                proc_to_graphs.setdefault(proc_id, set()).add(graph_label)
                 merged_adjacency.setdefault(proc_id, set())
             for source, targets in graph.adjacency.items():
                 merged_adjacency.setdefault(source, set()).update(targets)
@@ -582,6 +588,7 @@ class BuildCrossTeamGraphDashboard:
                 usage_in_other_graphs=max(0, len(graph_keys) - 1),
                 incoming_edges=metrics.in_degree.get(proc_id, 0),
                 outgoing_edges=metrics.out_degree.get(proc_id, 0),
+                graph_labels=tuple(sorted(graph_keys, key=str.lower)),
             )
             for proc_id, graph_keys in proc_to_graphs.items()
         ]
@@ -675,6 +682,7 @@ class BuildCrossTeamGraphDashboard:
             adjacency = service.to_adjacency()
             graph_metrics = compute_graph_metrics(adjacency)
             in_team_merge_nodes = len(merge_node_ids_by_service.get(service.key, set()))
+            weak_component_count = _count_weak_components(service.procedure_ids, service.adjacency)
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,
@@ -683,6 +691,12 @@ class BuildCrossTeamGraphDashboard:
                     block_count=service.block_count(),
                     in_team_merge_nodes=in_team_merge_nodes,
                     procedure_count=len(service.procedure_ids),
+                    procedure_ids=tuple(sorted(service.procedure_ids, key=str.lower)),
+                    merge_node_ids=tuple(
+                        sorted(merge_node_ids_by_service.get(service.key, set()), key=str.lower)
+                    ),
+                    weak_component_count=weak_component_count,
+                    cycle_path=tuple(graph_metrics.cycle_path or ()),
                 )
             )
         stats.sort(

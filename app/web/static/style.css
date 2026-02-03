@@ -898,18 +898,6 @@ main {
   align-content: start;
 }
 
-.team-graph-overlap-toggle {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-
-.team-graph-overlap-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-
 .team-graph-overlap-list {
   overflow: hidden;
   gap: 8px;
@@ -934,7 +922,7 @@ main {
   transition: max-height 0.24s ease, opacity 0.2s ease, margin-top 0.2s ease;
 }
 
-.team-graph-overlap-list.is-expanded .team-graph-overlap-entities {
+.team-graph-overlap-team.is-open .team-graph-overlap-entities {
   max-height: 170px;
   opacity: 1;
   margin-top: 8px;
@@ -980,6 +968,19 @@ main {
   font-size: 13px;
 }
 
+.team-graph-overlap-toggle-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.team-graph-overlap-toggle-row:hover .team-graph-overlap-main-label {
+  color: var(--accent);
+}
+
 .team-graph-overlap-value {
   justify-self: end;
   font-weight: 600;
@@ -991,6 +992,30 @@ main {
 
 .team-graph-overlap-row-service .team-graph-overlap-count {
   justify-self: end;
+}
+
+.team-graph-overlap-more {
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-overlap-more-button {
+  justify-self: center;
+  margin-top: 4px;
+  padding: 7px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.team-graph-overlap-more-button:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
 }
 
 @media (max-width: 880px) {
@@ -1022,6 +1047,99 @@ main {
 .team-graph-ranked-note {
   color: var(--muted);
   font-size: 12px;
+}
+
+.team-graph-ranked-table {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-ranked-table-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 2fr) repeat(4, minmax(74px, 1fr));
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.team-graph-ranked-table-row > span:first-child {
+  justify-self: start;
+  text-align: left;
+}
+
+.team-graph-ranked-table-row > span:not(:first-child) {
+  justify-self: end;
+  text-align: right;
+}
+
+.team-graph-ranked-table-header {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.team-graph-ranked-table-item {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-graph-ranked-table-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 10px;
+}
+
+.team-graph-ranked-table-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-graph-ranked-table-details {
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-ranked-details-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-graph-ranked-details-list {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.team-graph-ranked-details-list-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.team-graph-ranked-details-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.team-graph-data-card-spaced {
+  margin-top: 10px;
+}
+
+@media (max-width: 880px) {
+  .team-graph-ranked-table-row {
+    grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(52px, auto));
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .team-graph-ranked-table-header {
+    font-size: 10px;
+  }
 }
 
 .team-graph-graphs-details-card {
@@ -1087,15 +1205,15 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--team-chip-border, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--team-chip-border, rgba(210, 220, 235, 0.22));
   border-radius: 999px;
   padding: 2px 10px 2px 2px;
-  background: var(--team-chip-bg, rgba(255, 255, 255, 0.03));
+  background: var(--team-chip-bg, rgba(206, 216, 231, 0.09));
 }
 
 .team-graph-graph-entity-team {
-  background: var(--team-chip-team-bg, rgba(112, 170, 255, 0.2));
-  color: var(--team-chip-team-text, #b8d6ff);
+  background: var(--team-chip-team-bg, rgba(183, 197, 214, 0.3));
+  color: var(--team-chip-team-text, #dfebf8);
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 11px;
@@ -1104,6 +1222,15 @@ main {
 
 .team-graph-graph-entity-service {
   color: var(--text);
+}
+
+.team-graph-graph-entity-sm {
+  font-size: 11px;
+  padding-right: 8px;
+}
+
+.team-graph-graph-entity-sm .team-graph-graph-entity-team {
+  font-size: 10px;
 }
 
 .team-graph-graph-separator {

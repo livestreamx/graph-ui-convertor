@@ -160,7 +160,8 @@ def test_catalog_team_graph_api(
         assert "Unique procedures" in html_response.text
         assert "Multichannel procedures" in html_response.text
         assert "Employee procedures" in html_response.text
-        assert "More info" in html_response.text
+        assert "External team overlaps" in html_response.text
+        assert "data-overlap-team-toggle" in html_response.text
         assert 'data-team="Alpha"' in html_response.text
         assert 'data-team="Beta"' in html_response.text
         assert "team-graph-graphs-row-header" in html_response.text
