@@ -153,18 +153,42 @@ def test_build_cross_team_graph_dashboard() -> None:
         "Alpha / Payments",
         "Beta / Cards",
     )
+    assert [
+        (
+            item.graph_label,
+            item.is_cross_entity,
+            item.incoming_edges,
+            item.outgoing_edges,
+        )
+        for item in top_proc.graph_usage_stats
+    ] == [
+        ("Alpha / Loans", True, 1, 0),
+        ("Alpha / Payments", True, 1, 0),
+        ("Beta / Cards", True, 1, 1),
+    ]
 
     top_service = dashboard.overloaded_services[0]
-    assert top_service.team_name == "Beta"
-    assert top_service.service_name == "Cards"
-    assert top_service.cycle_count == 1
-    assert top_service.block_count == 4
-    assert top_service.procedure_ids == ("loop_proc", "shared_core")
-    assert top_service.merge_node_ids == ()
-    assert top_service.weak_component_count == 1
-    assert top_service.cycle_path
-    assert set(top_service.cycle_path) == {"shared_core", "loop_proc"}
-    assert top_service.cycle_path[0] == top_service.cycle_path[-1]
+    assert top_service.team_name == "Alpha"
+    assert top_service.service_name == "Loans"
+    assert top_service.in_team_merge_nodes == 1
+    assert top_service.cycle_count == 0
+    assert top_service.procedure_count == 4
+    assert top_service.block_count == 6
+    assert [
+        (
+            item.procedure_id,
+            item.in_team_merge_hits,
+            item.cycle_hits,
+            item.linked_procedure_count,
+            item.block_count,
+        )
+        for item in top_service.procedure_usage_stats
+    ] == [
+        ("multi_route", 0, 0, 1, 2),
+        ("split_a", 0, 0, 0, 2),
+        ("split_b", 0, 0, 0, 2),
+        ("shared_core", 1, 0, 1, 0),
+    ]
 
 
 def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:

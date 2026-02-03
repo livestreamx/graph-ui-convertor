@@ -1083,6 +1083,15 @@ main {
   text-align: right;
 }
 
+.team-graph-ranked-table-row > span.team-graph-ranked-details-list-entity {
+  justify-self: start;
+  text-align: left;
+}
+
+.team-graph-ranked-subitem-graph {
+  grid-column: 1 / span 2;
+}
+
 .team-graph-ranked-table-header {
   color: var(--muted);
   text-transform: uppercase;
@@ -1128,6 +1137,11 @@ main {
 
 .team-graph-ranked-details-list-entity .team-graph-graph-entities {
   gap: 4px;
+}
+
+.team-graph-ranked-subitem-label {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .team-graph-ranked-details-list-mono {

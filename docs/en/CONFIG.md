@@ -128,10 +128,12 @@ catalog:
 - Step 3 renders a dashboard after Merge with three compact sections:
   `Graphs info` (markup type distribution, unique graphs, unique procedures, bot/multi coverage),
   `Service Integrity` (internal/external service intersections, split services, target-state share),
-  and `Risk Hotspots` (top linking procedures and overloaded services by cycles/blocks/merge nodes).
+  and `Risk Hotspots` (top linking procedures and overloaded services by merge nodes/cycles/procedures/blocks).
   The layout is card-based to keep screenshots readable in demos.
   Graph/intersection drilldowns share one `team / service` output format with team color chips,
-  including `Multi graphs` and entity details in `Top linking procedures`.
+  including `Multi graphs` and tabular `Top linking procedures` details per graph
+  (`cross-entity`, `inbound deps`, `outbound deps`).
+  `Top overloaded entities` detail shows the same columns per procedure in graph order.
   `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,

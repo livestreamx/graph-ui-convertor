@@ -683,7 +683,7 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top linking procedures help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top linking procedures</div>
-                        <div class="team-graph-help-hint">Rank by cross-entity reuse and dependency fan-in/fan-out in merged <code>procedure_graph</code> data. Click a row to inspect entities where the procedure appears.</div>
+                        <div class="team-graph-help-hint">Rank by cross-entity reuse and dependency fan-in/fan-out in merged <code>procedure_graph</code> data. Click a row to inspect per-graph dependency impact for the same procedure.</div>
                       </div>
                     </div>
                   </div>
@@ -707,12 +707,17 @@
                             <span>{{ item.outgoing_edges }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
-                            <div class="team-graph-ranked-details-label">Used in entities:</div>
-                            <div class="team-graph-ranked-details-list">
-                              {% for graph_label in item.graph_labels %}
-                                <span class="team-graph-ranked-details-list-entity">
-                                  {{ render_graph_label_entities(graph_label, force_colorize=true) }}
-                                </span>
+                            <div class="team-graph-ranked-details-label">Graph-level breakdown</div>
+                            <div class="team-graph-ranked-table">
+                              {% for graph_item in item.graph_usage_stats %}
+                                <div class="team-graph-ranked-table-row">
+                                  <span class="team-graph-ranked-details-list-entity team-graph-ranked-subitem-graph">
+                                    {{ render_graph_label_entities(graph_item.graph_label, force_colorize=true) }}
+                                  </span>
+                                  <span>{{ "yes" if graph_item.is_cross_entity else "no" }}</span>
+                                  <span>{{ graph_item.incoming_edges }}</span>
+                                  <span>{{ graph_item.outgoing_edges }}</span>
+                                </div>
                               {% endfor %}
                             </div>
                           </div>
@@ -730,58 +735,40 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top overloaded entities</div>
-                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: cycles, block volume, in-team merge-node density, then procedure count. Click a row for evidence details.</div>
+                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: in-team merge-node density, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown.</div>
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-data-context">Ranking priority: cycles &rarr; blocks &rarr; in-team merge nodes &rarr; procedures. These metrics are computed directly from graph structure and block lists.</div>
+                  <div class="team-graph-data-context">Ranking priority: in-team merge nodes &rarr; cycles &rarr; procedures &rarr; blocks. These metrics are computed directly from graph structure and block lists.</div>
                   {% if team_dashboard.overloaded_services %}
                     <div class="team-graph-ranked-table team-graph-ranked-table-services">
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Entity</span>
-                        <span>Cycles</span>
-                        <span>Blocks</span>
                         <span>In-team merges</span>
+                        <span>Cycles</span>
                         <span>Procedures</span>
+                        <span>Blocks</span>
                       </div>
                       {% for item in team_dashboard.overloaded_services %}
                         <details class="team-graph-ranked-table-item">
                           <summary class="team-graph-ranked-table-row">
                             <span>{{ loop.index }}. {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm") }}</span>
-                            <span>{{ item.cycle_count }}</span>
-                            <span>{{ item.block_count }}</span>
                             <span>{{ item.in_team_merge_nodes }}</span>
+                            <span>{{ item.cycle_count }}</span>
                             <span>{{ item.procedure_count }}</span>
+                            <span>{{ item.block_count }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
-                            <div class="team-graph-ranked-details-grid">
-                              <div>
-                                <div class="team-graph-ranked-details-label">Merge procedures</div>
-                                <div class="team-graph-ranked-details-list team-graph-ranked-details-list-mono">
-                                  {% if item.merge_node_ids %}
-                                    {% for proc_id in item.merge_node_ids %}
-                                      <span>{{ proc_id }}</span>
-                                    {% endfor %}
-                                  {% else %}
-                                    <span>None</span>
-                                  {% endif %}
+                            <div class="team-graph-ranked-details-label">Procedure-level breakdown (graph order)</div>
+                            <div class="team-graph-ranked-table">
+                              {% for proc_item in item.procedure_usage_stats %}
+                                <div class="team-graph-ranked-table-row">
+                                  <span class="team-graph-mono">{{ proc_item.procedure_id }}</span>
+                                  <span>{% if proc_item.in_team_merge_hits %}{{ proc_item.in_team_merge_hits }}{% endif %}</span>
+                                  <span>{% if proc_item.cycle_hits %}{{ proc_item.cycle_hits }}{% endif %}</span>
+                                  <span>{% if proc_item.linked_procedure_count %}{{ proc_item.linked_procedure_count }}{% endif %}</span>
+                                  <span>{% if proc_item.block_count %}{{ proc_item.block_count }}{% endif %}</span>
                                 </div>
-                              </div>
-                              <div>
-                                <div class="team-graph-ranked-details-label">Cycle path</div>
-                                <div class="team-graph-ranked-details-list team-graph-ranked-details-list-mono">
-                                  {% if item.cycle_path %}
-                                    <span>{{ item.cycle_path | join(' -> ') }}</span>
-                                  {% else %}
-                                    <span>No explicit cycle path</span>
-                                  {% endif %}
-                                </div>
-                              </div>
-                            </div>
-                            <div class="team-graph-ranked-details-label">All procedures ({{ item.procedure_count }}), weak components: {{ item.weak_component_count }}</div>
-                            <div class="team-graph-ranked-details-list team-graph-ranked-details-list-mono">
-                              {% for proc_id in item.procedure_ids %}
-                                <span>{{ proc_id }}</span>
                               {% endfor %}
                             </div>
                           </div>
