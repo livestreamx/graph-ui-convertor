@@ -559,10 +559,21 @@ class BuildCrossTeamGraphDashboard:
         )
         flow_graph.add_document(flow_document)
         normalized_flow_graph = _normalize_flow_graph(flow_graph)
+        global_display_proc_ids = normalized_flow_graph.visible_procedure_ids()
+        global_proc_order = list(
+            normalized_flow_graph.ordered_procedure_ids(global_display_proc_ids)
+        )
+        global_adjacency = normalized_flow_graph.to_adjacency(global_display_proc_ids)
+        global_graph_labels_by_proc = _build_graph_labels(
+            global_proc_order,
+            {node: set(children) for node, children in global_adjacency.items()},
+        )
         overloaded_services = tuple(
             self._build_overloaded_services(
                 selected_services,
                 flow_graph=normalized_flow_graph,
+                global_proc_order=global_proc_order,
+                global_graph_labels_by_proc=global_graph_labels_by_proc,
                 procedure_names=procedure_names,
                 merge_selected_markups=merge_selected_markups,
                 top_limit=top_limit,
@@ -974,6 +985,8 @@ class BuildCrossTeamGraphDashboard:
         services: Mapping[str, _GraphAggregate],
         *,
         flow_graph: _GraphAggregate,
+        global_proc_order: Sequence[str],
+        global_graph_labels_by_proc: Mapping[str, str | None],
         procedure_names: Mapping[str, str],
         merge_selected_markups: bool,
         top_limit: int,
@@ -1001,8 +1014,13 @@ class BuildCrossTeamGraphDashboard:
             in_team_merge_nodes = len(merge_nodes)
             weak_component_count = _count_weak_components(display_proc_ids, visible_adjacency)
             cycle_nodes = set(graph_metrics.cycle_path or ())
-            ordered_proc_ids = list(flow_graph.ordered_procedure_ids(display_proc_ids))
-            graph_labels_by_proc = _build_graph_labels(ordered_proc_ids, visible_adjacency)
+            ordered_proc_ids = [
+                proc_id for proc_id in global_proc_order if proc_id in display_proc_ids
+            ]
+            if len(ordered_proc_ids) < len(display_proc_ids):
+                ordered_proc_ids.extend(
+                    sorted(display_proc_ids - set(ordered_proc_ids), key=str.lower)
+                )
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,
@@ -1033,7 +1051,7 @@ class BuildCrossTeamGraphDashboard:
                             end_block_count=len(
                                 service.end_block_types_by_procedure.get(proc_id, {})
                             ),
-                            graph_label=graph_labels_by_proc.get(proc_id),
+                            graph_label=global_graph_labels_by_proc.get(proc_id),
                             block_type_stats=self._build_procedure_block_type_stats(
                                 service,
                                 proc_id,
@@ -1171,6 +1189,14 @@ def _normalize_flow_graph(flow_graph: _GraphAggregate) -> _GraphAggregate:
         normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
         normalized.start_block_ids_by_procedure.setdefault(normalized_proc_id, set()).update(
             start_block_ids
+        )
+    for proc_id, block_ids in flow_graph.block_ids_by_procedure.items():
+        normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
+        normalized.block_ids_by_procedure.setdefault(normalized_proc_id, set()).update(block_ids)
+    for proc_id, end_block_types in flow_graph.end_block_types_by_procedure.items():
+        normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
+        normalized.end_block_types_by_procedure.setdefault(normalized_proc_id, {}).update(
+            end_block_types
         )
     return normalized
 

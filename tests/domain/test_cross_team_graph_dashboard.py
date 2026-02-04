@@ -544,6 +544,62 @@ def test_overloaded_entities_breakdown_prioritizes_start_components() -> None:
     ]
 
 
+def test_overloaded_entities_breakdown_projects_global_diagram_order() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="alpha_no_start", branches={"a1": ["a2"]}),
+                Procedure(
+                    procedure_id="alpha_start",
+                    start_block_ids=["s1"],
+                    branches={"s1": ["s2"]},
+                ),
+            ],
+            procedure_graph={
+                "alpha_no_start": ["beta_start", "alpha_start"],
+                "alpha_start": [],
+            },
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Gateway",
+            unit_id="svc-gw",
+            procedures=[
+                Procedure(
+                    procedure_id="beta_start",
+                    start_block_ids=["b1"],
+                    branches={"b1": ["b2"]},
+                ),
+            ],
+            procedure_graph={"beta_start": ["alpha_no_start"]},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+    )
+
+    alpha_service = next(
+        item
+        for item in dashboard.overloaded_services
+        if item.team_name == "Alpha" and item.service_name == "Payments"
+    )
+    assert [item.procedure_id for item in alpha_service.procedure_usage_stats] == [
+        "alpha_start",
+        "alpha_no_start",
+    ]
+    assert [item.start_block_count for item in alpha_service.procedure_usage_stats] == [1, 0]
+
+
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
     fixture_path = Path("examples/markup/graphs_set.json")
     document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
