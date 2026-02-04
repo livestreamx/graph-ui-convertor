@@ -366,7 +366,7 @@
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
                         <div class="team-graph-graphs-row team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
-                          {{ render_graph_label_entities(item.label) }}
+                          {{ render_graph_label_entities(item.label, force_colorize=true) }}
                           <span class="team-graph-graphs-count">
                             <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
                             <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
@@ -761,9 +761,19 @@
                           <div class="team-graph-ranked-table-details">
                             <div class="team-graph-ranked-details-label">Procedure-level breakdown (graph order)</div>
                             <div class="team-graph-ranked-table">
+                              <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
+                                <span>Procedure</span>
+                                <span>Merge</span>
+                                <span>Cycle</span>
+                                <span>Linked</span>
+                                <span>Blocks</span>
+                              </div>
                               {% for proc_item in item.procedure_usage_stats %}
                                 <div class="team-graph-ranked-table-row">
-                                  <span class="team-graph-mono">{{ proc_item.procedure_id }}</span>
+                                  <span class="team-graph-mono">
+                                    <span class="team-graph-procedure-order">P{{ loop.index }}</span>
+                                    {{ proc_item.procedure_id }}
+                                  </span>
                                   <span>{% if proc_item.in_team_merge_hits %}{{ proc_item.in_team_merge_hits }}{% endif %}</span>
                                   <span>{% if proc_item.cycle_hits %}{{ proc_item.cycle_hits }}{% endif %}</span>
                                   <span>{% if proc_item.linked_procedure_count %}{{ proc_item.linked_procedure_count }}{% endif %}</span>
@@ -932,27 +942,17 @@
         const graphEntities = Array.from(
           page.querySelectorAll(".team-graph-graph-entity[data-team]"),
         ).filter((node) => node instanceof HTMLElement);
-        const normalizeTeamName = (value) =>
-          value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
-        const teamNames = Array.from(
-          new Set(
-            graphEntities
-              .map((node) => node.getAttribute("data-team") || "")
-              .map((value) => normalizeTeamName(value))
-              .filter((value) => value.length > 0),
-          ),
-        ).sort((left, right) => left.localeCompare(right));
-        const teamHueByName = new Map();
-        teamNames.forEach((teamName, index) => {
-          teamHueByName.set(teamName, Math.round((index * 137.508) % 360));
-        });
+        const normalizeTeamName = (value) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
+        const hueForTeam = (teamName) => {
+          let hash = 0;
+          for (let index = 0; index < teamName.length; index += 1) {
+            hash = (hash * 31 + teamName.charCodeAt(index)) % 3600;
+          }
+          return Math.round((hash / 10) % 360);
+        };
         graphEntities.forEach((node) => {
           const teamName = normalizeTeamName(node.getAttribute("data-team") || "");
           if (!teamName) {
-            return;
-          }
-          const hue = teamHueByName.get(teamName);
-          if (typeof hue !== "number") {
             return;
           }
           const shouldColorize =
@@ -965,6 +965,7 @@
             node.style.removeProperty("--team-chip-team-text");
             return;
           }
+          const hue = hueForTeam(teamName);
           node.style.setProperty("--team-chip-border", `hsla(${hue}, 82%, 66%, 0.45)`);
           node.style.setProperty("--team-chip-bg", `hsla(${hue}, 80%, 44%, 0.12)`);
           node.style.setProperty("--team-chip-team-bg", `hsla(${hue}, 88%, 62%, 0.24)`);

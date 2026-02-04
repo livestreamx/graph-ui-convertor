@@ -168,12 +168,15 @@ def test_catalog_team_graph_api(
         assert "team-graph-ranked-details-list-entity" in html_response.text
         assert "Graph-level breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order)" in html_response.text
+        assert "Linked" in html_response.text
+        assert "team-graph-procedure-order" in html_response.text
         assert "Data quality note" not in html_response.text
         assert "Ranking priority: cross-entity reuse" in html_response.text
         assert "Ranking priority: in-team merge nodes" in html_response.text
         assert "team-graph-graphs-row-header" in html_response.text
         assert "team-graph-graphs-count-value" in html_response.text
         assert "--team-chip-border" in html_response.text
+        assert "const hueForTeam = (teamName)" in html_response.text
         assert 'id="team-graph-page"' in html_response.text
         assert 'hx-get="/catalog/teams/graph"' in html_response.text
         assert 'hx-target="#team-graph-page"' in html_response.text
@@ -269,7 +272,7 @@ def test_catalog_team_graph_merge_nodes_use_all_markups(
             if isinstance(proc_id, str):
                 merge_ids.add(proc_id)
         assert "proc_shared_routing" in merge_ids
-        assert "proc_shared_intake" not in merge_ids
+        assert "proc_shared_intake" in merge_ids
     finally:
         stubber.deactivate()
 
@@ -435,7 +438,7 @@ def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_marku
     assert isinstance(graphs_procedures, list)
     basic_proc_ids = {proc["proc_id"] for proc in basic_procedures if isinstance(proc, dict)}
     graphs_proc_ids = {proc["proc_id"] for proc in graphs_procedures if isinstance(proc, dict)}
-    expected_merge_proc_ids = (basic_proc_ids & graphs_proc_ids) - {"proc_shared_intake"}
+    expected_merge_proc_ids = basic_proc_ids & graphs_proc_ids
     graphs_only_proc_ids = graphs_proc_ids - basic_proc_ids
     assert expected_merge_proc_ids
     assert graphs_only_proc_ids
@@ -645,6 +648,7 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-kpi-card" in styles
     assert ".team-graph-merge-loader.htmx-request" in styles
     assert ".team-graph-merge-button:disabled" in styles
+    assert ".team-graph-procedure-order" in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(
@@ -966,8 +970,13 @@ def test_catalog_team_graph_fixture_markups_do_not_merge_when_flag_is_off(
         assert "proc_shared_routing" not in frame_ids
         assert "proc_shared_routing::doc1" in frame_ids
         assert "proc_shared_routing::doc2" in frame_ids
+        assert "proc_shared_intake" not in frame_ids
+        assert "proc_shared_intake::doc1" in frame_ids
+        assert "proc_shared_intake::doc2" in frame_ids
         assert "proc_shared_routing::doc1" in highlight_ids
         assert "proc_shared_routing::doc2" in highlight_ids
+        assert "proc_shared_intake::doc1" in highlight_ids
+        assert "proc_shared_intake::doc2" in highlight_ids
         assert all(
             element.get("customData", {}).get("cjm", {}).get("role") != "service_zone"
             for element in elements
