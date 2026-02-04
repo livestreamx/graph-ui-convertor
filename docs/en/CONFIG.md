@@ -121,6 +121,9 @@ catalog:
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
+  During graph build, intermediate procedures are removed when all conditions are met: no START/END
+  markers (including `postpone`), exactly one inbound + one outbound edge, and the node is not a
+  merge node.
   `merge_selected_markups` is disabled by default and controls whether selected markups are merged
   by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
   `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only

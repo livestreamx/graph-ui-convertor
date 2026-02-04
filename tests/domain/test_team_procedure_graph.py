@@ -492,6 +492,163 @@ def test_build_team_procedure_graph_groups_service_colors_when_palette_exhausted
     assert colors == set(_SERVICE_COLORS)
 
 
+def test_build_team_procedure_graph_drops_non_merge_intermediate_without_markers() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "proc_name": "Entry",
+                    "start_block_ids": ["s1"],
+                    "end_block_ids": ["e1::end"],
+                    "branches": {"s1": ["e1"]},
+                },
+                {
+                    "proc_id": "bridge",
+                    "proc_name": "Bridge",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {"m1": ["m2"]},
+                },
+                {
+                    "proc_id": "tail",
+                    "proc_name": "Tail",
+                    "start_block_ids": ["s2"],
+                    "end_block_ids": ["e2::end"],
+                    "branches": {"s2": ["e2"]},
+                },
+            ],
+            "procedure_graph": {"entry": ["bridge"], "bridge": ["tail"], "tail": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document])
+
+    assert {proc.procedure_id for proc in merged.procedures} == {"entry", "tail"}
+    assert merged.procedure_graph == {"entry": ["tail"], "tail": []}
+
+
+def test_build_team_procedure_graph_keeps_merge_intermediate_without_markers() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                },
+                {
+                    "proc_id": "shared",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {"a3": ["a4"]},
+                },
+                {
+                    "proc_id": "tail",
+                    "start_block_ids": ["a5"],
+                    "end_block_ids": ["a6::end"],
+                    "branches": {"a5": ["a6"]},
+                },
+            ],
+            "procedure_graph": {"entry": ["shared"], "shared": ["tail"], "tail": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "start_block_ids": ["b1"],
+                    "end_block_ids": ["b2::end"],
+                    "branches": {"b1": ["b2"]},
+                },
+                {
+                    "proc_id": "shared",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {"b3": ["b4"]},
+                },
+                {
+                    "proc_id": "tail",
+                    "start_block_ids": ["b5"],
+                    "end_block_ids": ["b6::end"],
+                    "branches": {"b5": ["b6"]},
+                },
+            ],
+            "procedure_graph": {"entry": ["shared"], "shared": ["tail"], "tail": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([doc_alpha, doc_beta])
+
+    assert {proc.procedure_id for proc in merged.procedures} == {"entry", "shared", "tail"}
+    assert merged.procedure_graph == {"entry": ["shared"], "shared": ["tail"], "tail": []}
+
+
+def test_build_team_procedure_graph_preserves_connectivity_after_multi_drop() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "start_block_ids": ["s1"],
+                    "end_block_ids": ["e1::end"],
+                    "branches": {"s1": ["e1"]},
+                },
+                {
+                    "proc_id": "middle_1",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {"m1": ["m2"]},
+                },
+                {
+                    "proc_id": "middle_2",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {"m3": ["m4"]},
+                },
+                {
+                    "proc_id": "alt",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                },
+                {
+                    "proc_id": "tail",
+                    "start_block_ids": ["t1"],
+                    "end_block_ids": ["t2::end"],
+                    "branches": {"t1": ["t2"]},
+                },
+            ],
+            "procedure_graph": {
+                "entry": ["middle_1", "alt"],
+                "middle_1": ["middle_2"],
+                "middle_2": ["tail"],
+                "alt": ["tail"],
+                "tail": [],
+            },
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document])
+
+    assert {proc.procedure_id for proc in merged.procedures} == {"entry", "alt", "tail"}
+    assert merged.procedure_graph == {"entry": ["alt", "tail"], "alt": ["tail"], "tail": []}
+
+
 def test_procedure_graph_panel_colors_match_graph() -> None:
     payload_alpha = {
         "markup_type": "service",
