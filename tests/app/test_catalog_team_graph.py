@@ -167,10 +167,11 @@ def test_catalog_team_graph_api(
         assert 'data-team="Beta"' in html_response.text
         assert "team-graph-ranked-details-list-entity" in html_response.text
         assert "Graph-level breakdown" in html_response.text
-        assert "Procedure-level breakdown (graph order)" in html_response.text
+        assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
         assert "team-graph-procedure-order" in html_response.text
+        assert "team-graph-procedure-id" in html_response.text
         assert "Data quality note" not in html_response.text
         assert "Ranking priority: cross-entity reuse" in html_response.text
         assert "Ranking priority: merges" in html_response.text
@@ -737,6 +738,10 @@ def test_catalog_team_graph_default_does_not_merge_selected_markups(
     )
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -1097,6 +1102,7 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
         assert html_response.status_code == 200
         assert "Intersection node breakdown" in html_response.text
         assert "team-graph-merge-node-card" in html_response.text
+        assert "team-graph-procedure-id" in html_response.text
         assert "proc_shared_intake" in html_response.text
         assert "proc_shared_routing" in html_response.text
     finally:
@@ -1309,6 +1315,8 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
     )
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -1354,5 +1362,14 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
             if isinstance(proc_id, str) and proc_id.startswith("shared::doc")
         ]
         assert len(shared_ids) == 2
+
+        html_response = client_api.get(
+            "/catalog/teams/graph",
+            params={"team_ids": "team-alpha,team-beta"},
+        )
+        assert html_response.status_code == 200
+        assert "Potential intersection node breakdown" in html_response.text
+        assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
+        assert "Potential merges" in html_response.text
     finally:
         stubber.deactivate()

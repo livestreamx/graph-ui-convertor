@@ -306,7 +306,11 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
             service_name="Payments",
             unit_id="svc-pay",
             procedures=[
-                Procedure(procedure_id="shared", branches={"a": ["b"]}),
+                Procedure(
+                    procedure_id="shared",
+                    procedure_name="Shared Flow",
+                    branches={"a": ["b"]},
+                ),
                 Procedure(procedure_id="alpha_only", branches={"c": ["d"]}),
             ],
             procedure_graph={"alpha_only": ["shared"], "shared": []},
@@ -318,7 +322,11 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
             service_name="Routing",
             unit_id="svc-routing",
             procedures=[
-                Procedure(procedure_id="shared", branches={"x": ["y"]}),
+                Procedure(
+                    procedure_id="shared",
+                    procedure_name="Shared Flow",
+                    branches={"x": ["y"]},
+                ),
                 Procedure(procedure_id="beta_only", branches={"z": ["w"]}),
             ],
             procedure_graph={"shared": ["beta_only"], "beta_only": []},
@@ -340,6 +348,7 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
     assert component.merge_nodes
     merge_node = component.merge_nodes[0]
     assert merge_node.procedure_id == "shared"
+    assert merge_node.procedure_name == "Shared Flow"
     assert merge_node.entities == ("Alpha / Payments", "Beta / Routing")
 
 

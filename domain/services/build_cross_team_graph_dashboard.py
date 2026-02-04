@@ -41,6 +41,7 @@ class ServiceIntersectionStat:
 @dataclass(frozen=True)
 class ProcedureLinkStat:
     procedure_id: str
+    procedure_name: str | None
     graph_count: int
     usage_in_other_graphs: int
     incoming_edges: int
@@ -73,6 +74,7 @@ class GraphComponentStat:
 @dataclass(frozen=True)
 class GraphMergeNodeStat:
     procedure_id: str
+    procedure_name: str | None
     entities: tuple[str, ...] = ()
 
 
@@ -94,6 +96,7 @@ class ServiceLoadStat:
 @dataclass(frozen=True)
 class ServiceProcedureUsageStat:
     procedure_id: str
+    procedure_name: str | None
     in_team_merge_hits: int
     cycle_hits: int
     linked_procedure_count: int
@@ -211,6 +214,7 @@ class BuildCrossTeamGraphDashboard:
         all_service_docs = [doc for doc in all_documents if _is_service_markup(doc)]
         selected_services = self._collect_graphs(selected_service_docs)
         all_services = self._collect_graphs(all_service_docs)
+        procedure_names = self._collect_procedure_names(selected_documents)
 
         selected_team_set = {
             team_id for team_id in (str(value).strip() for value in selected_team_ids) if team_id
@@ -395,11 +399,16 @@ class BuildCrossTeamGraphDashboard:
                 target_entities.append(entity_label)
 
         linking_procedures = tuple(
-            self._build_linking_procedures(selected_graphs, top_limit=top_limit)
+            self._build_linking_procedures(
+                selected_graphs,
+                procedure_names=procedure_names,
+                top_limit=top_limit,
+            )
         )
         overloaded_services = tuple(
             self._build_overloaded_services(
                 selected_services,
+                procedure_names=procedure_names,
                 merge_selected_markups=merge_selected_markups,
                 top_limit=top_limit,
             )
@@ -488,6 +497,11 @@ class BuildCrossTeamGraphDashboard:
         components = _collect_graph_components(graph_document)
         graph_keys_by_procedure_id: dict[str, set[str]] = {}
         procedure_meta = graph_document.procedure_meta or {}
+        procedure_names = {
+            proc.procedure_id: proc.procedure_name
+            for proc in graph_document.procedures
+            if proc.procedure_name
+        }
 
         component_payloads: list[tuple[str, list[str], tuple[GraphMergeNodeStat, ...]]] = []
         for component_nodes in components:
@@ -513,6 +527,7 @@ class BuildCrossTeamGraphDashboard:
                     merge_nodes.append(
                         GraphMergeNodeStat(
                             procedure_id=proc_id,
+                            procedure_name=procedure_names.get(proc_id),
                             entities=tuple(sorted(merge_keys, key=str.lower)),
                         )
                     )
@@ -637,6 +652,18 @@ class BuildCrossTeamGraphDashboard:
             for markup_type, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         ]
 
+    def _collect_procedure_names(
+        self,
+        documents: Sequence[MarkupDocument],
+    ) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for document in documents:
+            for proc in document.procedures:
+                if not proc.procedure_name:
+                    continue
+                names.setdefault(proc.procedure_id, proc.procedure_name)
+        return names
+
     def _build_service_node_states(
         self,
         services: Mapping[str, _GraphAggregate],
@@ -667,6 +694,7 @@ class BuildCrossTeamGraphDashboard:
         self,
         graphs: Mapping[str, _GraphAggregate],
         *,
+        procedure_names: Mapping[str, str],
         top_limit: int,
     ) -> list[ProcedureLinkStat]:
         proc_to_graph_keys: dict[str, set[str]] = {}
@@ -691,6 +719,7 @@ class BuildCrossTeamGraphDashboard:
         stats = [
             ProcedureLinkStat(
                 procedure_id=proc_id,
+                procedure_name=procedure_names.get(proc_id),
                 graph_count=len(graph_keys),
                 usage_in_other_graphs=max(0, len(graph_keys) - 1),
                 incoming_edges=metrics.in_degree.get(proc_id, 0),
@@ -789,6 +818,7 @@ class BuildCrossTeamGraphDashboard:
         self,
         services: Mapping[str, _GraphAggregate],
         *,
+        procedure_names: Mapping[str, str],
         merge_selected_markups: bool,
         top_limit: int,
     ) -> list[ServiceLoadStat]:
@@ -827,6 +857,7 @@ class BuildCrossTeamGraphDashboard:
                     procedure_usage_stats=tuple(
                         ServiceProcedureUsageStat(
                             procedure_id=proc_id,
+                            procedure_name=procedure_names.get(proc_id),
                             in_team_merge_hits=1 if proc_id in merge_nodes else 0,
                             cycle_hits=1 if proc_id in cycle_nodes else 0,
                             linked_procedure_count=graph_metrics.in_degree.get(proc_id, 0)

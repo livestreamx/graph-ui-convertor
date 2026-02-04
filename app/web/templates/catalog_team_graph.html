@@ -26,6 +26,20 @@
   </span>
 {% endmacro %}
 
+{% macro render_procedure_caption(procedure_name, procedure_id, order_prefix="") %}
+  <span class="team-graph-procedure-caption">
+    <span class="team-graph-procedure-primary">
+      {% if order_prefix %}
+        <span class="team-graph-procedure-order">{{ order_prefix }}</span>
+      {% endif %}
+      {{ procedure_name or procedure_id }}
+    </span>
+    {% if procedure_name %}
+      <span class="team-graph-procedure-id team-graph-mono">{{ procedure_id }}</span>
+    {% endif %}
+  </span>
+{% endmacro %}
+
 {% block content %}
   <section class="detail-header">
     <a class="ghost-button" href="/catalog">Back to catalog</a>
@@ -381,7 +395,19 @@
                           {% endfor %}
                           {% if merge_ns.has_merge_nodes %}
                             <div class="team-graph-graphs-item-details">
-                              <div class="team-graph-ranked-details-label">Intersection node breakdown</div>
+                              <div class="team-graph-ranked-details-label">
+                                {% if merge_selected_markups %}
+                                  Intersection node breakdown
+                                {% else %}
+                                  Potential intersection node breakdown
+                                {% endif %}
+                              </div>
+                              {% if not merge_selected_markups %}
+                                <div class="team-graph-potential-note">
+                                  Potential merges only: markups are rendered separately because
+                                  <code>Merge markups by shared nodes</code> is disabled.
+                                </div>
+                              {% endif %}
                               {% for component in item.components %}
                                 {% if component.merge_nodes %}
                                   <div class="team-graph-merge-component">
@@ -391,7 +417,9 @@
                                     <div class="team-graph-merge-nodes-grid">
                                       {% for merge_node in component.merge_nodes %}
                                         <article class="team-graph-merge-node-card">
-                                          <div class="team-graph-merge-node-id team-graph-mono">{{ merge_node.procedure_id }}</div>
+                                          <div class="team-graph-merge-node-id">
+                                            {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id) }}
+                                          </div>
                                           <div class="team-graph-merge-node-entities">
                                             {% for entity in merge_node.entities %}
                                               {{ render_team_service_entity(entity, "team-graph-graph-entity-sm", true) }}
@@ -734,7 +762,7 @@
                       {% for item in team_dashboard.linking_procedures %}
                         <details class="team-graph-ranked-table-item">
                           <summary class="team-graph-ranked-table-row">
-                            <span class="team-graph-mono">{{ loop.index }}. {{ item.procedure_id }}</span>
+                            <span>{{ render_procedure_caption(item.procedure_name, item.procedure_id, loop.index ~ ".") }}</span>
                             <span>{{ item.graph_count }}</span>
                             <span>{{ item.usage_in_other_graphs }}</span>
                             <span>{{ item.incoming_edges }}</span>
@@ -769,7 +797,14 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top overloaded entities</div>
-                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: shared-node merges with other entities, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown. In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.</div>
+                        <div class="team-graph-help-hint">
+                          Rank by structural risk in merged <code>procedure_graph</code>: shared-node merges with other entities, cycles, procedure volume, then block volume.
+                          Click a row for per-procedure breakdown.
+                          In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.
+                          {% if not merge_selected_markups %}
+                            With <code>Merge markups by shared nodes</code> disabled, merge metrics are shown as potential merges.
+                          {% endif %}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -793,20 +828,31 @@
                             <span>{{ item.block_count }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
-                            <div class="team-graph-ranked-details-label">Procedure-level breakdown (graph order)</div>
+                            <div class="team-graph-ranked-details-label">
+                              {% if merge_selected_markups %}
+                                Procedure-level breakdown (graph order)
+                              {% else %}
+                                Procedure-level breakdown (graph order, potential merges)
+                              {% endif %}
+                            </div>
+                            {% if not merge_selected_markups %}
+                              <div class="team-graph-potential-note">
+                                Potential merges only: graph rendering keeps procedures separated while
+                                still surfacing shared-node overlap risk.
+                              </div>
+                            {% endif %}
                             <div class="team-graph-ranked-table">
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                                 <span>Procedure</span>
-                                <span>Merges</span>
+                                <span>{% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}</span>
                                 <span>Cycle</span>
                                 <span>Links</span>
                                 <span>Blocks</span>
                               </div>
                               {% for proc_item in item.procedure_usage_stats %}
                                 <div class="team-graph-ranked-table-row">
-                                  <span class="team-graph-mono">
-                                    <span class="team-graph-procedure-order">P{{ loop.index }}</span>
-                                    {{ proc_item.procedure_id }}
+                                  <span>
+                                    {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id, "P" ~ loop.index) }}
                                   </span>
                                   <span>{% if proc_item.in_team_merge_hits %}{{ proc_item.in_team_merge_hits }}{% endif %}</span>
                                   <span>{% if proc_item.cycle_hits %}{{ proc_item.cycle_hits }}{% endif %}</span>

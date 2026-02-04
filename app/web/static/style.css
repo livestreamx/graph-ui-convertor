@@ -1164,6 +1164,32 @@ main {
   letter-spacing: 0.06em;
 }
 
+.team-graph-procedure-caption {
+  display: inline-grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.team-graph-procedure-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.team-graph-procedure-id {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.team-graph-potential-note {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .team-graph-ranked-details-grid {
   display: grid;
   gap: 10px;
