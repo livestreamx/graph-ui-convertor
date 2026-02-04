@@ -138,13 +138,15 @@ catalog:
   Graph/intersection drilldowns share one `team / service` output format with team color chips,
   including `Multi graphs` and tabular `Top linking procedures` details per graph
   (`cross-entity`, `inbound deps`, `outbound deps`).
-  `Top overloaded entities` detail shows the same columns per procedure in graph order.
+  `Top overloaded entities` detail shows the same columns per procedure in graph order and adds
+  per-procedure block-type breakdown (start/end types) using the same colors as in the diagram.
   `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,
   `external → selected` (outside team depends on selected teams), and `selected → external`
   (selected teams depend on the outside team). The two directional counters always add up to
-  `total`. Expanded `More info` shows per-service merge counts for that team.
+  `total`. Expanded team details show all services with no internal scroll. By default only the
+  top 10 external teams are shown; the rest are revealed with `Show N more teams`.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

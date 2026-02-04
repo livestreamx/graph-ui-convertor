@@ -4,7 +4,13 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 
-from domain.models import MarkupDocument
+from domain.models import (
+    END_TYPE_COLORS,
+    END_TYPE_DEFAULT,
+    INITIAL_BLOCK_COLOR,
+    MarkupDocument,
+    merge_end_types,
+)
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.graph_metrics import compute_graph_metrics
 from domain.services.shared_node_merge_rules import (
@@ -101,6 +107,17 @@ class ServiceProcedureUsageStat:
     cycle_hits: int
     linked_procedure_count: int
     block_count: int
+    start_block_count: int = 0
+    end_block_count: int = 0
+    block_type_stats: tuple[ProcedureBlockTypeStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProcedureBlockTypeStat:
+    type_id: str
+    label: str
+    count: int
+    color: str
 
 
 @dataclass(frozen=True)
@@ -146,6 +163,8 @@ class _GraphAggregate:
     _procedure_order_index: dict[str, int] = field(default_factory=dict)
     adjacency: dict[str, set[str]] = field(default_factory=dict)
     block_ids_by_procedure: dict[str, set[str]] = field(default_factory=dict)
+    start_block_ids_by_procedure: dict[str, set[str]] = field(default_factory=dict)
+    end_block_types_by_procedure: dict[str, dict[str, str]] = field(default_factory=dict)
 
     def add_document(self, document: MarkupDocument) -> None:
         for procedure in document.procedures:
@@ -163,6 +182,18 @@ class _GraphAggregate:
                 self.adjacency[source].add(target)
                 self.adjacency.setdefault(target, set())
         for procedure in document.procedures:
+            start_block_ids = self.start_block_ids_by_procedure.setdefault(
+                procedure.procedure_id,
+                set(),
+            )
+            start_block_ids.update(procedure.start_block_ids)
+            end_block_types = self.end_block_types_by_procedure.setdefault(
+                procedure.procedure_id,
+                {},
+            )
+            for block_id in procedure.end_block_ids:
+                end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
+                end_block_types[block_id] = merge_end_types(end_block_types.get(block_id), end_type)
             block_ids = self.block_ids_by_procedure.setdefault(procedure.procedure_id, set())
             block_ids.update(procedure.block_ids())
 
@@ -863,6 +894,16 @@ class BuildCrossTeamGraphDashboard:
                             linked_procedure_count=graph_metrics.in_degree.get(proc_id, 0)
                             + graph_metrics.out_degree.get(proc_id, 0),
                             block_count=len(service.block_ids_by_procedure.get(proc_id, set())),
+                            start_block_count=len(
+                                service.start_block_ids_by_procedure.get(proc_id, set())
+                            ),
+                            end_block_count=len(
+                                service.end_block_types_by_procedure.get(proc_id, {})
+                            ),
+                            block_type_stats=self._build_procedure_block_type_stats(
+                                service,
+                                proc_id,
+                            ),
                         )
                         for proc_id in service.ordered_procedure_ids()
                     ),
@@ -879,6 +920,49 @@ class BuildCrossTeamGraphDashboard:
             )
         )
         return stats[:top_limit]
+
+    def _build_procedure_block_type_stats(
+        self,
+        service: _GraphAggregate,
+        procedure_id: str,
+    ) -> tuple[ProcedureBlockTypeStat, ...]:
+        stats: list[ProcedureBlockTypeStat] = []
+        start_count = len(service.start_block_ids_by_procedure.get(procedure_id, set()))
+        if start_count > 0:
+            stats.append(
+                ProcedureBlockTypeStat(
+                    type_id="start",
+                    label="Start",
+                    count=start_count,
+                    color=INITIAL_BLOCK_COLOR,
+                )
+            )
+
+        end_type_counts: Counter[str] = Counter(
+            service.end_block_types_by_procedure.get(procedure_id, {}).values()
+        )
+        end_type_order = (
+            "end",
+            "exit",
+            "all",
+            "intermediate",
+            "postpone",
+            "turn_out",
+        )
+        for end_type in end_type_order:
+            count = end_type_counts.get(end_type, 0)
+            if count <= 0:
+                continue
+            label = "End" if end_type == END_TYPE_DEFAULT else f"End ({end_type})"
+            stats.append(
+                ProcedureBlockTypeStat(
+                    type_id=f"end:{end_type}",
+                    label=label,
+                    count=count,
+                    color=END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT]),
+                )
+            )
+        return tuple(stats)
 
 
 def _is_service_markup(document: MarkupDocument) -> bool:

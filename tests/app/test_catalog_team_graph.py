@@ -168,8 +168,11 @@ def test_catalog_team_graph_api(
         assert "team-graph-ranked-details-list-entity" in html_response.text
         assert "Graph-level breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
+        assert "Potential merges" in html_response.text
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
+        assert "Starts:" in html_response.text
+        assert "Ends:" in html_response.text
         assert "team-graph-procedure-order" in html_response.text
         assert "team-graph-procedure-id" in html_response.text
         assert "Data quality note" not in html_response.text

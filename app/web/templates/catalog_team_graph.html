@@ -376,15 +376,27 @@
                       <div class="team-graph-graphs-row team-graph-graphs-row-header">
                         <span>Graphs</span>
                         <span>Count</span>
+                        <span>{% if merge_selected_markups %}Real merges{% else %}Potential merges{% endif %}</span>
                       </div>
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
+                        {% set merge_count_ns = namespace(value=0) %}
+                        {% for component in item.components %}
+                          {% set merge_count_ns.value = merge_count_ns.value + (component.merge_nodes | length) %}
+                        {% endfor %}
+                        {% set item_merge_nodes_count = merge_count_ns.value %}
                         <details class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
                           <summary class="team-graph-graphs-row">
                             {{ render_graph_label_entities(item.label, force_colorize=true) }}
                             <span class="team-graph-graphs-count">
                               <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
                               <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                            </span>
+                            <span class="team-graph-graphs-merge-count {% if not merge_selected_markups and item_merge_nodes_count %}team-graph-graphs-merge-count-warning{% endif %}">
+                              <span class="team-graph-graphs-count-value">{{ item_merge_nodes_count }}</span>
+                              <span class="team-graph-graphs-count-label">
+                                {% if merge_selected_markups %}node{% else %}potential{% endif %}{% if item_merge_nodes_count != 1 %}s{% endif %}
+                              </span>
                             </span>
                           </summary>
                           {% set merge_ns = namespace(has_merge_nodes=false) %}
@@ -726,7 +738,7 @@
                           {% endfor %}
                         </div>
                         <button class="team-graph-overlap-more-button" type="button" data-overlap-more-toggle aria-expanded="false">
-                          More
+                          Show {{ hidden_external_teams|length }} more teams
                         </button>
                       {% endif %}
                     </div>
@@ -853,6 +865,25 @@
                                 <div class="team-graph-ranked-table-row">
                                   <span>
                                     {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id, "P" ~ loop.index) }}
+                                    {% if proc_item.start_block_count or proc_item.end_block_count or proc_item.block_type_stats %}
+                                      <span class="team-graph-procedure-block-meta">
+                                        <span class="team-graph-procedure-block-summary">
+                                          Starts: {{ proc_item.start_block_count }} · Ends: {{ proc_item.end_block_count }}
+                                        </span>
+                                        {% if proc_item.block_type_stats %}
+                                          <span class="team-graph-procedure-block-types">
+                                            {% for block_stat in proc_item.block_type_stats %}
+                                              <span
+                                                class="team-graph-procedure-block-type"
+                                                style="--team-graph-block-type-color: {{ block_stat.color }}"
+                                              >
+                                                {{ block_stat.label }} · {{ block_stat.count }}
+                                              </span>
+                                            {% endfor %}
+                                          </span>
+                                        {% endif %}
+                                      </span>
+                                    {% endif %}
                                   </span>
                                   <span>{% if proc_item.in_team_merge_hits %}{{ proc_item.in_team_merge_hits }}{% endif %}</span>
                                   <span>{% if proc_item.cycle_hits %}{{ proc_item.cycle_hits }}{% endif %}</span>
@@ -1011,11 +1042,14 @@
         const overlapMoreToggle = page.querySelector("[data-overlap-more-toggle]");
         const overlapMoreList = page.querySelector("[data-overlap-more-list]");
         if (overlapMoreToggle instanceof HTMLButtonElement && overlapMoreList instanceof HTMLElement) {
+          const moreLabel =
+            overlapMoreToggle.textContent?.trim() || "Show more teams";
+          const lessLabel = "Show fewer teams";
           overlapMoreToggle.addEventListener("click", () => {
             const isExpanded = overlapMoreToggle.getAttribute("aria-expanded") === "true";
             overlapMoreToggle.setAttribute("aria-expanded", isExpanded ? "false" : "true");
             overlapMoreList.hidden = isExpanded;
-            overlapMoreToggle.textContent = isExpanded ? "More" : "Less";
+            overlapMoreToggle.textContent = isExpanded ? moreLabel : lessLabel;
           });
         }
 
