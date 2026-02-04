@@ -1010,70 +1010,29 @@
                                 still surfacing shared-node overlap risk.
                               </div>
                             {% endif %}
-                            <div class="team-graph-ranked-table" data-sortable-table>
+                            <div class="team-graph-ranked-table">
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                                 <span>Procedure</span>
                                 <span>
-                                  <button
-                                    class="team-graph-sort-button"
-                                    type="button"
-                                    data-sort-trigger
-                                    data-sort-key="merge-count"
-                                    data-sort-type="number"
-                                    data-sort-default-order="desc"
-                                  >
-                                    {% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}
-                                  </button>
+                                  {% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}
                                 </span>
                                 <span>
-                                  <button
-                                    class="team-graph-sort-button"
-                                    type="button"
-                                    data-sort-trigger
-                                    data-sort-key="cycle-count"
-                                    data-sort-type="number"
-                                    data-sort-default-order="desc"
-                                  >
-                                    Cycle
-                                  </button>
+                                  Cycle
                                 </span>
                                 <span>
-                                  <button
-                                    class="team-graph-sort-button"
-                                    type="button"
-                                    data-sort-trigger
-                                    data-sort-key="link-count"
-                                    data-sort-type="number"
-                                    data-sort-default-order="desc"
-                                  >
-                                    Links
-                                  </button>
+                                  Links
                                 </span>
                                 <span>
-                                  <button
-                                    class="team-graph-sort-button"
-                                    type="button"
-                                    data-sort-trigger
-                                    data-sort-key="block-count"
-                                    data-sort-type="number"
-                                    data-sort-default-order="desc"
-                                  >
-                                    Blocks
-                                  </button>
+                                  Blocks
                                 </span>
                               </div>
-                              <div data-sort-items>
+                              <div>
                               {% for proc_item in item.procedure_usage_stats %}
                                 <div
                                   class="team-graph-ranked-table-row"
-                                  data-sort-item
-                                  data-sort-merge-count="{{ proc_item.in_team_merge_hits }}"
-                                  data-sort-cycle-count="{{ proc_item.cycle_hits }}"
-                                  data-sort-link-count="{{ proc_item.linked_procedure_count }}"
-                                  data-sort-block-count="{{ proc_item.block_count }}"
                                 >
                                   <span class="team-graph-procedure-row-main">
-                                    <span class="team-graph-procedure-order" data-sort-rank data-sort-rank-prefix="P">P{{ loop.index }}</span>
+                                    <span class="team-graph-procedure-order">P{{ loop.index }}</span>
                                     {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id) }}
                                     {% if proc_item.block_type_stats %}
                                       <span class="team-graph-procedure-block-meta">

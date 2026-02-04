@@ -170,6 +170,7 @@ def test_catalog_team_graph_api(
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "data-sortable-table" in html_response.text
         assert "data-sort-trigger" in html_response.text
+        assert 'data-sort-key="link-count"' not in html_response.text
         assert "Potential merges" in html_response.text
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
