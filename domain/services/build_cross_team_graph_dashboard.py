@@ -227,24 +227,64 @@ class _GraphAggregate:
                 adjacency[source].add(target)
                 indegree[target] += 1
 
+        undirected: dict[str, set[str]] = {node: set() for node in nodes}
+        for source, targets in adjacency.items():
+            for target in targets:
+                undirected[source].add(target)
+                undirected[target].add(source)
+
+        visited: set[str] = set()
+        components: list[set[str]] = []
+        for proc_id in sorted(nodes, key=lambda proc_id: (order_index(proc_id), proc_id.lower())):
+            if proc_id in visited:
+                continue
+            stack = [proc_id]
+            component: set[str] = set()
+            while stack:
+                current = stack.pop()
+                if current in visited:
+                    continue
+                visited.add(current)
+                component.add(current)
+                stack.extend(undirected.get(current, set()) - visited)
+            components.append(component)
+
+        components.sort(
+            key=lambda component: min(
+                (order_index(proc_id), proc_id.lower()) for proc_id in component
+            )
+        )
+
         def queue_key(proc_id: str) -> tuple[int, int, str]:
             has_start = 0 if self.start_block_ids_by_procedure.get(proc_id) else 1
             return (has_start, order_index(proc_id), proc_id.lower())
 
-        queue = sorted((node for node in nodes if indegree[node] == 0), key=queue_key)
         ordered: list[str] = []
-        while queue:
-            node = queue.pop(0)
-            ordered.append(node)
-            for target in sorted(adjacency.get(node, ()), key=queue_key):
-                indegree[target] -= 1
-                if indegree[target] == 0:
-                    queue.append(target)
-            queue.sort(key=queue_key)
+        for component in components:
+            component_indegree = {proc_id: indegree[proc_id] for proc_id in component}
+            queue = sorted(
+                (proc_id for proc_id in component if component_indegree[proc_id] == 0),
+                key=queue_key,
+            )
+            component_ordered: list[str] = []
+            while queue:
+                node = queue.pop(0)
+                component_ordered.append(node)
+                for target in sorted(adjacency.get(node, ()), key=queue_key):
+                    if target not in component_indegree:
+                        continue
+                    component_indegree[target] -= 1
+                    if component_indegree[target] == 0:
+                        queue.append(target)
+                queue.sort(key=queue_key)
 
-        if len(ordered) < len(nodes):
-            remaining = sorted((node for node in nodes if node not in ordered), key=queue_key)
-            ordered.extend(remaining)
+            if len(component_ordered) < len(component):
+                remaining = sorted(
+                    (proc_id for proc_id in component if proc_id not in component_ordered),
+                    key=queue_key,
+                )
+                component_ordered.extend(remaining)
+            ordered.extend(component_ordered)
 
         return tuple(ordered)
 

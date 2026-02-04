@@ -187,9 +187,9 @@ def test_build_cross_team_graph_dashboard() -> None:
         for item in top_service.procedure_usage_stats
     ] == [
         ("multi_route", 0, 0, 1, 2),
+        ("shared_core", 1, 0, 1, 0),
         ("split_a", 0, 0, 0, 2),
         ("split_b", 0, 0, 0, 2),
-        ("shared_core", 1, 0, 1, 0),
     ]
 
 
@@ -313,6 +313,47 @@ def test_overloaded_entities_procedure_breakdown_follows_graph_flow_order() -> N
     assert [
         item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
     ] == ["start_proc", "middle_proc", "end_proc"]
+
+
+def test_overloaded_entities_breakdown_keeps_component_flow_grouped_left_to_right() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="left_start",
+                    start_block_ids=["left-start"],
+                    branches={"l1": ["l2"]},
+                ),
+                Procedure(procedure_id="left_end", branches={"l3": ["l4"]}),
+                Procedure(
+                    procedure_id="right_start",
+                    start_block_ids=["right-start"],
+                    branches={"r1": ["r2"]},
+                ),
+                Procedure(procedure_id="right_end", branches={"r3": ["r4"]}),
+            ],
+            procedure_graph={
+                "left_start": ["left_end"],
+                "right_start": ["right_end"],
+            },
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    assert [
+        item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
+    ] == ["left_start", "left_end", "right_start", "right_end"]
 
 
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
