@@ -144,8 +144,9 @@ catalog:
   payload that is rendered in the team diagram.
   Numeric columns in dashboard tables support client-side sorting by clicking the column header,
   except `Procedure-level breakdown (graph order, potential merges)`: this drilldown keeps a fixed
-  graph-flow order and separates disconnected graph components (`Graph 1`, `Graph 2`, ...) exactly
-  as in the diagram.
+  depth-first graph-flow order from start procedures to terminal procedures, separates disconnected
+  graph components (`Graph 1`, `Graph 2`, ...), and shows both procedure rank (`P#`) and level
+  (`L#`, relative to graph roots) exactly as in the diagram.
   `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,
