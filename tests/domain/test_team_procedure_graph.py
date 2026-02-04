@@ -855,10 +855,14 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     plan = layout.build_plan(document)
 
     assert plan.scenarios
-    merge_text = plan.scenarios[0].merge_text or ""
+    scenario = plan.scenarios[0]
+    merge_text = scenario.merge_text or ""
     assert "Узлы слияния" in merge_text
     assert "> [Alpha] Payments x [Beta] Loans:" in merge_text
     assert "(1) Shared Flow" in merge_text
+    assert scenario.merge_origin is not None
+    assert scenario.merge_size is not None
+    assert scenario.procedures_origin.y + scenario.procedures_size.height <= scenario.merge_origin.y
 
 
 def test_procedure_graph_layout_uses_merge_services_for_groups() -> None:
