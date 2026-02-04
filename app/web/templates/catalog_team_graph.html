@@ -1043,7 +1043,12 @@
                                   class="team-graph-ranked-table-row{% if proc_item.graph_label %} team-graph-procedure-group-row{% endif %}"
                                 >
                                   <span class="team-graph-procedure-row-main">
-                                    <span class="team-graph-procedure-order">P{{ loop.index }}</span>
+                                    <span class="team-graph-procedure-order">
+                                      P{{ proc_item.flow_order_in_graph or loop.index }}
+                                      {% if proc_item.flow_level %}
+                                        · L{{ proc_item.flow_level }}
+                                      {% endif %}
+                                    </span>
                                     {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id) }}
                                     {% if proc_item.block_type_stats %}
                                       <span class="team-graph-procedure-block-meta">

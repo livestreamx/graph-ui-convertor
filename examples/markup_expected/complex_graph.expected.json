@@ -1,25 +1,31 @@
 {
   "counts": {
-    "procedures": 6,
-    "blocks": 25,
+    "procedures": 7,
+    "blocks": 32,
     "starts": 3,
-    "ends": 23
+    "ends": 30
   },
   "edges": {
     "start": 3,
-    "end": 23,
+    "end": 30,
     "branch": 0,
     "branch_cycle": 0,
-    "block_graph": 26,
+    "block_graph": 34,
     "block_graph_cycle": 2
   },
   "block_graph": {
-    "edges": 28,
+    "edges": 36,
     "cycle_edges": 2,
-    "cross_procedure_edges": 7,
+    "cross_procedure_edges": 8,
     "cycle_pairs": [
-      ["gamma_triage", "alpha_collect"],
-      ["delta_merge", "delta_router"]
+      [
+        "delta_merge",
+        "delta_router"
+      ],
+      [
+        "gamma_triage",
+        "alpha_collect"
+      ]
     ]
   },
   "end_types": {
@@ -27,10 +33,10 @@
     "exit": 1,
     "all": 1,
     "intermediate": 1,
-    "postpone": 1,
-    "turn_out": 18
+    "postpone": 2,
+    "turn_out": 24
   },
   "procedure_graph": {
-    "edges": 7
+    "edges": 8
   }
 }

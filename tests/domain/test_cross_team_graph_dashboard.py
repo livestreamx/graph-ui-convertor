@@ -600,6 +600,87 @@ def test_overloaded_entities_breakdown_projects_global_diagram_order() -> None:
     assert [item.start_block_count for item in alpha_service.procedure_usage_stats] == [1, 0]
 
 
+def test_overloaded_entities_breakdown_uses_depth_first_flow_and_levels_for_forest() -> None:
+    fixture_path = Path("examples/markup/forest.json")
+    document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=[document],
+        all_documents=[document],
+        selected_team_ids=[str(document.team_id)],
+    )
+
+    assert dashboard.overloaded_services
+    service = dashboard.overloaded_services[0]
+    assert [item.procedure_id for item in service.procedure_usage_stats] == [
+        "proc_a",
+        "proc_b",
+        "proc_b_a",
+        "proc_b_b",
+        "proc_c",
+        "proc_c_a",
+        "proc_c_b",
+    ]
+    assert [item.flow_level for item in service.procedure_usage_stats] == [
+        1,
+        2,
+        3,
+        3,
+        2,
+        3,
+        3,
+    ]
+
+
+def test_overloaded_entities_breakdown_scopes_levels_per_unique_graph_component() -> None:
+    fixture_paths = (
+        Path("examples/markup/graphs_set.json"),
+        Path("examples/markup/forest.json"),
+        Path("examples/markup/complex_graph.json"),
+    )
+    documents = [
+        MarkupDocument.model_validate(json.loads(path.read_text(encoding="utf-8")))
+        for path in fixture_paths
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=documents,
+        all_documents=documents,
+        selected_team_ids=["unknown-team"],
+    )
+
+    forest_service = next(
+        item for item in dashboard.overloaded_services if item.service_name == "Forest graph"
+    )
+    assert [item.procedure_id for item in forest_service.procedure_usage_stats] == [
+        "proc_a",
+        "proc_b",
+        "proc_b_a",
+        "proc_b_b",
+        "proc_c",
+        "proc_c_a",
+        "proc_c_b",
+    ]
+    assert [item.flow_level for item in forest_service.procedure_usage_stats] == [
+        1,
+        2,
+        3,
+        3,
+        2,
+        3,
+        3,
+    ]
+    assert [item.flow_order_in_graph for item in forest_service.procedure_usage_stats] == [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+    ]
+
+
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
     fixture_path = Path("examples/markup/graphs_set.json")
     document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
@@ -611,6 +692,7 @@ def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None
     )
 
     assert dashboard.unique_graph_count == len(document.procedures)
+    assert dashboard.bot_graph_count == 1
     assert dashboard.multi_graph_count == 1
     assert sum(item.graph_count for item in dashboard.graph_groups) == dashboard.unique_graph_count
 

@@ -662,19 +662,88 @@ class GridLayoutEngine(LayoutEngine):
         self, procedures: Sequence[Procedure], procedure_graph: dict[str, list[str]]
     ) -> list[str]:
         proc_ids = [proc.procedure_id for proc in procedures]
-        proc_by_id = {proc.procedure_id: proc for proc in procedures}
+        adjacency = self._normalize_procedure_graph(proc_ids, procedure_graph)
+        order_index = {proc_id: idx for idx, proc_id in enumerate(proc_ids)}
+        has_start = {proc.procedure_id: bool(proc.start_block_ids) for proc in procedures}
+
+        def node_key(proc_id: str) -> tuple[int, int, str]:
+            return (
+                0 if has_start.get(proc_id, False) else 1,
+                order_index.get(proc_id, len(proc_ids)),
+                proc_id.lower(),
+            )
+
+        indegree: dict[str, int] = {proc_id: 0 for proc_id in proc_ids}
+        undirected: dict[str, set[str]] = {proc_id: set() for proc_id in proc_ids}
+        for source, targets in adjacency.items():
+            for target in targets:
+                indegree[target] = indegree.get(target, 0) + 1
+                undirected[source].add(target)
+                undirected[target].add(source)
+
+        visited_components: set[str] = set()
+        components: list[set[str]] = []
+        for proc_id in sorted(proc_ids, key=node_key):
+            if proc_id in visited_components:
+                continue
+            stack = [proc_id]
+            component: set[str] = set()
+            while stack:
+                current = stack.pop()
+                if current in visited_components:
+                    continue
+                visited_components.add(current)
+                component.add(current)
+                stack.extend(undirected.get(current, set()) - visited_components)
+            components.append(component)
+
+        payloads: list[tuple[set[str], list[str]]] = []
+        for component in components:
+            indegree_roots = [proc_id for proc_id in component if indegree.get(proc_id, 0) == 0]
+            if indegree_roots:
+                roots = sorted(indegree_roots, key=node_key)
+            else:
+                start_roots = [proc_id for proc_id in component if has_start.get(proc_id, False)]
+                roots = (
+                    sorted(start_roots, key=node_key)
+                    if start_roots
+                    else sorted(component, key=node_key)[:1]
+                )
+            payloads.append((component, roots))
+        payloads.sort(key=lambda payload: min(node_key(proc_id) for proc_id in payload[1]))
+
         order_hint: list[str] = []
-        seen_hint: set[str] = set()
-        for parent, children in procedure_graph.items():
-            if parent in proc_by_id and parent not in seen_hint:
-                order_hint.append(parent)
-                seen_hint.add(parent)
-            for child in children:
-                if child in proc_by_id and child not in seen_hint:
-                    order_hint.append(child)
-                    seen_hint.add(child)
+        visited: set[str] = set()
+        for component, roots in payloads:
+            for root in roots or sorted(component, key=node_key):
+                stack = [root]
+                while stack:
+                    node = stack.pop()
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    order_hint.append(node)
+                    children = [child for child in adjacency.get(node, []) if child in component]
+                    for child in reversed(children):
+                        if child not in visited:
+                            stack.append(child)
+            for proc_id in sorted(component, key=node_key):
+                if proc_id in visited:
+                    continue
+                stack = [proc_id]
+                while stack:
+                    node = stack.pop()
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    order_hint.append(node)
+                    children = [child for child in adjacency.get(node, []) if child in component]
+                    for child in reversed(children):
+                        if child not in visited:
+                            stack.append(child)
+
         for proc_id in proc_ids:
-            if proc_id not in seen_hint:
+            if proc_id not in visited:
                 order_hint.append(proc_id)
         return order_hint
 

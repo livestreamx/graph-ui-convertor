@@ -11,13 +11,25 @@
     {
       "proc_id": "proc_shared_intake",
       "proc_name": "Shared Intake",
-      "start_block_ids": ["intake_start"],
-      "end_block_ids": ["intake_end::end"],
+      "start_block_ids": [
+        "intake_start"
+      ],
+      "end_block_ids": [
+        "intake_end::end"
+      ],
       "branches": {
-        "intake_start": ["intake_collect"],
-        "intake_collect": ["intake_validate"],
-        "intake_validate": ["intake_route"],
-        "intake_route": ["intake_end"]
+        "intake_start": [
+          "intake_collect"
+        ],
+        "intake_collect": [
+          "intake_validate"
+        ],
+        "intake_validate": [
+          "intake_route"
+        ],
+        "intake_route": [
+          "intake_end"
+        ]
       },
       "block_id_to_block_name": {
         "intake_start": "Start intake",
@@ -30,13 +42,25 @@
     {
       "proc_id": "proc_shared_routing",
       "proc_name": "Shared Routing",
-      "start_block_ids": ["route_review"],
-      "end_block_ids": ["route_done::end"],
+      "start_block_ids": [
+        "route_review"
+      ],
+      "end_block_ids": [
+        "route_done::end"
+      ],
       "branches": {
-        "route_review": ["route_recheck"],
-        "route_recheck": ["route_score"],
-        "route_score": ["route_branch"],
-        "route_branch": ["route_done"]
+        "route_review": [
+          "route_recheck"
+        ],
+        "route_recheck": [
+          "route_score"
+        ],
+        "route_score": [
+          "route_branch"
+        ],
+        "route_branch": [
+          "route_done"
+        ]
       },
       "block_id_to_block_name": {
         "route_review": "Review signal",
@@ -48,54 +72,110 @@
     },
     {
       "proc_id": "proc_end_markers",
-      "start_block_ids": ["root"],
-      "end_block_ids": ["end_a", "end_b", "end_c"],
+      "start_block_ids": [
+        "root"
+      ],
+      "end_block_ids": [
+        "end_a",
+        "end_b",
+        "end_c"
+      ],
       "branches": {
-        "root": ["end_a", "end_b", "end_c"]
+        "root": [
+          "end_a",
+          "end_b",
+          "end_c"
+        ]
       }
     },
     {
-      "proc_id": "proc_primary_chain",
-      "start_block_ids": ["chain_a"],
+      "proc_id": "proc_primary_chain_bot",
+      "start_block_ids": [
+        "chain_a"
+      ],
       "end_block_ids": [],
       "branches": {
-        "chain_a": ["chain_b"],
-        "chain_b": ["chain_c"]
+        "chain_a": [
+          "chain_b"
+        ],
+        "chain_b": [
+          "chain_c"
+        ]
       }
     },
     {
-      "proc_id": "proc_source_order",
-      "start_block_ids": ["source_a", "source_b", "source_c"],
+      "proc_id": "proc_source_order_multi",
+      "start_block_ids": [
+        "source_a",
+        "source_b",
+        "source_c"
+      ],
       "end_block_ids": [],
       "branches": {}
     },
     {
       "proc_id": "proc_marker_shift",
-      "start_block_ids": ["root"],
-      "end_block_ids": ["aligned", "shifted"],
+      "start_block_ids": [
+        "root"
+      ],
+      "end_block_ids": [
+        "aligned",
+        "shifted"
+      ],
       "branches": {
-        "root": ["aligned", "shifted"],
-        "shifted": ["blocker"]
+        "root": [
+          "aligned",
+          "shifted"
+        ],
+        "shifted": [
+          "blocker"
+        ]
       }
     },
     {
       "proc_id": "proc_shared_children",
-      "start_block_ids": ["parent_a", "parent_b"],
+      "start_block_ids": [
+        "parent_a",
+        "parent_b"
+      ],
       "end_block_ids": [],
       "branches": {
-        "parent_a": ["aux_a", "aux_b", "aux_c", "child_err", "child_ok"],
-        "parent_b": ["aux_a", "aux_b", "aux_c", "child_err", "child_ok"]
+        "parent_a": [
+          "aux_a",
+          "aux_b",
+          "aux_c",
+          "child_err",
+          "child_ok"
+        ],
+        "parent_b": [
+          "aux_a",
+          "aux_b",
+          "aux_c",
+          "child_err",
+          "child_ok"
+        ]
       }
     },
     {
       "proc_id": "proc_parallel_merge",
       "proc_name": "Parallel Merge",
-      "start_block_ids": ["merge_start"],
-      "end_block_ids": ["merge_join::end"],
+      "start_block_ids": [
+        "merge_start"
+      ],
+      "end_block_ids": [
+        "merge_join::end"
+      ],
       "branches": {
-        "merge_start": ["merge_left", "merge_right"],
-        "merge_left": ["merge_join"],
-        "merge_right": ["merge_join"]
+        "merge_start": [
+          "merge_left",
+          "merge_right"
+        ],
+        "merge_left": [
+          "merge_join"
+        ],
+        "merge_right": [
+          "merge_join"
+        ]
       },
       "block_id_to_block_name": {
         "merge_start": "Merge start",
@@ -105,15 +185,35 @@
       }
     },
     {
-      "proc_id": "proc_multi_starts",
-      "proc_name": "Multi Starts",
-      "start_block_ids": ["m1", "m2"],
-      "end_block_ids": ["m5::end"],
+      "proc_id": "proc_c",
+      "proc_name": "Branch C",
+      "start_block_ids": [],
+      "end_block_ids": [],
       "branches": {
-        "m1": ["m3", "m4"],
-        "m2": ["m4"],
-        "m3": ["m5"],
-        "m4": ["m5"]
+        "c_in": [
+          "c_filter"
+        ],
+        "c_filter": [
+          "c_route"
+        ],
+        "c_route": [
+          "c_left",
+          "c_right"
+        ],
+        "c_left": [
+          "c_hub"
+        ],
+        "c_right": [
+          "c_hub"
+        ]
+      },
+      "block_id_to_block_name": {
+        "c_in": "C in",
+        "c_filter": "C filter",
+        "c_route": "C route",
+        "c_left": "C left",
+        "c_right": "C right",
+        "c_hub": "C hub"
       }
     }
   ],
@@ -121,11 +221,11 @@
     "proc_shared_intake": [],
     "proc_shared_routing": [],
     "proc_end_markers": [],
-    "proc_primary_chain": [],
-    "proc_source_order": [],
+    "proc_primary_chain_bot": [],
+    "proc_source_order_multi": [],
     "proc_marker_shift": [],
     "proc_shared_children": [],
     "proc_parallel_merge": [],
-    "proc_multi_starts": []
+    "proc_c": []
   }
 }

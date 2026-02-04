@@ -43,7 +43,9 @@ def _meta(element: dict[str, Any]) -> dict[str, Any]:
     return cjm
 
 
-@pytest.mark.parametrize("name", ["basic.json", "complex_graph.json", "graphs_set.json"])
+@pytest.mark.parametrize(
+    "name", ["basic.json", "complex_graph.json", "graphs_set.json", "forest.json"]
+)
 def test_example_rendering_matches_expected_counts(name: str) -> None:
     markup = load_markup_fixture(name)
     expected = load_expected_fixture(name)
@@ -178,3 +180,26 @@ def test_examples_share_blocks_for_cross_team_merge() -> None:
     assert graphs_set.team_id is not None
     assert graphs_set.team_name
     assert basic.team_id != graphs_set.team_id
+
+
+@pytest.mark.parametrize(
+    ("name", "expected_bot_share", "expected_multi_share"),
+    [
+        ("basic.json", 0.0, 0.0),
+        ("complex_graph.json", 0.0, 0.0),
+        ("forest.json", 0.0, 0.0),
+        ("graphs_set.json", 1 / 9, 1 / 9),
+    ],
+)
+def test_examples_bot_multi_procedure_shares(
+    name: str, expected_bot_share: float, expected_multi_share: float
+) -> None:
+    markup = load_markup_fixture(name)
+    total = len(markup.procedures)
+    assert total > 0
+
+    bot_count = sum(1 for proc in markup.procedures if "bot" in proc.procedure_id.lower())
+    multi_count = sum(1 for proc in markup.procedures if "multi" in proc.procedure_id.lower())
+
+    assert bot_count / total == expected_bot_share
+    assert multi_count / total == expected_multi_share

@@ -110,6 +110,8 @@ class ServiceProcedureUsageStat:
     start_block_count: int = 0
     end_block_count: int = 0
     graph_label: str | None = None
+    flow_order_in_graph: int | None = None
+    flow_level: int | None = None
     block_type_stats: tuple[ProcedureBlockTypeStat, ...] = ()
 
 
@@ -213,9 +215,19 @@ class _GraphAggregate:
         return {proc_id for proc_id, block_ids in self.block_ids_by_procedure.items() if block_ids}
 
     def ordered_procedure_ids(self, nodes: set[str] | None = None) -> tuple[str, ...]:
+        ordered, _ = self._ordered_procedure_ids_with_levels(nodes)
+        return ordered
+
+    def procedure_levels(self, nodes: set[str] | None = None) -> dict[str, int]:
+        _, levels = self._ordered_procedure_ids_with_levels(nodes)
+        return levels
+
+    def _ordered_procedure_ids_with_levels(
+        self, nodes: set[str] | None = None
+    ) -> tuple[tuple[str, ...], dict[str, int]]:
         scoped_nodes = set(nodes) if nodes is not None else set(self.procedure_ids)
         if not scoped_nodes:
-            return ()
+            return (), {}
 
         order_fallback = len(self.procedure_order)
 
@@ -225,7 +237,7 @@ class _GraphAggregate:
         def has_start_blocks(proc_id: str) -> bool:
             return bool(self.start_block_ids_by_procedure.get(proc_id, set()))
 
-        def queue_key(proc_id: str) -> tuple[int, int, str]:
+        def node_key(proc_id: str) -> tuple[int, int, str]:
             return (
                 0 if has_start_blocks(proc_id) else 1,
                 order_index(proc_id),
@@ -244,65 +256,112 @@ class _GraphAggregate:
                 undirected[source].add(target)
                 undirected[target].add(source)
 
-        visited: set[str] = set()
+        visited_components: set[str] = set()
         components: list[set[str]] = []
         for proc_id in sorted(
             scoped_nodes,
             key=lambda proc_id: (order_index(proc_id), proc_id.lower()),
         ):
-            if proc_id in visited:
+            if proc_id in visited_components:
                 continue
             stack = [proc_id]
             component: set[str] = set()
             while stack:
                 current = stack.pop()
-                if current in visited:
+                if current in visited_components:
                     continue
-                visited.add(current)
+                visited_components.add(current)
                 component.add(current)
-                stack.extend(undirected.get(current, set()) - visited)
+                stack.extend(undirected.get(current, set()) - visited_components)
             components.append(component)
 
-        components.sort(
-            key=lambda component: min(
-                (queue_key(proc_id) for proc_id in component if indegree.get(proc_id, 0) == 0),
-                default=min(queue_key(proc_id) for proc_id in component),
-            )
+        component_payloads: list[tuple[set[str], list[str]]] = []
+        for component in components:
+            indegree_roots = [proc_id for proc_id in component if indegree.get(proc_id, 0) == 0]
+            if indegree_roots:
+                roots = sorted(indegree_roots, key=node_key)
+            else:
+                start_roots = [proc_id for proc_id in component if has_start_blocks(proc_id)]
+                roots = (
+                    sorted(start_roots, key=node_key)
+                    if start_roots
+                    else sorted(component, key=node_key)[:1]
+                )
+            component_payloads.append((component, roots))
+        component_payloads.sort(
+            key=lambda payload: min(node_key(proc_id) for proc_id in payload[1])
         )
 
+        levels: dict[str, int] = {}
         ordered: list[str] = []
-        for component in components:
-            component_indegree = {proc_id: indegree[proc_id] for proc_id in component}
-            queue = sorted(
-                (proc_id for proc_id in component if component_indegree[proc_id] == 0),
-                key=queue_key,
-            )
-            component_ordered: list[str] = []
-            while queue:
-                node = queue.pop(0)
-                component_ordered.append(node)
-                for target in sorted(adjacency.get(node, ()), key=queue_key):
-                    if target not in component_indegree:
+        visited: set[str] = set()
+
+        for component_set, roots in component_payloads:
+            level_roots = roots or sorted(component_set, key=node_key)[:1]
+
+            level_queue = list(level_roots)
+            for root in level_roots:
+                levels.setdefault(root, 1)
+            while level_queue:
+                current = level_queue.pop(0)
+                current_level = levels.get(current, 1)
+                for child in sorted(adjacency.get(current, set()) & component_set, key=node_key):
+                    next_level = current_level + 1
+                    existing = levels.get(child)
+                    if existing is None or next_level < existing:
+                        levels[child] = next_level
+                        level_queue.append(child)
+
+            traversal_roots = roots or sorted(component_set, key=node_key)
+            for root in traversal_roots:
+                stack = [root]
+                while stack:
+                    node = stack.pop()
+                    if node in visited:
                         continue
-                    component_indegree[target] -= 1
-                    if component_indegree[target] == 0:
-                        queue.append(target)
-                queue.sort(key=queue_key)
+                    visited.add(node)
+                    ordered.append(node)
+                    children = sorted(adjacency.get(node, set()) & component_set, key=node_key)
+                    for child in reversed(children):
+                        if child not in visited:
+                            stack.append(child)
 
-            if len(component_ordered) < len(component):
-                remaining = sorted(
-                    (proc_id for proc_id in component if proc_id not in component_ordered),
-                    key=queue_key,
-                )
-                component_ordered.extend(remaining)
-            ordered.extend(component_ordered)
+            for node in sorted(component_set, key=node_key):
+                if node in visited:
+                    continue
+                stack = [node]
+                while stack:
+                    current = stack.pop()
+                    if current in visited:
+                        continue
+                    visited.add(current)
+                    ordered.append(current)
+                    children = sorted(adjacency.get(current, set()) & component_set, key=node_key)
+                    for child in reversed(children):
+                        if child not in visited:
+                            stack.append(child)
 
-        return tuple(ordered)
+            for proc_id in component_set:
+                levels.setdefault(proc_id, 1)
+
+        return tuple(ordered), levels
 
     def _scoped_adjacency(self, scoped_nodes: set[str]) -> dict[str, set[str]]:
         adjacency: dict[str, set[str]] = {node: set() for node in scoped_nodes}
         if not scoped_nodes:
             return adjacency
+
+        proc_ids_by_base: dict[str, set[str]] = {}
+        for proc_id in self.procedure_ids:
+            proc_ids_by_base.setdefault(_normalize_scoped_procedure_id(proc_id), set()).add(proc_id)
+
+        def is_graph_only(proc_id: str) -> bool:
+            return not self.block_ids_by_procedure.get(proc_id, set())
+
+        def can_traverse_alias(left: str, right: str) -> bool:
+            if _normalize_scoped_procedure_id(left) != _normalize_scoped_procedure_id(right):
+                return False
+            return is_graph_only(left) or is_graph_only(right)
 
         hidden_nodes = self.procedure_ids - scoped_nodes
         for source in scoped_nodes:
@@ -326,6 +385,18 @@ class _GraphAggregate:
                         continue
                     if target in hidden_nodes and target not in visited_hidden:
                         hidden_stack.append(target)
+                for alias in proc_ids_by_base.get(
+                    _normalize_scoped_procedure_id(hidden_node), set()
+                ):
+                    if alias == source or alias == hidden_node:
+                        continue
+                    if not can_traverse_alias(hidden_node, alias):
+                        continue
+                    if alias in scoped_nodes:
+                        adjacency[source].add(alias)
+                        continue
+                    if alias in hidden_nodes and alias not in visited_hidden:
+                        hidden_stack.append(alias)
         return adjacency
 
     def _register_procedure_id(self, proc_id: str) -> None:
@@ -558,21 +629,22 @@ class BuildCrossTeamGraphDashboard:
             service_name="Flow",
         )
         flow_graph.add_document(flow_document)
-        normalized_flow_graph = _normalize_flow_graph(flow_graph)
-        global_display_proc_ids = normalized_flow_graph.visible_procedure_ids()
-        global_proc_order = list(
-            normalized_flow_graph.ordered_procedure_ids(global_display_proc_ids)
-        )
-        global_adjacency = normalized_flow_graph.to_adjacency(global_display_proc_ids)
+        global_display_proc_ids = flow_graph.visible_procedure_ids()
+        global_proc_order = list(flow_graph.ordered_procedure_ids(global_display_proc_ids))
+        global_proc_levels = flow_graph.procedure_levels(global_display_proc_ids)
+        global_adjacency = flow_graph.to_adjacency(global_display_proc_ids)
         global_graph_labels_by_proc = _build_graph_labels(
             global_proc_order,
             {node: set(children) for node, children in global_adjacency.items()},
         )
+        flow_proc_ids_by_service = self._collect_flow_proc_ids_by_service(flow_document)
         overloaded_services = tuple(
             self._build_overloaded_services(
                 selected_services,
-                flow_graph=normalized_flow_graph,
+                flow_graph=flow_graph,
+                flow_proc_ids_by_service=flow_proc_ids_by_service,
                 global_proc_order=global_proc_order,
+                global_proc_levels=global_proc_levels,
                 global_graph_labels_by_proc=global_graph_labels_by_proc,
                 procedure_names=procedure_names,
                 merge_selected_markups=merge_selected_markups,
@@ -985,7 +1057,9 @@ class BuildCrossTeamGraphDashboard:
         services: Mapping[str, _GraphAggregate],
         *,
         flow_graph: _GraphAggregate,
+        flow_proc_ids_by_service: Mapping[str, set[str]],
         global_proc_order: Sequence[str],
+        global_proc_levels: Mapping[str, int],
         global_graph_labels_by_proc: Mapping[str, str | None],
         procedure_names: Mapping[str, str],
         merge_selected_markups: bool,
@@ -1004,60 +1078,102 @@ class BuildCrossTeamGraphDashboard:
         stats: list[ServiceLoadStat] = []
         for service in services.values():
             visible_proc_ids = service.visible_procedure_ids()
-            display_proc_ids = visible_proc_ids & flow_graph.procedure_ids
-            if not display_proc_ids:
+            scoped_proc_ids = set(flow_proc_ids_by_service.get(service.key, set()))
+            if not scoped_proc_ids:
+                scoped_proc_ids = {
+                    flow_proc_id
+                    for flow_proc_id in flow_graph.procedure_ids
+                    if _normalize_scoped_procedure_id(flow_proc_id) in visible_proc_ids
+                }
+            display_scoped_proc_ids = scoped_proc_ids & flow_graph.visible_procedure_ids()
+            if not display_scoped_proc_ids:
                 continue
-            adjacency = flow_graph.to_adjacency(display_proc_ids)
+            adjacency = flow_graph.to_adjacency(display_scoped_proc_ids)
             graph_metrics = compute_graph_metrics(adjacency)
             visible_adjacency = {node: set(children) for node, children in adjacency.items()}
-            merge_nodes = merge_node_ids_by_service.get(service.key, set()) & display_proc_ids
+            merge_nodes = merge_node_ids_by_service.get(service.key, set()) & visible_proc_ids
             in_team_merge_nodes = len(merge_nodes)
-            weak_component_count = _count_weak_components(display_proc_ids, visible_adjacency)
+            weak_component_count = _count_weak_components(
+                display_scoped_proc_ids, visible_adjacency
+            )
             cycle_nodes = set(graph_metrics.cycle_path or ())
-            ordered_proc_ids = [
-                proc_id for proc_id in global_proc_order if proc_id in display_proc_ids
+            ordered_scoped_proc_ids = [
+                proc_id for proc_id in global_proc_order if proc_id in display_scoped_proc_ids
             ]
-            if len(ordered_proc_ids) < len(display_proc_ids):
-                ordered_proc_ids.extend(
-                    sorted(display_proc_ids - set(ordered_proc_ids), key=str.lower)
+            if len(ordered_scoped_proc_ids) < len(display_scoped_proc_ids):
+                ordered_scoped_proc_ids.extend(
+                    sorted(
+                        display_scoped_proc_ids - set(ordered_scoped_proc_ids),
+                        key=str.lower,
+                    )
                 )
+            scoped_proc_order_in_graph: dict[str, int] = {}
+            graph_proc_counter: dict[str, int] = {}
+            for scoped_proc_id in ordered_scoped_proc_ids:
+                graph_scope = global_graph_labels_by_proc.get(scoped_proc_id) or "__single__"
+                graph_proc_counter[graph_scope] = graph_proc_counter.get(graph_scope, 0) + 1
+                scoped_proc_order_in_graph[scoped_proc_id] = graph_proc_counter[graph_scope]
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,
                     service_name=service.service_name,
                     cycle_count=graph_metrics.cycle_count,
                     block_count=sum(
-                        len(service.block_ids_by_procedure.get(proc_id, set()))
-                        for proc_id in display_proc_ids
+                        len(
+                            service.block_ids_by_procedure.get(
+                                _normalize_scoped_procedure_id(proc_id),
+                                set(),
+                            )
+                        )
+                        for proc_id in ordered_scoped_proc_ids
                     ),
                     in_team_merge_nodes=in_team_merge_nodes,
-                    procedure_count=len(display_proc_ids),
-                    procedure_ids=tuple(sorted(display_proc_ids, key=str.lower)),
+                    procedure_count=len(ordered_scoped_proc_ids),
+                    procedure_ids=tuple(
+                        _normalize_scoped_procedure_id(proc_id)
+                        for proc_id in ordered_scoped_proc_ids
+                    ),
                     merge_node_ids=tuple(sorted(merge_nodes, key=str.lower)),
                     weak_component_count=weak_component_count,
                     cycle_path=tuple(graph_metrics.cycle_path or ()),
                     procedure_usage_stats=tuple(
                         ServiceProcedureUsageStat(
-                            procedure_id=proc_id,
-                            procedure_name=procedure_names.get(proc_id),
-                            in_team_merge_hits=1 if proc_id in merge_nodes else 0,
+                            procedure_id=_normalize_scoped_procedure_id(proc_id),
+                            procedure_name=procedure_names.get(
+                                _normalize_scoped_procedure_id(proc_id)
+                            ),
+                            in_team_merge_hits=1
+                            if _normalize_scoped_procedure_id(proc_id) in merge_nodes
+                            else 0,
                             cycle_hits=1 if proc_id in cycle_nodes else 0,
                             linked_procedure_count=graph_metrics.in_degree.get(proc_id, 0)
                             + graph_metrics.out_degree.get(proc_id, 0),
-                            block_count=len(service.block_ids_by_procedure.get(proc_id, set())),
+                            block_count=len(
+                                service.block_ids_by_procedure.get(
+                                    _normalize_scoped_procedure_id(proc_id),
+                                    set(),
+                                )
+                            ),
                             start_block_count=len(
-                                service.start_block_ids_by_procedure.get(proc_id, set())
+                                service.start_block_ids_by_procedure.get(
+                                    _normalize_scoped_procedure_id(proc_id),
+                                    set(),
+                                )
                             ),
                             end_block_count=len(
-                                service.end_block_types_by_procedure.get(proc_id, {})
+                                service.end_block_types_by_procedure.get(
+                                    _normalize_scoped_procedure_id(proc_id), {}
+                                )
                             ),
                             graph_label=global_graph_labels_by_proc.get(proc_id),
+                            flow_order_in_graph=scoped_proc_order_in_graph.get(proc_id),
+                            flow_level=global_proc_levels.get(proc_id),
                             block_type_stats=self._build_procedure_block_type_stats(
                                 service,
-                                proc_id,
+                                _normalize_scoped_procedure_id(proc_id),
                             ),
                         )
-                        for proc_id in ordered_proc_ids
+                        for proc_id in ordered_scoped_proc_ids
                     ),
                 )
             )
@@ -1072,6 +1188,26 @@ class BuildCrossTeamGraphDashboard:
             )
         )
         return stats[:top_limit]
+
+    def _collect_flow_proc_ids_by_service(
+        self,
+        flow_document: MarkupDocument,
+    ) -> dict[str, set[str]]:
+        flow_proc_ids_by_service: dict[str, set[str]] = {}
+        procedure_meta = flow_document.procedure_meta or {}
+        for proc in flow_document.procedures:
+            proc_id = proc.procedure_id
+            payload = procedure_meta.get(proc_id)
+            if not isinstance(payload, Mapping):
+                continue
+            service_keys = _extract_service_keys_from_procedure_meta(payload)
+            if not service_keys:
+                service_key = _service_key_from_payload(payload)
+                if service_key is not None:
+                    service_keys = {service_key}
+            for service_key in service_keys:
+                flow_proc_ids_by_service.setdefault(service_key, set()).add(proc_id)
+        return flow_proc_ids_by_service
 
     def _build_procedure_block_type_stats(
         self,
@@ -1129,6 +1265,13 @@ def _graph_key(document: MarkupDocument) -> tuple[str, str, str, str]:
     return f"{team_id}::{service_id}", team_id, team_name, service_name
 
 
+def _service_key_from_payload(payload: Mapping[str, object]) -> str | None:
+    team_id = str(payload.get("team_id") or "").strip() or "unknown-team"
+    service_name = str(payload.get("service_name") or "").strip() or "Unknown service"
+    service_id = str(payload.get("finedog_unit_id") or "").strip() or service_name.lower()
+    return f"{team_id}::{service_id}"
+
+
 def _document_procedure_ids(document: MarkupDocument) -> set[str]:
     proc_ids = {procedure.procedure_id for procedure in document.procedures}
     for source, targets in document.procedure_graph.items():
@@ -1161,44 +1304,6 @@ def _count_weak_components(nodes: set[str], adjacency: Mapping[str, set[str]]) -
             visited.add(current)
             stack.extend(undirected.get(current, set()) - visited)
     return components
-
-
-def _normalize_flow_graph(flow_graph: _GraphAggregate) -> _GraphAggregate:
-    normalized = _GraphAggregate(
-        key=flow_graph.key,
-        team_id=flow_graph.team_id,
-        team_name=flow_graph.team_name,
-        service_name=flow_graph.service_name,
-    )
-    for proc_id in flow_graph.procedure_order:
-        normalized._register_procedure_id(_normalize_scoped_procedure_id(proc_id))
-    for proc_id in flow_graph.procedure_ids:
-        normalized._register_procedure_id(_normalize_scoped_procedure_id(proc_id))
-
-    for source, targets in flow_graph.adjacency.items():
-        normalized_source = _normalize_scoped_procedure_id(source)
-        normalized.adjacency.setdefault(normalized_source, set())
-        for target in targets:
-            normalized_target = _normalize_scoped_procedure_id(target)
-            if normalized_target == normalized_source:
-                continue
-            normalized.adjacency[normalized_source].add(normalized_target)
-            normalized.adjacency.setdefault(normalized_target, set())
-
-    for proc_id, start_block_ids in flow_graph.start_block_ids_by_procedure.items():
-        normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
-        normalized.start_block_ids_by_procedure.setdefault(normalized_proc_id, set()).update(
-            start_block_ids
-        )
-    for proc_id, block_ids in flow_graph.block_ids_by_procedure.items():
-        normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
-        normalized.block_ids_by_procedure.setdefault(normalized_proc_id, set()).update(block_ids)
-    for proc_id, end_block_types in flow_graph.end_block_types_by_procedure.items():
-        normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
-        normalized.end_block_types_by_procedure.setdefault(normalized_proc_id, {}).update(
-            end_block_types
-        )
-    return normalized
 
 
 def _normalize_scoped_procedure_id(proc_id: str) -> str:
@@ -1305,6 +1410,20 @@ def _extract_service_keys(services: object) -> set[str]:
                 str(item.get("service_name") or "Unknown entity"),
             )
         )
+    return result
+
+
+def _extract_service_keys_from_procedure_meta(payload: Mapping[str, object]) -> set[str]:
+    services = payload.get("services")
+    if not isinstance(services, list):
+        return set()
+    result: set[str] = set()
+    for item in services:
+        if not isinstance(item, Mapping):
+            continue
+        service_key = _service_key_from_payload(item)
+        if service_key is not None:
+            result.add(service_key)
     return result
 
 

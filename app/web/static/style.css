@@ -1226,7 +1226,7 @@ main {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.2em;
+  min-width: 4.8em;
   margin-right: 8px;
   border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: 999px;
