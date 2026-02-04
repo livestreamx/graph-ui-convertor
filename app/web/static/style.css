@@ -1238,6 +1238,57 @@ main {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.team-graph-graphs-item > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.team-graph-graphs-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-graph-graphs-item-details {
+  margin-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-merge-component {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-merge-component-title .team-graph-graph-entities {
+  gap: 4px;
+}
+
+.team-graph-merge-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 6px;
+}
+
+.team-graph-merge-node-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 7px 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-merge-node-id {
+  font-size: 11px;
+}
+
+.team-graph-merge-node-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .team-graph-graph-entities {
   display: flex;
   flex-wrap: wrap;

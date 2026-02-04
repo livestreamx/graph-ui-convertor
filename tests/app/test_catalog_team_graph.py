@@ -168,11 +168,12 @@ def test_catalog_team_graph_api(
         assert "team-graph-ranked-details-list-entity" in html_response.text
         assert "Graph-level breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order)" in html_response.text
+        assert "Merges" in html_response.text
         assert "Links" in html_response.text
         assert "team-graph-procedure-order" in html_response.text
         assert "Data quality note" not in html_response.text
         assert "Ranking priority: cross-entity reuse" in html_response.text
-        assert "Ranking priority: in-team merge nodes" in html_response.text
+        assert "Ranking priority: merges" in html_response.text
         assert "team-graph-graphs-row-header" in html_response.text
         assert "team-graph-graphs-count-value" in html_response.text
         assert "--team-chip-border" in html_response.text
@@ -226,6 +227,14 @@ def test_catalog_team_graph_merge_nodes_use_all_markups(
         bucket="cjm-bucket",
         prefix="markup/",
         list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
     )
     add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
     add_get_object(
@@ -1025,6 +1034,10 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
     add_get_object(
         stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
     )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -1073,6 +1086,19 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
             element.get("customData", {}).get("cjm", {}).get("role") == "service_zone"
             for element in elements
         )
+
+        html_response = client_api.get(
+            "/catalog/teams/graph",
+            params={
+                "team_ids": f"{basic_team_id},{graphs_team_id}",
+                "merge_selected_markups": "true",
+            },
+        )
+        assert html_response.status_code == 200
+        assert "Intersection node breakdown" in html_response.text
+        assert "team-graph-merge-node-card" in html_response.text
+        assert "proc_shared_intake" in html_response.text
+        assert "proc_shared_routing" in html_response.text
     finally:
         stubber.deactivate()
 

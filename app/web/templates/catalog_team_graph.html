@@ -365,13 +365,47 @@
                       </div>
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
-                        <div class="team-graph-graphs-row team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
-                          {{ render_graph_label_entities(item.label, force_colorize=true) }}
-                          <span class="team-graph-graphs-count">
-                            <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
-                            <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
-                          </span>
-                        </div>
+                        <details class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
+                          <summary class="team-graph-graphs-row">
+                            {{ render_graph_label_entities(item.label, force_colorize=true) }}
+                            <span class="team-graph-graphs-count">
+                              <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
+                              <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                            </span>
+                          </summary>
+                          {% set merge_ns = namespace(has_merge_nodes=false) %}
+                          {% for component in item.components %}
+                            {% if component.merge_nodes %}
+                              {% set merge_ns.has_merge_nodes = true %}
+                            {% endif %}
+                          {% endfor %}
+                          {% if merge_ns.has_merge_nodes %}
+                            <div class="team-graph-graphs-item-details">
+                              <div class="team-graph-ranked-details-label">Intersection node breakdown</div>
+                              {% for component in item.components %}
+                                {% if component.merge_nodes %}
+                                  <div class="team-graph-merge-component">
+                                    <div class="team-graph-merge-component-title">
+                                      {{ render_graph_label_entities(component.graph_label, force_colorize=true) }}
+                                    </div>
+                                    <div class="team-graph-merge-nodes-grid">
+                                      {% for merge_node in component.merge_nodes %}
+                                        <article class="team-graph-merge-node-card">
+                                          <div class="team-graph-merge-node-id team-graph-mono">{{ merge_node.procedure_id }}</div>
+                                          <div class="team-graph-merge-node-entities">
+                                            {% for entity in merge_node.entities %}
+                                              {{ render_team_service_entity(entity, "team-graph-graph-entity-sm", true) }}
+                                            {% endfor %}
+                                          </div>
+                                        </article>
+                                      {% endfor %}
+                                    </div>
+                                  </div>
+                                {% endif %}
+                              {% endfor %}
+                            </div>
+                          {% endif %}
+                        </details>
                       {% endfor %}
                     </div>
                   {% else %}
@@ -735,17 +769,17 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top overloaded entities</div>
-                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: in-team merge-node density, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown. In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.</div>
+                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: shared-node merges with other entities, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown. In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.</div>
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-data-context">Ranking priority: in-team merge nodes &rarr; cycles &rarr; procedures &rarr; blocks. These metrics are computed directly from graph structure and block lists.</div>
+                  <div class="team-graph-data-context">Ranking priority: merges &rarr; cycles &rarr; procedures &rarr; blocks. These metrics are computed directly from graph structure and block lists.</div>
                   {% if team_dashboard.overloaded_services %}
                     <div class="team-graph-ranked-table team-graph-ranked-table-services">
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Entity</span>
                         <span>Procedures</span>
-                        <span>In-team merges</span>
+                        <span>Merges</span>
                         <span>Cycles</span>
                         <span>Blocks</span>
                       </div>
@@ -763,7 +797,7 @@
                             <div class="team-graph-ranked-table">
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                                 <span>Procedure</span>
-                                <span>Merge</span>
+                                <span>Merges</span>
                                 <span>Cycle</span>
                                 <span>Links</span>
                                 <span>Blocks</span>

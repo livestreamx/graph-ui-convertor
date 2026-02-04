@@ -61,6 +61,19 @@ class ProcedureGraphUsageStat:
 class GraphGroupStat:
     label: str
     graph_count: int
+    components: tuple[GraphComponentStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class GraphComponentStat:
+    graph_label: str
+    merge_nodes: tuple[GraphMergeNodeStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class GraphMergeNodeStat:
+    procedure_id: str
+    entities: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -474,12 +487,14 @@ class BuildCrossTeamGraphDashboard:
         )
         components = _collect_graph_components(graph_document)
         graph_keys_by_procedure_id: dict[str, set[str]] = {}
+        procedure_meta = graph_document.procedure_meta or {}
 
-        component_payloads: list[tuple[str, list[str]]] = []
+        component_payloads: list[tuple[str, list[str], tuple[GraphMergeNodeStat, ...]]] = []
         for component_nodes in components:
             service_labels: set[str] = set()
+            merge_nodes: list[GraphMergeNodeStat] = []
             for proc_id in component_nodes:
-                payload = (graph_document.procedure_meta or {}).get(proc_id, {})
+                payload = procedure_meta.get(proc_id, {})
                 services = payload.get("services")
                 keys = _extract_service_keys(services)
                 if not keys:
@@ -490,6 +505,17 @@ class BuildCrossTeamGraphDashboard:
                         )
                     }
                 service_labels.update(keys)
+                if bool(payload.get("is_intersection")):
+                    merge_services = payload.get("merge_services")
+                    merge_keys = _extract_service_keys(merge_services)
+                    if not merge_keys:
+                        merge_keys = keys
+                    merge_nodes.append(
+                        GraphMergeNodeStat(
+                            procedure_id=proc_id,
+                            entities=tuple(sorted(merge_keys, key=str.lower)),
+                        )
+                    )
             if len(service_labels) > 1:
                 service_labels.discard(_entity_label("Unknown team", "Unknown entity"))
             sorted_services = sorted(service_labels, key=str.lower)
@@ -497,12 +523,24 @@ class BuildCrossTeamGraphDashboard:
                 base_label = sorted_services[0] if sorted_services else "Unknown graph"
             else:
                 base_label = " + ".join(sorted_services)
-            component_payloads.append((base_label, sorted(component_nodes, key=str.lower)))
+            component_payloads.append(
+                (
+                    base_label,
+                    sorted(component_nodes, key=str.lower),
+                    tuple(
+                        sorted(
+                            merge_nodes,
+                            key=lambda item: (-len(item.entities), item.procedure_id.lower()),
+                        )
+                    ),
+                )
+            )
 
-        base_label_counts: Counter[str] = Counter(base for base, _ in component_payloads)
+        base_label_counts: Counter[str] = Counter(base for base, _, _ in component_payloads)
         base_label_index: Counter[str] = Counter()
         graph_keys: list[str] = []
-        for base_label, proc_ids in sorted(
+        components_by_base_label: dict[str, list[GraphComponentStat]] = {}
+        for base_label, proc_ids, merge_node_stats in sorted(
             component_payloads,
             key=lambda item: (item[0].lower(), item[1][0].lower() if item[1] else ""),
         ):
@@ -513,8 +551,28 @@ class BuildCrossTeamGraphDashboard:
             graph_keys.append(label)
             for proc_id in proc_ids:
                 graph_keys_by_procedure_id.setdefault(proc_id, set()).add(label)
+            components_by_base_label.setdefault(base_label, []).append(
+                GraphComponentStat(
+                    graph_label=label,
+                    merge_nodes=tuple(
+                        sorted(
+                            merge_node_stats,
+                            key=lambda item: (-len(item.entities), item.procedure_id.lower()),
+                        )
+                    ),
+                )
+            )
         graph_groups = tuple(
-            GraphGroupStat(label=label, graph_count=count)
+            GraphGroupStat(
+                label=label,
+                graph_count=count,
+                components=tuple(
+                    sorted(
+                        components_by_base_label.get(label, []),
+                        key=lambda item: item.graph_label.lower(),
+                    )
+                ),
+            )
             for label, count in sorted(
                 base_label_counts.items(),
                 key=lambda item: (-item[1], item[0].lower()),
@@ -734,9 +792,6 @@ class BuildCrossTeamGraphDashboard:
         merge_selected_markups: bool,
         top_limit: int,
     ) -> list[ServiceLoadStat]:
-        team_by_service_key: dict[str, str] = {
-            service.key: service.team_id for service in services.values()
-        }
         merge_node_ids_by_service: dict[str, set[str]] = {}
         states = self._build_service_node_states(services)
         pair_merge_nodes = collect_pair_merge_nodes(
@@ -744,8 +799,6 @@ class BuildCrossTeamGraphDashboard:
             merge_selected_markups=merge_selected_markups,
         )
         for (left_key, right_key), proc_ids in pair_merge_nodes.items():
-            if team_by_service_key.get(left_key) != team_by_service_key.get(right_key):
-                continue
             merge_node_ids_by_service.setdefault(left_key, set()).update(proc_ids)
             merge_node_ids_by_service.setdefault(right_key, set()).update(proc_ids)
 
