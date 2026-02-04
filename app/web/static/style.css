@@ -907,6 +907,11 @@ main {
   gap: 8px;
 }
 
+.team-graph-overlap-teams {
+  display: grid;
+  gap: 8px;
+}
+
 .team-graph-overlap-team {
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -1096,6 +1101,45 @@ main {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-size: 11px;
+}
+
+.team-graph-sort-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.team-graph-sort-button::after {
+  content: "↕";
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.team-graph-sort-button[data-sort-active="true"] {
+  color: var(--text);
+}
+
+.team-graph-sort-button[data-sort-active="true"][data-sort-order="desc"]::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.team-graph-sort-button[data-sort-active="true"][data-sort-order="asc"]::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.team-graph-sort-button:hover {
+  color: var(--text);
 }
 
 .team-graph-ranked-table-item {

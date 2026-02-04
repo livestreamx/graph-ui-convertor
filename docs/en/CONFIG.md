@@ -140,6 +140,7 @@ catalog:
   (`cross-entity`, `inbound deps`, `outbound deps`).
   `Top overloaded entities` detail shows the same columns per procedure in graph order and adds
   per-procedure block-type breakdown (start/end types) using the same colors as in the diagram.
+  Numeric columns in dashboard tables support client-side sorting by clicking the column header.
   `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,
