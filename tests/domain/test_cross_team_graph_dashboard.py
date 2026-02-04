@@ -390,6 +390,47 @@ def test_overloaded_entities_breakdown_skips_graph_only_intermediate_nodes() -> 
     ]
 
 
+def test_overloaded_entities_breakdown_preserves_flow_through_hidden_graph_nodes() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="downstream_no_start", branches={"d1": ["d2"]}),
+                Procedure(
+                    procedure_id="actual_start",
+                    start_block_ids=["s1"],
+                    branches={"s1": ["s2"]},
+                ),
+            ],
+            procedure_graph={
+                "actual_start": ["hidden_mid"],
+                "hidden_mid": ["downstream_no_start"],
+            },
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    service = dashboard.overloaded_services[0]
+    assert [item.procedure_id for item in service.procedure_usage_stats] == [
+        "actual_start",
+        "downstream_no_start",
+    ]
+    assert service.weak_component_count == 1
+    usage_by_id = {item.procedure_id: item for item in service.procedure_usage_stats}
+    assert usage_by_id["actual_start"].linked_procedure_count == 1
+    assert usage_by_id["downstream_no_start"].linked_procedure_count == 1
+
+
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
     fixture_path = Path("examples/markup/graphs_set.json")
     document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))

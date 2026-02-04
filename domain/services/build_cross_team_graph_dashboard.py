@@ -202,11 +202,10 @@ class _GraphAggregate:
 
     def to_adjacency(self, nodes: set[str] | None = None) -> dict[str, list[str]]:
         scoped_nodes = set(nodes) if nodes is not None else set(self.procedure_ids)
+        scoped_adjacency = self._scoped_adjacency(scoped_nodes)
         adjacency: dict[str, list[str]] = {}
         for node in sorted(scoped_nodes):
-            adjacency[node] = sorted(
-                target for target in self.adjacency.get(node, set()) if target in scoped_nodes
-            )
+            adjacency[node] = sorted(scoped_adjacency.get(node, set()))
         return adjacency
 
     def visible_procedure_ids(self) -> set[str]:
@@ -222,15 +221,10 @@ class _GraphAggregate:
         def order_index(proc_id: str) -> int:
             return self._procedure_order_index.get(proc_id, order_fallback)
 
-        adjacency: dict[str, set[str]] = {node: set() for node in scoped_nodes}
+        adjacency = self._scoped_adjacency(scoped_nodes)
         indegree: dict[str, int] = {node: 0 for node in scoped_nodes}
-        for source, targets in self.adjacency.items():
-            if source not in scoped_nodes:
-                continue
+        for targets in adjacency.values():
             for target in targets:
-                if target not in scoped_nodes:
-                    continue
-                adjacency[source].add(target)
                 indegree[target] += 1
 
         undirected: dict[str, set[str]] = {node: set() for node in scoped_nodes}
@@ -295,6 +289,35 @@ class _GraphAggregate:
             ordered.extend(component_ordered)
 
         return tuple(ordered)
+
+    def _scoped_adjacency(self, scoped_nodes: set[str]) -> dict[str, set[str]]:
+        adjacency: dict[str, set[str]] = {node: set() for node in scoped_nodes}
+        if not scoped_nodes:
+            return adjacency
+
+        hidden_nodes = self.procedure_ids - scoped_nodes
+        for source in scoped_nodes:
+            direct_targets = self.adjacency.get(source, set())
+            for target in direct_targets:
+                if target in scoped_nodes and target != source:
+                    adjacency[source].add(target)
+
+            hidden_stack = [target for target in direct_targets if target in hidden_nodes]
+            visited_hidden: set[str] = set()
+            while hidden_stack:
+                hidden_node = hidden_stack.pop()
+                if hidden_node in visited_hidden:
+                    continue
+                visited_hidden.add(hidden_node)
+                for target in self.adjacency.get(hidden_node, set()):
+                    if target == source:
+                        continue
+                    if target in scoped_nodes:
+                        adjacency[source].add(target)
+                        continue
+                    if target in hidden_nodes and target not in visited_hidden:
+                        hidden_stack.append(target)
+        return adjacency
 
     def _register_procedure_id(self, proc_id: str) -> None:
         if proc_id in self.procedure_ids:
