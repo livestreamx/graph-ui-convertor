@@ -177,7 +177,9 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
-def test_build_team_procedure_graph_merges_singleton_shared_nodes_even_when_flag_is_off() -> None:
+def test_build_team_procedure_graph_does_not_merge_singleton_shared_nodes_when_flag_is_off() -> (
+    None
+):
     doc_alpha = MarkupDocument.model_validate(
         {
             "markup_type": "service",
@@ -219,16 +221,15 @@ def test_build_team_procedure_graph_merges_singleton_shared_nodes_even_when_flag
     )
 
     proc_ids = [proc.procedure_id for proc in merged.procedures]
-    assert proc_ids == ["shared"]
-    meta = merged.procedure_meta["shared"]
-    assert meta["is_intersection"] is True
-    assert meta["procedure_color"] == "#ffd6d6"
-    services = meta["services"]
-    assert isinstance(services, list)
-    assert len(services) == 2
-    merge_services = meta["merge_services"]
-    assert isinstance(merge_services, list)
-    assert len(merge_services) == 2
+    assert len(proc_ids) == 2
+    shared_proc_ids = [proc_id for proc_id in proc_ids if proc_id.startswith("shared::doc")]
+    assert len(shared_proc_ids) == 2
+    for proc_id in shared_proc_ids:
+        meta = merged.procedure_meta[proc_id]
+        assert meta["is_intersection"] is not True
+        services = meta["services"]
+        assert isinstance(services, list)
+        assert len(services) == 1
 
 
 def test_build_team_procedure_graph_does_not_merge_terminal_to_start_nodes_when_flag_is_off() -> (

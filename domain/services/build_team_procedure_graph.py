@@ -258,10 +258,6 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         service_keys: set[str] = set()
         source_proc_by_scoped: dict[str, str] = {}
-        merge_node_ids = self._resolve_merge_node_ids(
-            documents,
-            merge_selected_markups=False,
-        )
 
         source_counts: dict[str, int] = {}
         for document in documents:
@@ -271,7 +267,7 @@ class BuildTeamProcedureGraph:
         for doc_idx, document in enumerate(documents):
             scoped_id_map: dict[str, str] = {}
             for proc_id in self._document_procedure_ids(document):
-                if source_counts.get(proc_id, 0) > 1 and proc_id not in merge_node_ids:
+                if source_counts.get(proc_id, 0) > 1:
                     scoped_id = f"{proc_id}::doc{doc_idx + 1}"
                 else:
                     scoped_id = proc_id

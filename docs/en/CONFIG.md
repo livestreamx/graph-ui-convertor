@@ -125,6 +125,8 @@ catalog:
   by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
   `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only
   the selected teams.
+  Dashboard graph counters (`Graphs`, grouped graph stats) are computed from the same merged
+  procedure graph payload that is opened/downloaded as the team diagram.
 - Step 3 renders a dashboard after Merge with three compact sections:
   `Graphs info` (markup type distribution, unique graphs, unique procedures, bot/multi coverage),
   `Service Integrity` (internal/external service intersections, split services, target-state share),

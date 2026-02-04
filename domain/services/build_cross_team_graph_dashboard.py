@@ -190,6 +190,7 @@ class BuildCrossTeamGraphDashboard:
         all_documents: Sequence[MarkupDocument],
         selected_team_ids: Sequence[str],
         merge_selected_markups: bool = False,
+        merge_documents: Sequence[MarkupDocument] | None = None,
         top_limit: int = 10,
     ) -> CrossTeamGraphDashboard:
         selected_graphs = self._collect_graphs(selected_documents)
@@ -208,6 +209,7 @@ class BuildCrossTeamGraphDashboard:
         ) = self._extract_graph_view(
             selected_documents,
             merge_selected_markups=merge_selected_markups,
+            merge_documents=merge_documents,
         )
         markup_type_counts = tuple(self._build_markup_type_counts(selected_documents))
         total_procedure_count = sum(len(document.procedures) for document in selected_documents)
@@ -463,9 +465,11 @@ class BuildCrossTeamGraphDashboard:
         selected_documents: Sequence[MarkupDocument],
         *,
         merge_selected_markups: bool,
+        merge_documents: Sequence[MarkupDocument] | None = None,
     ) -> tuple[list[str], dict[str, set[str]], tuple[GraphGroupStat, ...]]:
         graph_document = BuildTeamProcedureGraph().build(
             selected_documents,
+            merge_documents=merge_documents,
             merge_selected_markups=merge_selected_markups,
         )
         components = _collect_graph_components(graph_document)

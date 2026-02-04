@@ -5,6 +5,7 @@ from pathlib import Path
 
 from domain.models import MarkupDocument, Procedure
 from domain.services.build_cross_team_graph_dashboard import BuildCrossTeamGraphDashboard
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 
 
 def _doc(
@@ -105,7 +106,7 @@ def test_build_cross_team_graph_dashboard() -> None:
         ("service", 3),
         ("operations", 1),
     ]
-    assert dashboard.unique_graph_count == 4
+    assert dashboard.unique_graph_count == 6
     assert dashboard.bot_graph_count == 2
     assert dashboard.multi_graph_count == 1
     assert dashboard.total_procedure_count == 8
@@ -115,13 +116,13 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert dashboard.employee_procedure_count == 5
 
     assert dashboard.internal_intersection_markup_count == 3
-    assert dashboard.external_intersection_markup_count == 3
+    assert dashboard.external_intersection_markup_count == 1
     assert [(item.team_name, item.count) for item in dashboard.external_team_intersections] == [
-        ("Gamma", 3)
+        ("Gamma", 1)
     ]
     overlap = dashboard.external_team_intersections[0]
     assert overlap.external_depends_on_selected_count == 1
-    assert overlap.selected_depends_on_external_count == 2
+    assert overlap.selected_depends_on_external_count == 0
     assert (
         overlap.external_depends_on_selected_count + overlap.selected_depends_on_external_count
         == overlap.count
@@ -129,10 +130,10 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert [
         (item.service_name, item.count)
         for item in dashboard.external_team_intersections[0].services
-    ] == [("Wallet", 3)]
+    ] == [("Wallet", 1)]
     service_overlap = dashboard.external_team_intersections[0].services[0]
     assert service_overlap.external_depends_on_selected_count == 1
-    assert service_overlap.selected_depends_on_external_count == 2
+    assert service_overlap.selected_depends_on_external_count == 0
     assert (
         service_overlap.external_depends_on_selected_count
         + service_overlap.selected_depends_on_external_count
@@ -239,3 +240,64 @@ def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None
     assert dashboard.unique_graph_count == len(document.procedures)
     assert dashboard.multi_graph_count == 1
     assert sum(item.graph_count for item in dashboard.graph_groups) == dashboard.unique_graph_count
+
+
+def test_dashboard_graph_stats_follow_same_merge_graph_as_diagram() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="entry", branches={"a": ["b"]}),
+                Procedure(procedure_id="shared", branches={"c": ["d"]}),
+            ],
+            procedure_graph={"entry": [], "shared": []},
+        )
+    ]
+    all_documents = [
+        *selected_documents,
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Loans",
+            unit_id="svc-loans",
+            procedures=[
+                Procedure(procedure_id="entry", branches={"x": ["y"]}),
+                Procedure(procedure_id="shared", branches={"z": ["w"]}),
+            ],
+            procedure_graph={"entry": ["shared"], "shared": []},
+        ),
+    ]
+
+    merged_from_selected_only = BuildTeamProcedureGraph().build(
+        selected_documents,
+        merge_selected_markups=True,
+    )
+    merged_with_all_markups = BuildTeamProcedureGraph().build(
+        selected_documents,
+        merge_documents=all_documents,
+        merge_selected_markups=True,
+    )
+    assert len(merged_from_selected_only.procedure_graph.get("entry", [])) == 0
+    assert merged_with_all_markups.procedure_graph.get("entry") == ["shared"]
+
+    dashboard_without_all = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=all_documents,
+        selected_team_ids=["team-alpha"],
+        merge_selected_markups=True,
+    )
+    dashboard_with_all = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=all_documents,
+        selected_team_ids=["team-alpha"],
+        merge_selected_markups=True,
+        merge_documents=all_documents,
+    )
+
+    assert dashboard_without_all.unique_graph_count == 2
+    assert dashboard_with_all.unique_graph_count == 1
