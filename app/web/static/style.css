@@ -944,7 +944,7 @@ main {
 
 .team-graph-overlap-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.6fr) repeat(3, minmax(88px, 1fr));
+  grid-template-columns: minmax(240px, 3.2fr) repeat(3, minmax(64px, 0.75fr));
   gap: 10px;
   align-items: baseline;
   font-size: 12px;
@@ -1028,7 +1028,7 @@ main {
 
 @media (max-width: 880px) {
   .team-graph-overlap-row {
-    grid-template-columns: minmax(120px, 1fr) repeat(3, minmax(56px, auto));
+    grid-template-columns: minmax(128px, 1fr) repeat(3, minmax(52px, auto));
     gap: 8px;
   }
 
@@ -1071,7 +1071,7 @@ main {
 
 .team-graph-ranked-table-row {
   display: grid;
-  grid-template-columns: minmax(170px, 2fr) repeat(4, minmax(74px, 1fr));
+  grid-template-columns: minmax(260px, 4fr) repeat(4, minmax(58px, 0.65fr));
   gap: 10px;
   align-items: center;
   font-size: 12px;
@@ -1245,7 +1245,7 @@ main {
 
 @media (max-width: 880px) {
   .team-graph-ranked-table-row {
-    grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(52px, auto));
+    grid-template-columns: minmax(140px, 1fr) repeat(4, minmax(48px, auto));
     gap: 8px;
     font-size: 11px;
   }
@@ -1274,7 +1274,7 @@ main {
 
 .team-graph-graphs-row {
   display: grid;
-  grid-template-columns: minmax(190px, 1.6fr) minmax(92px, auto) minmax(110px, auto);
+  grid-template-columns: minmax(250px, 3.4fr) minmax(64px, 0.75fr) minmax(84px, 0.9fr);
   gap: 10px;
   align-items: center;
 }
@@ -1441,7 +1441,7 @@ main {
 
 @media (max-width: 880px) {
   .team-graph-graphs-row {
-    grid-template-columns: minmax(120px, 1fr) minmax(64px, auto) minmax(84px, auto);
+    grid-template-columns: minmax(132px, 1fr) minmax(54px, auto) minmax(74px, auto);
     gap: 8px;
   }
 
