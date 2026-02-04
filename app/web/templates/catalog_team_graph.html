@@ -1072,26 +1072,33 @@
                                   data-sort-link-count="{{ proc_item.linked_procedure_count }}"
                                   data-sort-block-count="{{ proc_item.block_count }}"
                                 >
-                                  <span>
-                                    <span class="team-graph-procedure-order" data-sort-rank data-sort-rank-prefix="P">{{ loop.index }}</span>
+                                  <span class="team-graph-procedure-row-main">
+                                    <span class="team-graph-procedure-order" data-sort-rank data-sort-rank-prefix="P">P{{ loop.index }}</span>
                                     {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id) }}
-                                    {% if proc_item.start_block_count or proc_item.end_block_count or proc_item.block_type_stats %}
+                                    {% if proc_item.block_type_stats %}
                                       <span class="team-graph-procedure-block-meta">
-                                        <span class="team-graph-procedure-block-summary">
-                                          Starts: {{ proc_item.start_block_count }} · Ends: {{ proc_item.end_block_count }}
+                                        <span class="team-graph-procedure-block-types">
+                                          {% for block_stat in proc_item.block_type_stats %}
+                                            {% set block_label = block_stat.label %}
+                                            {% if block_label == "End (exit)" %}
+                                              {% set block_label = "Exit" %}
+                                            {% elif block_label == "End (all)" %}
+                                              {% set block_label = "End & Exit" %}
+                                            {% elif block_label == "End (intermediate)" %}
+                                              {% set block_label = "Intermediate" %}
+                                            {% elif block_label == "End (postpone)" %}
+                                              {% set block_label = "Postpone" %}
+                                            {% elif block_label == "End (turn_out)" %}
+                                              {% set block_label = "Turn out" %}
+                                            {% endif %}
+                                            <span
+                                              class="team-graph-procedure-block-type"
+                                              style="--team-graph-block-type-color: {{ block_stat.color }}"
+                                            >
+                                              {{ block_label }} · {{ block_stat.count }}
+                                            </span>
+                                          {% endfor %}
                                         </span>
-                                        {% if proc_item.block_type_stats %}
-                                          <span class="team-graph-procedure-block-types">
-                                            {% for block_stat in proc_item.block_type_stats %}
-                                              <span
-                                                class="team-graph-procedure-block-type"
-                                                style="--team-graph-block-type-color: {{ block_stat.color }}"
-                                              >
-                                                {{ block_stat.label }} · {{ block_stat.count }}
-                                              </span>
-                                            {% endfor %}
-                                          </span>
-                                        {% endif %}
                                       </span>
                                     {% endif %}
                                   </span>

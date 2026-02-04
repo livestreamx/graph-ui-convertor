@@ -173,8 +173,10 @@ def test_catalog_team_graph_api(
         assert "Potential merges" in html_response.text
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
-        assert "Starts:" in html_response.text
-        assert "Ends:" in html_response.text
+        assert "team-graph-procedure-block-type" in html_response.text
+        assert "Starts:" not in html_response.text
+        assert "Ends:" not in html_response.text
+        assert "End (" not in html_response.text
         assert "team-graph-procedure-order" in html_response.text
         assert "team-graph-procedure-id" in html_response.text
         assert "Data quality note" not in html_response.text

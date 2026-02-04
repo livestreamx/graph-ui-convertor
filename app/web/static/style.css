@@ -1451,20 +1451,27 @@ main {
 }
 
 .team-graph-procedure-block-meta {
-  margin-top: 4px;
-  display: grid;
-  gap: 5px;
-}
-
-.team-graph-procedure-block-summary {
-  color: var(--muted);
-  font-size: 10px;
+  margin-left: auto;
+  min-width: 0;
 }
 
 .team-graph-procedure-block-types {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  justify-content: flex-end;
+}
+
+.team-graph-procedure-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.team-graph-procedure-row-main .team-graph-procedure-caption {
+  min-width: 0;
 }
 
 .team-graph-procedure-block-type {
@@ -1476,6 +1483,21 @@ main {
   font-size: 10px;
   color: var(--text);
   background: color-mix(in srgb, var(--team-graph-block-type-color, #d1ffd6) 22%, transparent);
+}
+
+@media (max-width: 880px) {
+  .team-graph-procedure-row-main {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .team-graph-procedure-block-meta {
+    margin-left: 0;
+  }
+
+  .team-graph-procedure-block-types {
+    justify-content: flex-start;
+  }
 }
 
 .team-graph-empty {
