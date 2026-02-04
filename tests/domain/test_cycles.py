@@ -179,5 +179,6 @@ def test_example_procedure_graph_matches_linear_flow() -> None:
     assert graph.get("proc_beta") == ["proc_gamma", "proc_delta"]
     assert graph.get("proc_gamma") == ["proc_delta"]
     assert graph.get("proc_delta") == ["proc_epsilon"]
-    assert graph.get("proc_epsilon") == ["proc_zeta"]
+    assert graph.get("proc_epsilon") == ["proc_zeta", "proc_c"]
     assert graph.get("proc_zeta") == []
+    assert graph.get("proc_c") == []

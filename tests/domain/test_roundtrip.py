@@ -208,6 +208,39 @@ def test_roundtrip_graphs_set_fixture() -> None:
     assert normalize(reconstructed) == normalize(markup)
 
 
+def test_roundtrip_forest_fixture() -> None:
+    markup = load_markup_fixture("forest.json")
+    layout = GridLayoutEngine()
+    forward = MarkupToExcalidrawConverter(layout)
+    backward = ExcalidrawToMarkupConverter()
+
+    excal = forward.convert(markup)
+    reconstructed = backward.convert(excal.to_dict())
+
+    assert normalize(reconstructed) == normalize(markup)
+
+
+def test_complex_graph_has_epsilon_variant_to_proc_c() -> None:
+    markup = load_markup_fixture("complex_graph.json")
+    proc_graph = markup.procedure_graph
+
+    assert "proc_c" in proc_graph.get("proc_epsilon", [])
+
+    proc_c = next(proc for proc in markup.procedures if proc.procedure_id == "proc_c")
+    assert "c_postpone" in proc_c.end_block_ids
+    assert proc_c.end_block_types.get("c_postpone") == "postpone"
+    assert proc_c.branches.get("c_hub") == ["c_postpone"]
+
+
+def test_graphs_set_contains_proc_c_merge_node() -> None:
+    markup = load_markup_fixture("graphs_set.json")
+    proc_c = next(proc for proc in markup.procedures if proc.procedure_id == "proc_c")
+
+    assert proc_c.branches.get("c_route") == ["c_left", "c_right"]
+    assert proc_c.branches.get("c_left") == ["c_hub"]
+    assert proc_c.branches.get("c_right") == ["c_hub"]
+
+
 def test_extra_block_names_not_rendered() -> None:
     payload = {
         "markup_type": "service",

@@ -146,7 +146,7 @@ def test_primary_branch_aligns_rows_in_large_procedure() -> None:
     markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
-    proc_id = "proc_primary_chain"
+    proc_id = "proc_primary_chain_bot"
     block_ids = ["chain_a", "chain_b", "chain_c"]
     blocks = {
         block.block_id: block
@@ -163,7 +163,7 @@ def test_large_procedure_orders_source_blocks() -> None:
     markup = load_markup_fixture("graphs_set.json")
     plan = GridLayoutEngine().build_plan(markup)
 
-    proc_id = "proc_source_order"
+    proc_id = "proc_source_order_multi"
     block_ids = {
         "first": "source_a",
         "second": "source_b",
