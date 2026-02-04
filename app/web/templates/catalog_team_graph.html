@@ -735,7 +735,7 @@
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
                         <div class="team-graph-help-title">Top overloaded entities</div>
-                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: in-team merge-node density, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown.</div>
+                        <div class="team-graph-help-hint">Rank by structural risk in merged <code>procedure_graph</code>: in-team merge-node density, cycles, procedure volume, then block volume. Click a row for per-procedure breakdown. In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.</div>
                       </div>
                     </div>
                   </div>
@@ -744,18 +744,18 @@
                     <div class="team-graph-ranked-table team-graph-ranked-table-services">
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Entity</span>
+                        <span>Procedures</span>
                         <span>In-team merges</span>
                         <span>Cycles</span>
-                        <span>Procedures</span>
                         <span>Blocks</span>
                       </div>
                       {% for item in team_dashboard.overloaded_services %}
                         <details class="team-graph-ranked-table-item">
                           <summary class="team-graph-ranked-table-row">
-                            <span>{{ loop.index }}. {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm") }}</span>
+                            <span>{{ loop.index }}. {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}</span>
+                            <span>{{ item.procedure_count }}</span>
                             <span>{{ item.in_team_merge_nodes }}</span>
                             <span>{{ item.cycle_count }}</span>
-                            <span>{{ item.procedure_count }}</span>
                             <span>{{ item.block_count }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
@@ -765,7 +765,7 @@
                                 <span>Procedure</span>
                                 <span>Merge</span>
                                 <span>Cycle</span>
-                                <span>Linked</span>
+                                <span>Links</span>
                                 <span>Blocks</span>
                               </div>
                               {% for proc_item in item.procedure_usage_stats %}
