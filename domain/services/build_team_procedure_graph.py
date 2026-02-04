@@ -41,6 +41,8 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, object]]]
         service_keys: set[str]
         source_proc_by_scoped: dict[str, str] | None = None
+        merge_services: dict[str, dict[str, dict[str, object]]] = {}
+        merge_node_ids: set[str] = set()
         if merge_selected_markups:
             (
                 procedure_payloads,
@@ -91,6 +93,30 @@ class BuildTeamProcedureGraph:
                         procedure_payloads[proc_id] = dict(payload)
                         procedure_order.append(proc_id)
 
+        merge_scope = merge_documents if merge_documents is not None else documents
+        if merge_scope:
+            merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
+            self._apply_service_colors(merge_services, merge_service_keys)
+            merge_node_ids = self._resolve_merge_node_ids(
+                merge_scope,
+                merge_selected_markups=merge_selected_markups,
+            )
+
+        removed_proc_ids, procedure_graph = self._drop_intermediate_procedures(
+            procedure_payloads,
+            procedure_order,
+            procedure_graph,
+            merge_node_ids=merge_node_ids,
+            source_proc_by_scoped=source_proc_by_scoped,
+        )
+        if removed_proc_ids:
+            procedure_order = [
+                proc_id for proc_id in procedure_order if proc_id not in removed_proc_ids
+            ]
+            for proc_id in removed_proc_ids:
+                procedure_payloads.pop(proc_id, None)
+                procedure_services.pop(proc_id, None)
+
         for proc_id in procedure_order:
             payload = procedure_payloads[proc_id]
             procedures.append(Procedure.model_validate(payload))
@@ -132,14 +158,7 @@ class BuildTeamProcedureGraph:
                     "services": [],
                 }
 
-        merge_scope = merge_documents if merge_documents is not None else documents
         if merge_scope:
-            merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
-            self._apply_service_colors(merge_services, merge_service_keys)
-            merge_node_ids = self._resolve_merge_node_ids(
-                merge_scope,
-                merge_selected_markups=merge_selected_markups,
-            )
             if merge_selected_markups:
                 self._apply_merge_metadata(
                     procedure_meta,
@@ -177,6 +196,96 @@ class BuildTeamProcedureGraph:
             procedure_graph=procedure_graph,
             procedure_meta=procedure_meta,
         )
+
+    def _drop_intermediate_procedures(
+        self,
+        procedure_payloads: dict[str, dict[str, Any]],
+        procedure_order: Sequence[str],
+        procedure_graph: dict[str, list[str]],
+        *,
+        merge_node_ids: set[str],
+        source_proc_by_scoped: dict[str, str] | None = None,
+    ) -> tuple[set[str], dict[str, list[str]]]:
+        adjacency: dict[str, list[str]] = {
+            source: list(dict.fromkeys(targets)) for source, targets in procedure_graph.items()
+        }
+        for proc_id in procedure_payloads:
+            adjacency.setdefault(proc_id, [])
+        for targets in list(adjacency.values()):
+            for target in targets:
+                adjacency.setdefault(target, [])
+
+        removed: set[str] = set()
+        while True:
+            incoming_by_proc: dict[str, set[str]] = {proc_id: set() for proc_id in adjacency}
+            for source, targets in adjacency.items():
+                for target in targets:
+                    incoming_by_proc.setdefault(target, set()).add(source)
+
+            candidate: tuple[str, str, str] | None = None
+            for proc_id in procedure_order:
+                if proc_id in removed:
+                    continue
+                if proc_id not in procedure_payloads:
+                    continue
+                merge_lookup_id = (
+                    source_proc_by_scoped.get(proc_id, proc_id)
+                    if source_proc_by_scoped is not None
+                    else proc_id
+                )
+                if merge_lookup_id in merge_node_ids:
+                    continue
+                payload = procedure_payloads.get(proc_id, {})
+                if self._has_start_or_end_blocks(payload):
+                    continue
+                incoming = incoming_by_proc.get(proc_id, set())
+                outgoing = adjacency.get(proc_id, [])
+                if len(incoming) != 1 or len(outgoing) != 1:
+                    continue
+                parent_id = next(iter(incoming))
+                child_id = outgoing[0]
+                if parent_id == proc_id or child_id == proc_id or parent_id == child_id:
+                    continue
+                candidate = (proc_id, parent_id, child_id)
+                break
+
+            if candidate is None:
+                break
+
+            proc_id, parent_id, child_id = candidate
+            removed.add(proc_id)
+
+            parent_targets = [
+                target for target in adjacency.get(parent_id, []) if target != proc_id
+            ]
+            if child_id not in parent_targets:
+                parent_targets.append(child_id)
+            adjacency[parent_id] = parent_targets
+
+            adjacency.pop(proc_id, None)
+            for source, targets in list(adjacency.items()):
+                if source == parent_id:
+                    continue
+                filtered_targets = [target for target in targets if target != proc_id]
+                if len(filtered_targets) != len(targets):
+                    adjacency[source] = filtered_targets
+
+        filtered_graph: dict[str, list[str]] = {}
+        for source, targets in adjacency.items():
+            if source in removed:
+                continue
+            filtered_targets = [target for target in targets if target not in removed]
+            if not filtered_targets and source not in procedure_payloads:
+                continue
+            filtered_graph[source] = filtered_targets
+        return removed, filtered_graph
+
+    def _has_start_or_end_blocks(self, payload: dict[str, Any]) -> bool:
+        if payload.get("start_block_ids"):
+            return True
+        if payload.get("end_block_ids"):
+            return True
+        return bool(payload.get("end_block_types"))
 
     def _collect_documents(
         self,
@@ -258,10 +367,6 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         service_keys: set[str] = set()
         source_proc_by_scoped: dict[str, str] = {}
-        merge_node_ids = self._resolve_merge_node_ids(
-            documents,
-            merge_selected_markups=False,
-        )
 
         source_counts: dict[str, int] = {}
         for document in documents:
@@ -271,7 +376,7 @@ class BuildTeamProcedureGraph:
         for doc_idx, document in enumerate(documents):
             scoped_id_map: dict[str, str] = {}
             for proc_id in self._document_procedure_ids(document):
-                if source_counts.get(proc_id, 0) > 1 and proc_id not in merge_node_ids:
+                if source_counts.get(proc_id, 0) > 1:
                     scoped_id = f"{proc_id}::doc{doc_idx + 1}"
                 else:
                     scoped_id = proc_id

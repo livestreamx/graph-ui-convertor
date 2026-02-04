@@ -41,8 +41,19 @@ class ServiceIntersectionStat:
 @dataclass(frozen=True)
 class ProcedureLinkStat:
     procedure_id: str
+    procedure_name: str | None
     graph_count: int
     usage_in_other_graphs: int
+    incoming_edges: int
+    outgoing_edges: int
+    graph_labels: tuple[str, ...] = ()
+    graph_usage_stats: tuple[ProcedureGraphUsageStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class ProcedureGraphUsageStat:
+    graph_label: str
+    is_cross_entity: bool
     incoming_edges: int
     outgoing_edges: int
 
@@ -51,6 +62,20 @@ class ProcedureLinkStat:
 class GraphGroupStat:
     label: str
     graph_count: int
+    components: tuple[GraphComponentStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class GraphComponentStat:
+    graph_label: str
+    merge_nodes: tuple[GraphMergeNodeStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class GraphMergeNodeStat:
+    procedure_id: str
+    procedure_name: str | None
+    entities: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -61,6 +86,21 @@ class ServiceLoadStat:
     block_count: int
     in_team_merge_nodes: int
     procedure_count: int
+    procedure_ids: tuple[str, ...] = ()
+    merge_node_ids: tuple[str, ...] = ()
+    weak_component_count: int = 0
+    cycle_path: tuple[str, ...] = ()
+    procedure_usage_stats: tuple[ServiceProcedureUsageStat, ...] = ()
+
+
+@dataclass(frozen=True)
+class ServiceProcedureUsageStat:
+    procedure_id: str
+    procedure_name: str | None
+    in_team_merge_hits: int
+    cycle_hits: int
+    linked_procedure_count: int
+    block_count: int
 
 
 @dataclass(frozen=True)
@@ -102,20 +142,26 @@ class _GraphAggregate:
     team_name: str
     service_name: str
     procedure_ids: set[str] = field(default_factory=set)
+    procedure_order: list[str] = field(default_factory=list)
+    _procedure_order_index: dict[str, int] = field(default_factory=dict)
     adjacency: dict[str, set[str]] = field(default_factory=dict)
     block_ids_by_procedure: dict[str, set[str]] = field(default_factory=dict)
 
     def add_document(self, document: MarkupDocument) -> None:
+        for procedure in document.procedures:
+            self._register_procedure_id(procedure.procedure_id)
+        for source, targets in document.procedure_graph.items():
+            self._register_procedure_id(source)
+            for target in targets:
+                self._register_procedure_id(target)
         for proc_id in _document_procedure_ids(document):
-            self.procedure_ids.add(proc_id)
+            self._register_procedure_id(proc_id)
             self.adjacency.setdefault(proc_id, set())
         for source, targets in document.procedure_graph.items():
             self.adjacency.setdefault(source, set())
-            self.procedure_ids.add(source)
             for target in targets:
                 self.adjacency[source].add(target)
                 self.adjacency.setdefault(target, set())
-                self.procedure_ids.add(target)
         for procedure in document.procedures:
             block_ids = self.block_ids_by_procedure.setdefault(procedure.procedure_id, set())
             block_ids.update(procedure.block_ids())
@@ -128,6 +174,21 @@ class _GraphAggregate:
         for node in sorted(self.procedure_ids):
             adjacency[node] = sorted(self.adjacency.get(node, set()))
         return adjacency
+
+    def ordered_procedure_ids(self) -> tuple[str, ...]:
+        ordered = list(self.procedure_order)
+        for proc_id in sorted(self.procedure_ids, key=str.lower):
+            if proc_id in self._procedure_order_index:
+                continue
+            ordered.append(proc_id)
+        return tuple(ordered)
+
+    def _register_procedure_id(self, proc_id: str) -> None:
+        if proc_id in self.procedure_ids:
+            return
+        self.procedure_ids.add(proc_id)
+        self._procedure_order_index[proc_id] = len(self.procedure_order)
+        self.procedure_order.append(proc_id)
 
 
 @dataclass(frozen=True)
@@ -145,6 +206,7 @@ class BuildCrossTeamGraphDashboard:
         all_documents: Sequence[MarkupDocument],
         selected_team_ids: Sequence[str],
         merge_selected_markups: bool = False,
+        merge_documents: Sequence[MarkupDocument] | None = None,
         top_limit: int = 10,
     ) -> CrossTeamGraphDashboard:
         selected_graphs = self._collect_graphs(selected_documents)
@@ -152,6 +214,7 @@ class BuildCrossTeamGraphDashboard:
         all_service_docs = [doc for doc in all_documents if _is_service_markup(doc)]
         selected_services = self._collect_graphs(selected_service_docs)
         all_services = self._collect_graphs(all_service_docs)
+        procedure_names = self._collect_procedure_names(selected_documents)
 
         selected_team_set = {
             team_id for team_id in (str(value).strip() for value in selected_team_ids) if team_id
@@ -163,6 +226,7 @@ class BuildCrossTeamGraphDashboard:
         ) = self._extract_graph_view(
             selected_documents,
             merge_selected_markups=merge_selected_markups,
+            merge_documents=merge_documents,
         )
         markup_type_counts = tuple(self._build_markup_type_counts(selected_documents))
         total_procedure_count = sum(len(document.procedures) for document in selected_documents)
@@ -335,11 +399,16 @@ class BuildCrossTeamGraphDashboard:
                 target_entities.append(entity_label)
 
         linking_procedures = tuple(
-            self._build_linking_procedures(selected_graphs, top_limit=top_limit)
+            self._build_linking_procedures(
+                selected_graphs,
+                procedure_names=procedure_names,
+                top_limit=top_limit,
+            )
         )
         overloaded_services = tuple(
             self._build_overloaded_services(
                 selected_services,
+                procedure_names=procedure_names,
                 merge_selected_markups=merge_selected_markups,
                 top_limit=top_limit,
             )
@@ -418,19 +487,28 @@ class BuildCrossTeamGraphDashboard:
         selected_documents: Sequence[MarkupDocument],
         *,
         merge_selected_markups: bool,
+        merge_documents: Sequence[MarkupDocument] | None = None,
     ) -> tuple[list[str], dict[str, set[str]], tuple[GraphGroupStat, ...]]:
         graph_document = BuildTeamProcedureGraph().build(
             selected_documents,
+            merge_documents=merge_documents,
             merge_selected_markups=merge_selected_markups,
         )
         components = _collect_graph_components(graph_document)
         graph_keys_by_procedure_id: dict[str, set[str]] = {}
+        procedure_meta = graph_document.procedure_meta or {}
+        procedure_names = {
+            proc.procedure_id: proc.procedure_name
+            for proc in graph_document.procedures
+            if proc.procedure_name
+        }
 
-        component_payloads: list[tuple[str, list[str]]] = []
+        component_payloads: list[tuple[str, list[str], tuple[GraphMergeNodeStat, ...]]] = []
         for component_nodes in components:
             service_labels: set[str] = set()
+            merge_nodes: list[GraphMergeNodeStat] = []
             for proc_id in component_nodes:
-                payload = (graph_document.procedure_meta or {}).get(proc_id, {})
+                payload = procedure_meta.get(proc_id, {})
                 services = payload.get("services")
                 keys = _extract_service_keys(services)
                 if not keys:
@@ -441,6 +519,18 @@ class BuildCrossTeamGraphDashboard:
                         )
                     }
                 service_labels.update(keys)
+                if bool(payload.get("is_intersection")):
+                    merge_services = payload.get("merge_services")
+                    merge_keys = _extract_service_keys(merge_services)
+                    if not merge_keys:
+                        merge_keys = keys
+                    merge_nodes.append(
+                        GraphMergeNodeStat(
+                            procedure_id=proc_id,
+                            procedure_name=procedure_names.get(proc_id),
+                            entities=tuple(sorted(merge_keys, key=str.lower)),
+                        )
+                    )
             if len(service_labels) > 1:
                 service_labels.discard(_entity_label("Unknown team", "Unknown entity"))
             sorted_services = sorted(service_labels, key=str.lower)
@@ -448,12 +538,24 @@ class BuildCrossTeamGraphDashboard:
                 base_label = sorted_services[0] if sorted_services else "Unknown graph"
             else:
                 base_label = " + ".join(sorted_services)
-            component_payloads.append((base_label, sorted(component_nodes, key=str.lower)))
+            component_payloads.append(
+                (
+                    base_label,
+                    sorted(component_nodes, key=str.lower),
+                    tuple(
+                        sorted(
+                            merge_nodes,
+                            key=lambda item: (-len(item.entities), item.procedure_id.lower()),
+                        )
+                    ),
+                )
+            )
 
-        base_label_counts: Counter[str] = Counter(base for base, _ in component_payloads)
+        base_label_counts: Counter[str] = Counter(base for base, _, _ in component_payloads)
         base_label_index: Counter[str] = Counter()
         graph_keys: list[str] = []
-        for base_label, proc_ids in sorted(
+        components_by_base_label: dict[str, list[GraphComponentStat]] = {}
+        for base_label, proc_ids, merge_node_stats in sorted(
             component_payloads,
             key=lambda item: (item[0].lower(), item[1][0].lower() if item[1] else ""),
         ):
@@ -464,8 +566,28 @@ class BuildCrossTeamGraphDashboard:
             graph_keys.append(label)
             for proc_id in proc_ids:
                 graph_keys_by_procedure_id.setdefault(proc_id, set()).add(label)
+            components_by_base_label.setdefault(base_label, []).append(
+                GraphComponentStat(
+                    graph_label=label,
+                    merge_nodes=tuple(
+                        sorted(
+                            merge_node_stats,
+                            key=lambda item: (-len(item.entities), item.procedure_id.lower()),
+                        )
+                    ),
+                )
+            )
         graph_groups = tuple(
-            GraphGroupStat(label=label, graph_count=count)
+            GraphGroupStat(
+                label=label,
+                graph_count=count,
+                components=tuple(
+                    sorted(
+                        components_by_base_label.get(label, []),
+                        key=lambda item: item.graph_label.lower(),
+                    )
+                ),
+            )
             for label, count in sorted(
                 base_label_counts.items(),
                 key=lambda item: (-item[1], item[0].lower()),
@@ -530,6 +652,18 @@ class BuildCrossTeamGraphDashboard:
             for markup_type, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))
         ]
 
+    def _collect_procedure_names(
+        self,
+        documents: Sequence[MarkupDocument],
+    ) -> dict[str, str]:
+        names: dict[str, str] = {}
+        for document in documents:
+            for proc in document.procedures:
+                if not proc.procedure_name:
+                    continue
+                names.setdefault(proc.procedure_id, proc.procedure_name)
+        return names
+
     def _build_service_node_states(
         self,
         services: Mapping[str, _GraphAggregate],
@@ -560,13 +694,20 @@ class BuildCrossTeamGraphDashboard:
         self,
         graphs: Mapping[str, _GraphAggregate],
         *,
+        procedure_names: Mapping[str, str],
         top_limit: int,
     ) -> list[ProcedureLinkStat]:
-        proc_to_graphs: dict[str, set[str]] = {}
+        proc_to_graph_keys: dict[str, set[str]] = {}
+        graph_labels_by_key: dict[str, str] = {}
+        graph_metrics_by_key = {
+            graph.key: compute_graph_metrics(graph.to_adjacency()) for graph in graphs.values()
+        }
         merged_adjacency: dict[str, set[str]] = {}
         for graph in graphs.values():
+            graph_label = _entity_label(graph.team_name, graph.service_name)
+            graph_labels_by_key[graph.key] = graph_label
             for proc_id in graph.procedure_ids:
-                proc_to_graphs.setdefault(proc_id, set()).add(graph.key)
+                proc_to_graph_keys.setdefault(proc_id, set()).add(graph.key)
                 merged_adjacency.setdefault(proc_id, set())
             for source, targets in graph.adjacency.items():
                 merged_adjacency.setdefault(source, set()).update(targets)
@@ -578,12 +719,37 @@ class BuildCrossTeamGraphDashboard:
         stats = [
             ProcedureLinkStat(
                 procedure_id=proc_id,
+                procedure_name=procedure_names.get(proc_id),
                 graph_count=len(graph_keys),
                 usage_in_other_graphs=max(0, len(graph_keys) - 1),
                 incoming_edges=metrics.in_degree.get(proc_id, 0),
                 outgoing_edges=metrics.out_degree.get(proc_id, 0),
+                graph_labels=tuple(
+                    sorted(
+                        (graph_labels_by_key.get(graph_key, graph_key) for graph_key in graph_keys),
+                        key=str.lower,
+                    )
+                ),
+                graph_usage_stats=tuple(
+                    ProcedureGraphUsageStat(
+                        graph_label=_resolve_graph_label(graph_labels_by_key, graph_key),
+                        is_cross_entity=len(graph_keys) > 1,
+                        incoming_edges=graph_metrics_by_key.get(graph_key, metrics).in_degree.get(
+                            proc_id,
+                            0,
+                        ),
+                        outgoing_edges=graph_metrics_by_key.get(graph_key, metrics).out_degree.get(
+                            proc_id,
+                            0,
+                        ),
+                    )
+                    for graph_key in sorted(
+                        graph_keys,
+                        key=lambda key: _resolve_graph_label(graph_labels_by_key, key).lower(),
+                    )
+                ),
             )
-            for proc_id, graph_keys in proc_to_graphs.items()
+            for proc_id, graph_keys in proc_to_graph_keys.items()
         ]
         stats.sort(
             key=lambda item: (
@@ -652,12 +818,10 @@ class BuildCrossTeamGraphDashboard:
         self,
         services: Mapping[str, _GraphAggregate],
         *,
+        procedure_names: Mapping[str, str],
         merge_selected_markups: bool,
         top_limit: int,
     ) -> list[ServiceLoadStat]:
-        team_by_service_key: dict[str, str] = {
-            service.key: service.team_id for service in services.values()
-        }
         merge_node_ids_by_service: dict[str, set[str]] = {}
         states = self._build_service_node_states(services)
         pair_merge_nodes = collect_pair_merge_nodes(
@@ -665,8 +829,6 @@ class BuildCrossTeamGraphDashboard:
             merge_selected_markups=merge_selected_markups,
         )
         for (left_key, right_key), proc_ids in pair_merge_nodes.items():
-            if team_by_service_key.get(left_key) != team_by_service_key.get(right_key):
-                continue
             merge_node_ids_by_service.setdefault(left_key, set()).update(proc_ids)
             merge_node_ids_by_service.setdefault(right_key, set()).update(proc_ids)
 
@@ -675,6 +837,9 @@ class BuildCrossTeamGraphDashboard:
             adjacency = service.to_adjacency()
             graph_metrics = compute_graph_metrics(adjacency)
             in_team_merge_nodes = len(merge_node_ids_by_service.get(service.key, set()))
+            weak_component_count = _count_weak_components(service.procedure_ids, service.adjacency)
+            cycle_nodes = set(graph_metrics.cycle_path or ())
+            merge_nodes = merge_node_ids_by_service.get(service.key, set())
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,
@@ -683,14 +848,32 @@ class BuildCrossTeamGraphDashboard:
                     block_count=service.block_count(),
                     in_team_merge_nodes=in_team_merge_nodes,
                     procedure_count=len(service.procedure_ids),
+                    procedure_ids=tuple(sorted(service.procedure_ids, key=str.lower)),
+                    merge_node_ids=tuple(
+                        sorted(merge_node_ids_by_service.get(service.key, set()), key=str.lower)
+                    ),
+                    weak_component_count=weak_component_count,
+                    cycle_path=tuple(graph_metrics.cycle_path or ()),
+                    procedure_usage_stats=tuple(
+                        ServiceProcedureUsageStat(
+                            procedure_id=proc_id,
+                            procedure_name=procedure_names.get(proc_id),
+                            in_team_merge_hits=1 if proc_id in merge_nodes else 0,
+                            cycle_hits=1 if proc_id in cycle_nodes else 0,
+                            linked_procedure_count=graph_metrics.in_degree.get(proc_id, 0)
+                            + graph_metrics.out_degree.get(proc_id, 0),
+                            block_count=len(service.block_ids_by_procedure.get(proc_id, set())),
+                        )
+                        for proc_id in service.ordered_procedure_ids()
+                    ),
                 )
             )
         stats.sort(
             key=lambda item: (
-                -item.cycle_count,
-                -item.block_count,
                 -item.in_team_merge_nodes,
+                -item.cycle_count,
                 -item.procedure_count,
+                -item.block_count,
                 item.team_name.lower(),
                 item.service_name.lower(),
             )
@@ -806,3 +989,7 @@ def _extract_service_keys(services: object) -> set[str]:
 
 def _sorted_pair(left: str, right: str) -> tuple[str, str]:
     return (left, right) if left <= right else (right, left)
+
+
+def _resolve_graph_label(graph_labels_by_key: Mapping[str, str], graph_key: str) -> str:
+    return graph_labels_by_key[graph_key] if graph_key in graph_labels_by_key else graph_key

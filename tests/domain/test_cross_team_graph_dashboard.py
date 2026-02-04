@@ -5,6 +5,7 @@ from pathlib import Path
 
 from domain.models import MarkupDocument, Procedure
 from domain.services.build_cross_team_graph_dashboard import BuildCrossTeamGraphDashboard
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 
 
 def _doc(
@@ -105,7 +106,7 @@ def test_build_cross_team_graph_dashboard() -> None:
         ("service", 3),
         ("operations", 1),
     ]
-    assert dashboard.unique_graph_count == 4
+    assert dashboard.unique_graph_count == 6
     assert dashboard.bot_graph_count == 2
     assert dashboard.multi_graph_count == 1
     assert dashboard.total_procedure_count == 8
@@ -148,12 +149,48 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert top_proc.usage_in_other_graphs == 2
     assert top_proc.incoming_edges == 3
     assert top_proc.outgoing_edges == 1
+    assert top_proc.graph_labels == (
+        "Alpha / Loans",
+        "Alpha / Payments",
+        "Beta / Cards",
+    )
+    assert [
+        (
+            item.graph_label,
+            item.is_cross_entity,
+            item.incoming_edges,
+            item.outgoing_edges,
+        )
+        for item in top_proc.graph_usage_stats
+    ] == [
+        ("Alpha / Loans", True, 1, 0),
+        ("Alpha / Payments", True, 1, 0),
+        ("Beta / Cards", True, 1, 1),
+    ]
 
-    top_service = dashboard.overloaded_services[0]
-    assert top_service.team_name == "Beta"
-    assert top_service.service_name == "Cards"
-    assert top_service.cycle_count == 1
-    assert top_service.block_count == 4
+    overloaded_by_entity = {
+        (item.team_name, item.service_name): item for item in dashboard.overloaded_services
+    }
+    top_service = overloaded_by_entity[("Alpha", "Loans")]
+    assert top_service.in_team_merge_nodes == 1
+    assert top_service.cycle_count == 0
+    assert top_service.procedure_count == 4
+    assert top_service.block_count == 6
+    assert [
+        (
+            item.procedure_id,
+            item.in_team_merge_hits,
+            item.cycle_hits,
+            item.linked_procedure_count,
+            item.block_count,
+        )
+        for item in top_service.procedure_usage_stats
+    ] == [
+        ("multi_route", 0, 0, 1, 2),
+        ("split_a", 0, 0, 0, 2),
+        ("split_b", 0, 0, 0, 2),
+        ("shared_core", 1, 0, 1, 0),
+    ]
 
 
 def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
@@ -191,6 +228,60 @@ def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
     ]
 
 
+def test_overloaded_entities_count_shared_node_merges_across_teams() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="proc_shared_intake", branches={"a": ["b"]}),
+                Procedure(procedure_id="alpha_only", branches={"c": ["d"]}),
+            ],
+            procedure_graph={"proc_shared_intake": ["alpha_only"], "alpha_only": []},
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Routing",
+            unit_id="svc-routing",
+            procedures=[
+                Procedure(procedure_id="proc_shared_intake", branches={"x": ["y"]}),
+                Procedure(procedure_id="beta_only", branches={"z": ["w"]}),
+            ],
+            procedure_graph={"beta_only": ["proc_shared_intake"], "proc_shared_intake": []},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+        merge_selected_markups=True,
+        top_limit=10,
+    )
+
+    overloaded_by_entity = {
+        (item.team_name, item.service_name): item for item in dashboard.overloaded_services
+    }
+    alpha = overloaded_by_entity[("Alpha", "Payments")]
+    beta = overloaded_by_entity[("Beta", "Routing")]
+
+    assert alpha.in_team_merge_nodes == 1
+    assert beta.in_team_merge_nodes == 1
+    assert any(
+        proc_item.procedure_id == "proc_shared_intake" and proc_item.in_team_merge_hits == 1
+        for proc_item in alpha.procedure_usage_stats
+    )
+    assert any(
+        proc_item.procedure_id == "proc_shared_intake" and proc_item.in_team_merge_hits == 1
+        for proc_item in beta.procedure_usage_stats
+    )
+
+
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
     fixture_path = Path("examples/markup/graphs_set.json")
     document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
@@ -204,3 +295,119 @@ def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None
     assert dashboard.unique_graph_count == len(document.procedures)
     assert dashboard.multi_graph_count == 1
     assert sum(item.graph_count for item in dashboard.graph_groups) == dashboard.unique_graph_count
+
+
+def test_graph_groups_include_component_merge_node_breakdown() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="shared",
+                    procedure_name="Shared Flow",
+                    branches={"a": ["b"]},
+                ),
+                Procedure(procedure_id="alpha_only", branches={"c": ["d"]}),
+            ],
+            procedure_graph={"alpha_only": ["shared"], "shared": []},
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Routing",
+            unit_id="svc-routing",
+            procedures=[
+                Procedure(
+                    procedure_id="shared",
+                    procedure_name="Shared Flow",
+                    branches={"x": ["y"]},
+                ),
+                Procedure(procedure_id="beta_only", branches={"z": ["w"]}),
+            ],
+            procedure_graph={"shared": ["beta_only"], "beta_only": []},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+        merge_selected_markups=True,
+    )
+
+    merged_group = next(
+        item for item in dashboard.graph_groups if "Alpha / Payments + Beta / Routing" in item.label
+    )
+    assert merged_group.components
+    component = merged_group.components[0]
+    assert component.merge_nodes
+    merge_node = component.merge_nodes[0]
+    assert merge_node.procedure_id == "shared"
+    assert merge_node.procedure_name == "Shared Flow"
+    assert merge_node.entities == ("Alpha / Payments", "Beta / Routing")
+
+
+def test_dashboard_graph_stats_follow_same_merge_graph_as_diagram() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="entry", branches={"a": ["b"]}),
+                Procedure(procedure_id="shared", branches={"c": ["d"]}),
+            ],
+            procedure_graph={"entry": [], "shared": []},
+        )
+    ]
+    all_documents = [
+        *selected_documents,
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Loans",
+            unit_id="svc-loans",
+            procedures=[
+                Procedure(procedure_id="entry", branches={"x": ["y"]}),
+                Procedure(procedure_id="shared", branches={"z": ["w"]}),
+            ],
+            procedure_graph={"entry": ["shared"], "shared": []},
+        ),
+    ]
+
+    merged_from_selected_only = BuildTeamProcedureGraph().build(
+        selected_documents,
+        merge_selected_markups=True,
+    )
+    merged_with_all_markups = BuildTeamProcedureGraph().build(
+        selected_documents,
+        merge_documents=all_documents,
+        merge_selected_markups=True,
+    )
+    assert len(merged_from_selected_only.procedure_graph.get("entry", [])) == 0
+    assert merged_with_all_markups.procedure_graph.get("entry") == ["shared"]
+
+    dashboard_without_all = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=all_documents,
+        selected_team_ids=["team-alpha"],
+        merge_selected_markups=True,
+    )
+    dashboard_with_all = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=all_documents,
+        selected_team_ids=["team-alpha"],
+        merge_selected_markups=True,
+        merge_documents=all_documents,
+    )
+
+    assert dashboard_without_all.unique_graph_count == 2
+    assert dashboard_with_all.unique_graph_count == 1

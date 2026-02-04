@@ -568,6 +568,11 @@ main {
   background: linear-gradient(120deg, rgba(8, 13, 28, 0.88), rgba(16, 20, 40, 0.9));
 }
 
+.team-graph-result-card {
+  position: relative;
+  overflow: hidden;
+}
+
 .team-graph-cta-title {
   font-weight: 600;
 }
@@ -592,6 +597,101 @@ main {
 .team-graph-merge-button {
   min-width: 130px;
   justify-content: center;
+}
+
+.team-graph-merge-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  background: rgba(255, 179, 71, 0.5);
+}
+
+.team-graph-merge-button:disabled:hover {
+  transform: none;
+  background: rgba(255, 179, 71, 0.5);
+}
+
+.team-graph-cta-warning {
+  margin-top: 10px;
+  border: 1px solid rgba(255, 120, 120, 0.35);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: #ffd7d7;
+  background: rgba(255, 120, 120, 0.12);
+}
+
+.team-graph-merge-loader {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(90deg, rgba(31, 41, 74, 0.72), rgba(66, 30, 26, 0.58), rgba(31, 41, 74, 0.72));
+  background-size: 220% 100%;
+  color: var(--text);
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 0.25s ease, transform 0.25s ease, max-height 0.25s ease, margin 0.25s ease;
+}
+
+.team-graph-merge-loader.htmx-request {
+  opacity: 1;
+  max-height: 140px;
+  pointer-events: auto;
+  transform: translateY(0);
+  animation: mergeLoaderWave 2s linear infinite;
+}
+
+.team-graph-merge-loader-spinner {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: var(--accent);
+  border-right-color: var(--accent-strong);
+  animation: mergeLoaderSpin 0.8s linear infinite;
+}
+
+.team-graph-merge-loader-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.team-graph-merge-loader-title {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.team-graph-merge-loader-text {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.is-hidden {
+  display: none !important;
+}
+
+@keyframes mergeLoaderSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes mergeLoaderWave {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 220% 50%;
+  }
 }
 
 .team-graph-result-meta {
@@ -784,6 +884,10 @@ main {
   padding: 2px 0;
 }
 
+.team-graph-hover-item-entities .team-graph-graph-entities {
+  gap: 4px;
+}
+
 .team-graph-kpi-card-drilldown:hover .team-graph-hover-list,
 .team-graph-kpi-card-drilldown:focus-within .team-graph-hover-list,
 .team-graph-inline-metric-drilldown:hover .team-graph-hover-list,
@@ -796,18 +900,6 @@ main {
   display: grid;
   gap: 6px;
   align-content: start;
-}
-
-.team-graph-overlap-toggle {
-  padding: 4px 10px;
-  font-size: 11px;
-}
-
-.team-graph-overlap-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
 }
 
 .team-graph-overlap-list {
@@ -834,7 +926,7 @@ main {
   transition: max-height 0.24s ease, opacity 0.2s ease, margin-top 0.2s ease;
 }
 
-.team-graph-overlap-list.is-expanded .team-graph-overlap-entities {
+.team-graph-overlap-team.is-open .team-graph-overlap-entities {
   max-height: 170px;
   opacity: 1;
   margin-top: 8px;
@@ -880,6 +972,19 @@ main {
   font-size: 13px;
 }
 
+.team-graph-overlap-toggle-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.team-graph-overlap-toggle-row:hover .team-graph-overlap-main-label {
+  color: var(--accent);
+}
+
 .team-graph-overlap-value {
   justify-self: end;
   font-weight: 600;
@@ -891,6 +996,30 @@ main {
 
 .team-graph-overlap-row-service .team-graph-overlap-count {
   justify-self: end;
+}
+
+.team-graph-overlap-more {
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-overlap-more-button {
+  justify-self: center;
+  margin-top: 4px;
+  padding: 7px 18px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.04));
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.team-graph-overlap-more-button:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.13), rgba(255, 255, 255, 0.06));
 }
 
 @media (max-width: 880px) {
@@ -922,6 +1051,165 @@ main {
 .team-graph-ranked-note {
   color: var(--muted);
   font-size: 12px;
+}
+
+.team-graph-ranked-table {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-data-context {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.team-graph-ranked-table-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 2fr) repeat(4, minmax(74px, 1fr));
+  gap: 10px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.team-graph-ranked-table-row > span:first-child {
+  justify-self: start;
+  text-align: left;
+}
+
+.team-graph-ranked-table-row > span:not(:first-child) {
+  justify-self: end;
+  text-align: right;
+}
+
+.team-graph-ranked-table-row > span.team-graph-ranked-details-list-entity {
+  justify-self: start;
+  text-align: left;
+}
+
+.team-graph-ranked-subitem-graph {
+  grid-column: 1 / span 2;
+}
+
+.team-graph-ranked-table-header {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 11px;
+}
+
+.team-graph-ranked-table-item {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-graph-ranked-table-item summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 9px 10px;
+}
+
+.team-graph-ranked-table-item summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-graph-ranked-table-details {
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  padding: 8px 10px 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-ranked-details-label {
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-graph-ranked-details-list {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.team-graph-ranked-details-list-entity .team-graph-graph-entities {
+  gap: 4px;
+}
+
+.team-graph-ranked-subitem-label {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.team-graph-ranked-details-list-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+}
+
+.team-graph-procedure-order {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  margin-right: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.team-graph-procedure-caption {
+  display: inline-grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.team-graph-procedure-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+}
+
+.team-graph-procedure-id {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.team-graph-potential-note {
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-graph-ranked-details-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.team-graph-data-card-spaced {
+  margin-top: 10px;
+}
+
+@media (max-width: 880px) {
+  .team-graph-ranked-table-row {
+    grid-template-columns: minmax(120px, 1fr) repeat(4, minmax(52px, auto));
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .team-graph-ranked-table-header {
+    font-size: 10px;
+  }
 }
 
 .team-graph-graphs-details-card {
@@ -976,6 +1264,57 @@ main {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.team-graph-graphs-item > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.team-graph-graphs-item > summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-graph-graphs-item-details {
+  margin-top: 8px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.12);
+  padding-top: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.team-graph-merge-component {
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-merge-component-title .team-graph-graph-entities {
+  gap: 4px;
+}
+
+.team-graph-merge-nodes-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 6px;
+}
+
+.team-graph-merge-node-card {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 7px 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.team-graph-merge-node-id {
+  font-size: 11px;
+}
+
+.team-graph-merge-node-entities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
 .team-graph-graph-entities {
   display: flex;
   flex-wrap: wrap;
@@ -987,15 +1326,15 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  border: 1px solid var(--team-chip-border, rgba(255, 255, 255, 0.14));
+  border: 1px solid var(--team-chip-border, rgba(210, 220, 235, 0.22));
   border-radius: 999px;
   padding: 2px 10px 2px 2px;
-  background: var(--team-chip-bg, rgba(255, 255, 255, 0.03));
+  background: var(--team-chip-bg, rgba(206, 216, 231, 0.09));
 }
 
 .team-graph-graph-entity-team {
-  background: var(--team-chip-team-bg, rgba(112, 170, 255, 0.2));
-  color: var(--team-chip-team-text, #b8d6ff);
+  background: var(--team-chip-team-bg, rgba(183, 197, 214, 0.3));
+  color: var(--team-chip-team-text, #dfebf8);
   border-radius: 999px;
   padding: 2px 8px;
   font-size: 11px;
@@ -1004,6 +1343,15 @@ main {
 
 .team-graph-graph-entity-service {
   color: var(--text);
+}
+
+.team-graph-graph-entity-sm {
+  font-size: 11px;
+  padding-right: 8px;
+}
+
+.team-graph-graph-entity-sm .team-graph-graph-entity-team {
+  font-size: 10px;
 }
 
 .team-graph-graph-separator {

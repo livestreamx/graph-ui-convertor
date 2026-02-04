@@ -104,17 +104,7 @@ def should_merge_shared_node(
     *,
     merge_selected_markups: bool,
 ) -> bool:
-    if merge_selected_markups:
-        return True
-
-    if left_state.is_singleton(proc_id) or right_state.is_singleton(proc_id):
-        return True
-
-    left_end_right_start = left_state.is_end(proc_id) and right_state.is_start(proc_id)
-    right_end_left_start = right_state.is_end(proc_id) and left_state.is_start(proc_id)
-    if left_end_right_start or right_end_left_start:
-        return False
-
+    _ = (proc_id, left_state, right_state, merge_selected_markups)
     return True
 
 

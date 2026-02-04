@@ -121,15 +121,26 @@ catalog:
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
+  During graph build, intermediate procedures are removed when all conditions are met: no START/END
+  markers (including `postpone`), exactly one inbound + one outbound edge, and the node is not a
+  merge node.
   `merge_selected_markups` is disabled by default and controls whether selected markups are merged
   by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
   `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only
   the selected teams.
+  Dashboard graph counters (`Graphs`, grouped graph stats) are computed from the same merged
+  procedure graph payload that is opened/downloaded as the team diagram.
 - Step 3 renders a dashboard after Merge with three compact sections:
   `Graphs info` (markup type distribution, unique graphs, unique procedures, bot/multi coverage),
   `Service Integrity` (internal/external service intersections, split services, target-state share),
-  and `Risk Hotspots` (top linking procedures and overloaded services by cycles/blocks/merge nodes).
+  and `Risk Hotspots` (top linking procedures and overloaded services by merge nodes/cycles/procedures/blocks).
   The layout is card-based to keep screenshots readable in demos.
+  Graph/intersection drilldowns share one `team / service` output format with team color chips,
+  including `Multi graphs` and tabular `Top linking procedures` details per graph
+  (`cross-entity`, `inbound deps`, `outbound deps`).
+  `Top overloaded entities` detail shows the same columns per procedure in graph order.
+  `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
+  easier to interpret and trust.
 - In `External team overlaps`, each team row shows three counters: `total`,
   `external → selected` (outside team depends on selected teams), and `selected → external`
   (selected teams depend on the outside team). The two directional counters always add up to
