@@ -282,6 +282,39 @@ def test_overloaded_entities_count_shared_node_merges_across_teams() -> None:
     )
 
 
+def test_overloaded_entities_procedure_breakdown_follows_graph_flow_order() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="end_proc", branches={"e1": ["e2"]}),
+                Procedure(
+                    procedure_id="start_proc",
+                    start_block_ids=["start-1"],
+                    branches={"s1": ["s2"]},
+                ),
+                Procedure(procedure_id="middle_proc", branches={"m1": ["m2"]}),
+            ],
+            procedure_graph={"start_proc": ["middle_proc"], "middle_proc": ["end_proc"]},
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    assert [
+        item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
+    ] == ["start_proc", "middle_proc", "end_proc"]
+
+
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
     fixture_path = Path("examples/markup/graphs_set.json")
     document = MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))

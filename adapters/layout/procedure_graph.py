@@ -318,11 +318,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
                 if scenario:
                     scenarios.append(scenario)
-                    scenario_total_height = (
-                        scenario.procedures_origin.y
-                        + scenario.procedures_size.height
-                        - scenario.origin.y
+                    procedures_bottom = (
+                        scenario.procedures_origin.y + scenario.procedures_size.height
                     )
+                    merge_bottom = procedures_bottom
+                    if scenario.merge_origin and scenario.merge_size:
+                        merge_bottom = scenario.merge_origin.y + scenario.merge_size.height
+                    scenario_total_height = max(procedures_bottom, merge_bottom) - scenario.origin.y
 
             if component_frames:
                 frames.extend(component_frames)
@@ -442,6 +444,15 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         merge_blocks, merge_text, merge_block_padding, merge_node_numbers = (
             self._component_merge_blocks(component, procedure_map, procedure_meta, order_index)
         )
+        procedures_content_height = sum(block.height for block in procedures_blocks)
+        procedures_height = max(
+            self.config.scenario_procedures_min_height,
+            procedures_content_height + self.config.scenario_procedures_padding * 2,
+        )
+        procedures_origin = Point(
+            x=x_left,
+            y=origin.y + scenario_height + self.config.scenario_procedures_gap,
+        )
         merge_height = 0.0
         merge_origin = None
         merge_size = None
@@ -453,23 +464,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
             merge_origin = Point(
                 x=x_left,
-                y=origin.y + scenario_height + self.config.scenario_merge_gap,
+                y=procedures_origin.y + procedures_height + self.config.scenario_merge_gap,
             )
             merge_size = Size(scenario_width, merge_height)
-            procedures_origin = Point(
-                x=x_left,
-                y=merge_origin.y + merge_height + self.config.scenario_procedures_gap,
-            )
-        else:
-            procedures_origin = Point(
-                x=x_left,
-                y=origin.y + scenario_height + self.config.scenario_procedures_gap,
-            )
-        procedures_content_height = sum(block.height for block in procedures_blocks)
-        procedures_height = max(
-            self.config.scenario_procedures_min_height,
-            procedures_content_height + self.config.scenario_procedures_padding * 2,
-        )
         return ScenarioPlacement(
             origin=origin,
             size=Size(scenario_width, scenario_height),

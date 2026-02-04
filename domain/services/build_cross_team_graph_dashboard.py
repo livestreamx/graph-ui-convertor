@@ -207,11 +207,45 @@ class _GraphAggregate:
         return adjacency
 
     def ordered_procedure_ids(self) -> tuple[str, ...]:
-        ordered = list(self.procedure_order)
-        for proc_id in sorted(self.procedure_ids, key=str.lower):
-            if proc_id in self._procedure_order_index:
+        if not self.procedure_ids:
+            return ()
+
+        order_fallback = len(self.procedure_order)
+
+        def order_index(proc_id: str) -> int:
+            return self._procedure_order_index.get(proc_id, order_fallback)
+
+        nodes = set(self.procedure_ids)
+        adjacency: dict[str, set[str]] = {node: set() for node in nodes}
+        indegree: dict[str, int] = {node: 0 for node in nodes}
+        for source, targets in self.adjacency.items():
+            if source not in nodes:
                 continue
-            ordered.append(proc_id)
+            for target in targets:
+                if target not in nodes:
+                    continue
+                adjacency[source].add(target)
+                indegree[target] += 1
+
+        def queue_key(proc_id: str) -> tuple[int, int, str]:
+            has_start = 0 if self.start_block_ids_by_procedure.get(proc_id) else 1
+            return (has_start, order_index(proc_id), proc_id.lower())
+
+        queue = sorted((node for node in nodes if indegree[node] == 0), key=queue_key)
+        ordered: list[str] = []
+        while queue:
+            node = queue.pop(0)
+            ordered.append(node)
+            for target in sorted(adjacency.get(node, ()), key=queue_key):
+                indegree[target] -= 1
+                if indegree[target] == 0:
+                    queue.append(target)
+            queue.sort(key=queue_key)
+
+        if len(ordered) < len(nodes):
+            remaining = sorted((node for node in nodes if node not in ordered), key=queue_key)
+            ordered.extend(remaining)
+
         return tuple(ordered)
 
     def _register_procedure_id(self, proc_id: str) -> None:
