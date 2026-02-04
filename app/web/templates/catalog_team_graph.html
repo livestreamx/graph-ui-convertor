@@ -1027,7 +1027,18 @@
                                 </span>
                               </div>
                               <div>
+                              {% set graph_group = namespace(current=None) %}
                               {% for proc_item in item.procedure_usage_stats %}
+                                {% if proc_item.graph_label and proc_item.graph_label != graph_group.current %}
+                                  <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
+                                    <span>{{ proc_item.graph_label }}</span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                  </div>
+                                  {% set graph_group.current = proc_item.graph_label %}
+                                {% endif %}
                                 <div
                                   class="team-graph-ranked-table-row"
                                 >

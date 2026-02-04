@@ -309,9 +309,12 @@ def test_overloaded_entities_procedure_breakdown_follows_graph_flow_order() -> N
     )
 
     assert dashboard.overloaded_services
-    assert [
-        item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
-    ] == ["start_proc", "middle_proc", "end_proc"]
+    service = dashboard.overloaded_services[0]
+    assert service.procedure_count == 2
+    assert [item.procedure_id for item in service.procedure_usage_stats] == [
+        "start_proc",
+        "end_proc",
+    ]
 
 
 def test_overloaded_entities_breakdown_keeps_component_flow_grouped_left_to_right() -> None:
@@ -350,9 +353,19 @@ def test_overloaded_entities_breakdown_keeps_component_flow_grouped_left_to_righ
     )
 
     assert dashboard.overloaded_services
-    assert [
-        item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
-    ] == ["left_start", "left_end", "right_start", "right_end"]
+    usage_stats = dashboard.overloaded_services[0].procedure_usage_stats
+    assert [item.procedure_id for item in usage_stats] == [
+        "left_start",
+        "left_end",
+        "right_start",
+        "right_end",
+    ]
+    assert [item.graph_label for item in usage_stats] == [
+        "Graph 1",
+        "Graph 1",
+        "Graph 2",
+        "Graph 2",
+    ]
 
 
 def test_overloaded_entities_breakdown_skips_graph_only_intermediate_nodes() -> None:
@@ -429,6 +442,106 @@ def test_overloaded_entities_breakdown_preserves_flow_through_hidden_graph_nodes
     usage_by_id = {item.procedure_id: item for item in service.procedure_usage_stats}
     assert usage_by_id["actual_start"].linked_procedure_count == 1
     assert usage_by_id["downstream_no_start"].linked_procedure_count == 1
+
+
+def test_overloaded_entities_breakdown_uses_same_flow_as_diagram_graph() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="alpha_start",
+                    start_block_ids=["s1"],
+                    branches={"s1": ["s2"]},
+                ),
+                Procedure(procedure_id="alpha_mid", branches={"m1": ["m2"]}),
+                Procedure(procedure_id="alpha_end", branches={"e1": ["e2"]}),
+            ],
+            procedure_graph={
+                "alpha_start": ["shared_bridge"],
+                "alpha_mid": ["alpha_end"],
+            },
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Gateway",
+            unit_id="svc-gw",
+            procedures=[
+                Procedure(procedure_id="shared_bridge", branches={"b1": ["b2"]}),
+            ],
+            procedure_graph={"shared_bridge": ["alpha_mid"]},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+    )
+
+    assert dashboard.overloaded_services
+    alpha_service = next(
+        item
+        for item in dashboard.overloaded_services
+        if item.team_name == "Alpha" and item.service_name == "Payments"
+    )
+    assert alpha_service.weak_component_count == 1
+    assert [item.procedure_id for item in alpha_service.procedure_usage_stats] == [
+        "alpha_start",
+        "alpha_mid",
+        "alpha_end",
+    ]
+    usage_by_id = {item.procedure_id: item for item in alpha_service.procedure_usage_stats}
+    assert usage_by_id["alpha_start"].linked_procedure_count == 1
+    assert usage_by_id["alpha_mid"].linked_procedure_count == 2
+    assert usage_by_id["alpha_end"].linked_procedure_count == 1
+
+
+def test_overloaded_entities_breakdown_prioritizes_start_components() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="no_start_root", branches={"a1": ["a2"]}),
+                Procedure(procedure_id="no_start_end", branches={"a3": ["a4"]}),
+                Procedure(
+                    procedure_id="start_root",
+                    start_block_ids=["s1"],
+                    branches={"s1": ["s2"]},
+                ),
+                Procedure(procedure_id="start_end", branches={"s3": ["s4"]}),
+            ],
+            procedure_graph={
+                "no_start_root": ["no_start_end"],
+                "start_root": ["start_end"],
+            },
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    service = dashboard.overloaded_services[0]
+    assert [item.procedure_id for item in service.procedure_usage_stats] == [
+        "start_root",
+        "start_end",
+        "no_start_root",
+        "no_start_end",
+    ]
 
 
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:
