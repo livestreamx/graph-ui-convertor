@@ -1,0 +1,169 @@
+{
+  "markup_type": "service",
+  "finedog_unit_id": "svc-forest",
+  "finedog_unit_meta": {
+    "service_name": "Forest graph",
+    "criticality_level": "B2",
+    "team_id": "team-forest",
+    "team_name": "Forest team"
+  },
+  "procedures": [
+    {
+      "proc_id": "proc_a",
+      "proc_name": "Root A",
+      "start_block_ids": ["a_start"],
+      "end_block_ids": [],
+      "branches": {
+        "a_start": ["a_probe"],
+        "a_probe": ["a_gate"],
+        "a_gate": ["a_path_b", "a_path_c"],
+        "a_path_b": ["a_join"],
+        "a_path_c": ["a_join"]
+      },
+      "block_id_to_block_name": {
+        "a_start": "A start",
+        "a_probe": "A probe",
+        "a_gate": "A gate",
+        "a_path_b": "A path B",
+        "a_path_c": "A path C",
+        "a_join": "A join"
+      }
+    },
+    {
+      "proc_id": "proc_b",
+      "proc_name": "Branch B",
+      "start_block_ids": [],
+      "end_block_ids": [],
+      "branches": {
+        "b_in": ["b_check"],
+        "b_check": ["b_branch_left", "b_branch_right"],
+        "b_branch_left": ["b_hub"],
+        "b_branch_right": ["b_hub"]
+      },
+      "block_id_to_block_name": {
+        "b_in": "B in",
+        "b_check": "B check",
+        "b_branch_left": "B branch left",
+        "b_branch_right": "B branch right",
+        "b_hub": "B hub"
+      }
+    },
+    {
+      "proc_id": "proc_c",
+      "proc_name": "Branch C",
+      "start_block_ids": [],
+      "end_block_ids": [],
+      "branches": {
+        "c_in": ["c_filter"],
+        "c_filter": ["c_route"],
+        "c_route": ["c_left", "c_right"],
+        "c_left": ["c_hub"],
+        "c_right": ["c_hub"]
+      },
+      "block_id_to_block_name": {
+        "c_in": "C in",
+        "c_filter": "C filter",
+        "c_route": "C route",
+        "c_left": "C left",
+        "c_right": "C right",
+        "c_hub": "C hub"
+      }
+    },
+    {
+      "proc_id": "proc_b_a",
+      "proc_name": "Leaf B A",
+      "start_block_ids": ["ba_start"],
+      "end_block_ids": ["ba_exit::end"],
+      "branches": {
+        "ba_start": ["ba_work"],
+        "ba_work": ["ba_exit"]
+      },
+      "block_id_to_block_name": {
+        "ba_start": "BA start",
+        "ba_work": "BA work",
+        "ba_exit": "BA exit"
+      }
+    },
+    {
+      "proc_id": "proc_b_b",
+      "proc_name": "Leaf B B",
+      "start_block_ids": [],
+      "end_block_ids": ["bb_exit::exit"],
+      "branches": {
+        "bb_in": ["bb_work"],
+        "bb_work": ["bb_exit"]
+      },
+      "block_id_to_block_name": {
+        "bb_in": "BB in",
+        "bb_work": "BB work",
+        "bb_exit": "BB exit"
+      }
+    },
+    {
+      "proc_id": "proc_c_a",
+      "proc_name": "Leaf C A",
+      "start_block_ids": [],
+      "end_block_ids": ["ca_exit::all"],
+      "branches": {
+        "ca_in": ["ca_work"],
+        "ca_work": ["ca_exit"]
+      },
+      "block_id_to_block_name": {
+        "ca_in": "CA in",
+        "ca_work": "CA work",
+        "ca_exit": "CA exit"
+      }
+    },
+    {
+      "proc_id": "proc_c_b",
+      "proc_name": "Leaf C B",
+      "start_block_ids": [],
+      "end_block_ids": ["cb_exit::postpone"],
+      "branches": {
+        "cb_in": ["cb_work"],
+        "cb_work": ["cb_exit"]
+      },
+      "block_id_to_block_name": {
+        "cb_in": "CB in",
+        "cb_work": "CB work",
+        "cb_exit": "CB exit"
+      }
+    }
+  ],
+  "procedure_graph": {
+    "proc_a": ["proc_b", "proc_c"],
+    "proc_b": ["proc_b_a", "proc_b_b"],
+    "proc_c": ["proc_c_a", "proc_c_b"],
+    "proc_b_a": [],
+    "proc_b_b": [],
+    "proc_c_a": [],
+    "proc_c_b": []
+  },
+  "block_graph": {
+    "a_start": ["a_probe"],
+    "a_probe": ["a_gate"],
+    "a_gate": ["a_path_b", "a_path_c"],
+    "a_path_b": ["a_join"],
+    "a_path_c": ["a_join"],
+    "a_join": ["b_in", "c_in"],
+    "b_in": ["b_check"],
+    "b_check": ["b_branch_left", "b_branch_right"],
+    "b_branch_left": ["b_hub"],
+    "b_branch_right": ["b_hub"],
+    "b_hub": ["ba_start", "bb_in"],
+    "c_in": ["c_filter"],
+    "c_filter": ["c_route"],
+    "c_route": ["c_left", "c_right"],
+    "c_left": ["c_hub"],
+    "c_right": ["c_hub"],
+    "c_hub": ["ca_in", "cb_in"],
+    "ba_start": ["ba_work"],
+    "ba_work": ["ba_exit"],
+    "bb_in": ["bb_work"],
+    "bb_work": ["bb_exit"],
+    "ca_in": ["ca_work"],
+    "ca_work": ["ca_exit"],
+    "cb_in": ["cb_work"],
+    "cb_work": ["cb_exit"]
+  }
+}
