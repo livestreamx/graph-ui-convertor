@@ -172,9 +172,9 @@ def test_build_cross_team_graph_dashboard() -> None:
         (item.team_name, item.service_name): item for item in dashboard.overloaded_services
     }
     top_service = overloaded_by_entity[("Alpha", "Loans")]
-    assert top_service.in_team_merge_nodes == 1
+    assert top_service.in_team_merge_nodes == 0
     assert top_service.cycle_count == 0
-    assert top_service.procedure_count == 4
+    assert top_service.procedure_count == 3
     assert top_service.block_count == 6
     assert [
         (
@@ -186,8 +186,7 @@ def test_build_cross_team_graph_dashboard() -> None:
         )
         for item in top_service.procedure_usage_stats
     ] == [
-        ("multi_route", 0, 0, 1, 2),
-        ("shared_core", 1, 0, 1, 0),
+        ("multi_route", 0, 0, 0, 2),
         ("split_a", 0, 0, 0, 2),
         ("split_b", 0, 0, 0, 2),
     ]
@@ -354,6 +353,41 @@ def test_overloaded_entities_breakdown_keeps_component_flow_grouped_left_to_righ
     assert [
         item.procedure_id for item in dashboard.overloaded_services[0].procedure_usage_stats
     ] == ["left_start", "left_end", "right_start", "right_end"]
+
+
+def test_overloaded_entities_breakdown_skips_graph_only_intermediate_nodes() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="start_proc",
+                    start_block_ids=["start-1"],
+                    branches={"s1": ["s2"]},
+                ),
+                Procedure(procedure_id="end_proc", branches={"e1": ["e2"]}),
+            ],
+            procedure_graph={"start_proc": ["bridge_proc"], "bridge_proc": ["end_proc"]},
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    service = dashboard.overloaded_services[0]
+    assert service.procedure_count == 2
+    assert [item.procedure_id for item in service.procedure_usage_stats] == [
+        "start_proc",
+        "end_proc",
+    ]
 
 
 def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None:

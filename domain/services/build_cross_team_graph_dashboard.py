@@ -200,14 +200,21 @@ class _GraphAggregate:
     def block_count(self) -> int:
         return sum(len(block_ids) for block_ids in self.block_ids_by_procedure.values())
 
-    def to_adjacency(self) -> dict[str, list[str]]:
+    def to_adjacency(self, nodes: set[str] | None = None) -> dict[str, list[str]]:
+        scoped_nodes = set(nodes) if nodes is not None else set(self.procedure_ids)
         adjacency: dict[str, list[str]] = {}
-        for node in sorted(self.procedure_ids):
-            adjacency[node] = sorted(self.adjacency.get(node, set()))
+        for node in sorted(scoped_nodes):
+            adjacency[node] = sorted(
+                target for target in self.adjacency.get(node, set()) if target in scoped_nodes
+            )
         return adjacency
 
-    def ordered_procedure_ids(self) -> tuple[str, ...]:
-        if not self.procedure_ids:
+    def visible_procedure_ids(self) -> set[str]:
+        return {proc_id for proc_id, block_ids in self.block_ids_by_procedure.items() if block_ids}
+
+    def ordered_procedure_ids(self, nodes: set[str] | None = None) -> tuple[str, ...]:
+        scoped_nodes = set(nodes) if nodes is not None else set(self.procedure_ids)
+        if not scoped_nodes:
             return ()
 
         order_fallback = len(self.procedure_order)
@@ -215,19 +222,18 @@ class _GraphAggregate:
         def order_index(proc_id: str) -> int:
             return self._procedure_order_index.get(proc_id, order_fallback)
 
-        nodes = set(self.procedure_ids)
-        adjacency: dict[str, set[str]] = {node: set() for node in nodes}
-        indegree: dict[str, int] = {node: 0 for node in nodes}
+        adjacency: dict[str, set[str]] = {node: set() for node in scoped_nodes}
+        indegree: dict[str, int] = {node: 0 for node in scoped_nodes}
         for source, targets in self.adjacency.items():
-            if source not in nodes:
+            if source not in scoped_nodes:
                 continue
             for target in targets:
-                if target not in nodes:
+                if target not in scoped_nodes:
                     continue
                 adjacency[source].add(target)
                 indegree[target] += 1
 
-        undirected: dict[str, set[str]] = {node: set() for node in nodes}
+        undirected: dict[str, set[str]] = {node: set() for node in scoped_nodes}
         for source, targets in adjacency.items():
             for target in targets:
                 undirected[source].add(target)
@@ -235,7 +241,10 @@ class _GraphAggregate:
 
         visited: set[str] = set()
         components: list[set[str]] = []
-        for proc_id in sorted(nodes, key=lambda proc_id: (order_index(proc_id), proc_id.lower())):
+        for proc_id in sorted(
+            scoped_nodes,
+            key=lambda proc_id: (order_index(proc_id), proc_id.lower()),
+        ):
             if proc_id in visited:
                 continue
             stack = [proc_id]
@@ -255,9 +264,8 @@ class _GraphAggregate:
             )
         )
 
-        def queue_key(proc_id: str) -> tuple[int, int, str]:
-            has_start = 0 if self.start_block_ids_by_procedure.get(proc_id) else 1
-            return (has_start, order_index(proc_id), proc_id.lower())
+        def queue_key(proc_id: str) -> tuple[int, str]:
+            return (order_index(proc_id), proc_id.lower())
 
         ordered: list[str] = []
         for component in components:
@@ -939,24 +947,27 @@ class BuildCrossTeamGraphDashboard:
 
         stats: list[ServiceLoadStat] = []
         for service in services.values():
-            adjacency = service.to_adjacency()
+            visible_proc_ids = service.visible_procedure_ids()
+            adjacency = service.to_adjacency(visible_proc_ids)
             graph_metrics = compute_graph_metrics(adjacency)
-            in_team_merge_nodes = len(merge_node_ids_by_service.get(service.key, set()))
-            weak_component_count = _count_weak_components(service.procedure_ids, service.adjacency)
+            visible_adjacency = {node: set(children) for node, children in adjacency.items()}
+            merge_nodes = merge_node_ids_by_service.get(service.key, set()) & visible_proc_ids
+            in_team_merge_nodes = len(merge_nodes)
+            weak_component_count = _count_weak_components(visible_proc_ids, visible_adjacency)
             cycle_nodes = set(graph_metrics.cycle_path or ())
-            merge_nodes = merge_node_ids_by_service.get(service.key, set())
             stats.append(
                 ServiceLoadStat(
                     team_name=service.team_name,
                     service_name=service.service_name,
                     cycle_count=graph_metrics.cycle_count,
-                    block_count=service.block_count(),
-                    in_team_merge_nodes=in_team_merge_nodes,
-                    procedure_count=len(service.procedure_ids),
-                    procedure_ids=tuple(sorted(service.procedure_ids, key=str.lower)),
-                    merge_node_ids=tuple(
-                        sorted(merge_node_ids_by_service.get(service.key, set()), key=str.lower)
+                    block_count=sum(
+                        len(service.block_ids_by_procedure.get(proc_id, set()))
+                        for proc_id in visible_proc_ids
                     ),
+                    in_team_merge_nodes=in_team_merge_nodes,
+                    procedure_count=len(visible_proc_ids),
+                    procedure_ids=tuple(sorted(visible_proc_ids, key=str.lower)),
+                    merge_node_ids=tuple(sorted(merge_nodes, key=str.lower)),
                     weak_component_count=weak_component_count,
                     cycle_path=tuple(graph_metrics.cycle_path or ()),
                     procedure_usage_stats=tuple(
@@ -979,7 +990,7 @@ class BuildCrossTeamGraphDashboard:
                                 proc_id,
                             ),
                         )
-                        for proc_id in service.ordered_procedure_ids()
+                        for proc_id in service.ordered_procedure_ids(visible_proc_ids)
                     ),
                 )
             )
