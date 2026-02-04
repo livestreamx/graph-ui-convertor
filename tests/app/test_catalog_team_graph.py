@@ -168,8 +168,15 @@ def test_catalog_team_graph_api(
         assert "team-graph-ranked-details-list-entity" in html_response.text
         assert "Graph-level breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
+        assert "data-sortable-table" in html_response.text
+        assert "data-sort-trigger" in html_response.text
+        assert "Potential merges" in html_response.text
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
+        assert "team-graph-procedure-block-type" in html_response.text
+        assert "Starts:" not in html_response.text
+        assert "Ends:" not in html_response.text
+        assert "End (" not in html_response.text
         assert "team-graph-procedure-order" in html_response.text
         assert "team-graph-procedure-id" in html_response.text
         assert "Data quality note" not in html_response.text
@@ -659,6 +666,7 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-merge-loader.htmx-request" in styles
     assert ".team-graph-merge-button:disabled" in styles
     assert ".team-graph-procedure-order" in styles
+    assert ".team-graph-sort-button" in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(

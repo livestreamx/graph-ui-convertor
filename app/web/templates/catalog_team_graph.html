@@ -372,19 +372,60 @@
                     </div>
                   </div>
                   {% if team_dashboard.graph_groups %}
-                    <div class="team-graph-graphs-list">
+                    <div class="team-graph-graphs-list" data-sortable-table>
                       <div class="team-graph-graphs-row team-graph-graphs-row-header">
                         <span>Graphs</span>
-                        <span>Count</span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="graph-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Count
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="merge-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            {% if merge_selected_markups %}Real merges{% else %}Potential merges{% endif %}
+                          </button>
+                        </span>
                       </div>
+                      <div data-sort-items>
                       {% for item in team_dashboard.graph_groups %}
                         {% set entities = item.label.split(' + ') %}
-                        <details class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}" data-graph-group-size="{{ entities|length }}">
+                        {% set merge_count_ns = namespace(value=0) %}
+                        {% for component in item.components %}
+                          {% set merge_count_ns.value = merge_count_ns.value + (component.merge_nodes | length) %}
+                        {% endfor %}
+                        {% set item_merge_nodes_count = merge_count_ns.value %}
+                        <details
+                          class="team-graph-graphs-item {% if entities|length > 1 %}is-merged{% endif %}"
+                          data-graph-group-size="{{ entities|length }}"
+                          data-sort-item
+                          data-sort-graph-count="{{ item.graph_count }}"
+                          data-sort-merge-count="{{ item_merge_nodes_count }}"
+                        >
                           <summary class="team-graph-graphs-row">
                             {{ render_graph_label_entities(item.label, force_colorize=true) }}
                             <span class="team-graph-graphs-count">
                               <span class="team-graph-graphs-count-value">{{ item.graph_count }}</span>
                               <span class="team-graph-graphs-count-label">graph{% if item.graph_count != 1 %}s{% endif %}</span>
+                            </span>
+                            <span class="team-graph-graphs-merge-count {% if not merge_selected_markups and item_merge_nodes_count %}team-graph-graphs-merge-count-warning{% endif %}">
+                              <span class="team-graph-graphs-count-value">{{ item_merge_nodes_count }}</span>
+                              <span class="team-graph-graphs-count-label">
+                                {% if merge_selected_markups %}node{% else %}potential{% endif %}{% if item_merge_nodes_count != 1 %}s{% endif %}
+                              </span>
                             </span>
                           </summary>
                           {% set merge_ns = namespace(has_merge_nodes=false) %}
@@ -435,6 +476,7 @@
                           {% endif %}
                         </details>
                       {% endfor %}
+                      </div>
                     </div>
                   {% else %}
                     <div class="team-graph-empty">No graphs detected for selected markups.</div>
@@ -653,25 +695,72 @@
                     </div>
                   </div>
                   {% if team_dashboard.external_team_intersections %}
-                    {% set top_external_teams = team_dashboard.external_team_intersections[:10] %}
-                    {% set hidden_external_teams = team_dashboard.external_team_intersections[10:] %}
-                    <div class="team-graph-ranked-list team-graph-overlap-list">
+                    {% set hidden_external_team_count = (team_dashboard.external_team_intersections|length) - 10 %}
+                    <div
+                      class="team-graph-ranked-list team-graph-overlap-list"
+                      data-sortable-table
+                      data-overlap-sortable
+                      data-overlap-limit="10"
+                    >
                       <div class="team-graph-overlap-row team-graph-overlap-row-header">
                         <span>Team</span>
-                        <span>External &rarr; selected</span>
-                        <span>Selected &rarr; external</span>
-                        <span>Total</span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="external-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            External &rarr; selected
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="selected-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Selected &rarr; external
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="total-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Total
+                          </button>
+                        </span>
                       </div>
-                      {% for item in top_external_teams %}
-                        {% set rank = loop.index %}
-                        <div class="team-graph-overlap-team" data-overlap-team-card>
+                      <div class="team-graph-overlap-teams" data-sort-items data-overlap-team-list>
+                      {% for item in team_dashboard.external_team_intersections %}
+                        <div
+                          class="team-graph-overlap-team"
+                          data-overlap-team-card
+                          data-sort-item
+                          data-sort-external-count="{{ item.external_depends_on_selected_count }}"
+                          data-sort-selected-count="{{ item.selected_depends_on_external_count }}"
+                          data-sort-total-count="{{ item.count }}"
+                        >
                           <button
                             class="team-graph-overlap-row team-graph-overlap-toggle-row"
                             type="button"
                             data-overlap-team-toggle
                             aria-expanded="false"
                           >
-                            <span class="team-graph-overlap-main-label">{{ rank }}. {{ item.team_name }}</span>
+                            <span class="team-graph-overlap-main-label">
+                              <span data-overlap-rank data-sort-rank data-sort-rank-suffix=".">{{ loop.index }}.</span>
+                              {{ item.team_name }}
+                            </span>
                             <span class="team-graph-overlap-value">{{ item.external_depends_on_selected_count }}</span>
                             <span class="team-graph-overlap-value">{{ item.selected_depends_on_external_count }}</span>
                             <span class="team-graph-overlap-value">{{ item.count }}</span>
@@ -692,41 +781,10 @@
                           {% endif %}
                         </div>
                       {% endfor %}
-                      {% if hidden_external_teams %}
-                        <div class="team-graph-overlap-more" data-overlap-more-list hidden>
-                          {% for item in hidden_external_teams %}
-                            {% set rank = loop.index + 10 %}
-                            <div class="team-graph-overlap-team" data-overlap-team-card>
-                              <button
-                                class="team-graph-overlap-row team-graph-overlap-toggle-row"
-                                type="button"
-                                data-overlap-team-toggle
-                                aria-expanded="false"
-                              >
-                                <span class="team-graph-overlap-main-label">{{ rank }}. {{ item.team_name }}</span>
-                                <span class="team-graph-overlap-value">{{ item.external_depends_on_selected_count }}</span>
-                                <span class="team-graph-overlap-value">{{ item.selected_depends_on_external_count }}</span>
-                                <span class="team-graph-overlap-value">{{ item.count }}</span>
-                              </button>
-                              {% if item.services %}
-                                <div class="team-graph-overlap-entities" data-overlap-team-details>
-                                  {% for service in item.services %}
-                                    <div class="team-graph-overlap-row team-graph-overlap-row-service">
-                                      <span class="team-graph-overlap-service">
-                                        {{ render_team_service_entity(item.team_name ~ ' / ' ~ service.service_name, "team-graph-graph-entity-sm", true) }}
-                                      </span>
-                                      <span class="team-graph-overlap-count">{{ service.external_depends_on_selected_count }}</span>
-                                      <span class="team-graph-overlap-count">{{ service.selected_depends_on_external_count }}</span>
-                                      <span class="team-graph-overlap-count">{{ service.count }}</span>
-                                    </div>
-                                  {% endfor %}
-                                </div>
-                              {% endif %}
-                            </div>
-                          {% endfor %}
-                        </div>
+                      </div>
+                      {% if hidden_external_team_count > 0 %}
                         <button class="team-graph-overlap-more-button" type="button" data-overlap-more-toggle aria-expanded="false">
-                          More
+                          Show {{ hidden_external_team_count }} more teams
                         </button>
                       {% endif %}
                     </div>
@@ -751,18 +809,73 @@
                   </div>
                   <div class="team-graph-data-context">Ranking priority: cross-entity reuse &rarr; total dependencies (incoming + outgoing) &rarr; incoming &rarr; outgoing. Based only on selected markups, deterministic for the same input.</div>
                   {% if team_dashboard.linking_procedures %}
-                    <div class="team-graph-ranked-table">
+                    <div class="team-graph-ranked-table" data-sortable-table>
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Procedure</span>
-                        <span>Entities</span>
-                        <span>Cross-entity</span>
-                        <span>Inbound deps</span>
-                        <span>Outbound deps</span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="graph-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Entities
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="cross-entity"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Cross-entity
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="incoming"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Inbound deps
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="outgoing"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Outbound deps
+                          </button>
+                        </span>
                       </div>
+                      <div data-sort-items>
                       {% for item in team_dashboard.linking_procedures %}
-                        <details class="team-graph-ranked-table-item">
+                        <details
+                          class="team-graph-ranked-table-item"
+                          data-sort-item
+                          data-sort-graph-count="{{ item.graph_count }}"
+                          data-sort-cross-entity="{{ item.usage_in_other_graphs }}"
+                          data-sort-incoming="{{ item.incoming_edges }}"
+                          data-sort-outgoing="{{ item.outgoing_edges }}"
+                        >
                           <summary class="team-graph-ranked-table-row">
-                            <span>{{ render_procedure_caption(item.procedure_name, item.procedure_id, loop.index ~ ".") }}</span>
+                            <span>
+                              <span class="team-graph-procedure-order" data-sort-rank>{{ loop.index }}</span>
+                              {{ render_procedure_caption(item.procedure_name, item.procedure_id) }}
+                            </span>
                             <span>{{ item.graph_count }}</span>
                             <span>{{ item.usage_in_other_graphs }}</span>
                             <span>{{ item.incoming_edges }}</span>
@@ -785,6 +898,7 @@
                           </div>
                         </details>
                       {% endfor %}
+                      </div>
                     </div>
                   {% else %}
                     <div class="team-graph-empty">No procedure-level data.</div>
@@ -810,18 +924,73 @@
                   </div>
                   <div class="team-graph-data-context">Ranking priority: merges &rarr; cycles &rarr; procedures &rarr; blocks. These metrics are computed directly from graph structure and block lists.</div>
                   {% if team_dashboard.overloaded_services %}
-                    <div class="team-graph-ranked-table team-graph-ranked-table-services">
+                    <div class="team-graph-ranked-table team-graph-ranked-table-services" data-sortable-table>
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>Entity</span>
-                        <span>Procedures</span>
-                        <span>Merges</span>
-                        <span>Cycles</span>
-                        <span>Blocks</span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="procedure-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Procedures
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="merge-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Merges
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="cycle-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Cycles
+                          </button>
+                        </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="block-count"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Blocks
+                          </button>
+                        </span>
                       </div>
+                      <div data-sort-items>
                       {% for item in team_dashboard.overloaded_services %}
-                        <details class="team-graph-ranked-table-item">
+                        <details
+                          class="team-graph-ranked-table-item"
+                          data-sort-item
+                          data-sort-procedure-count="{{ item.procedure_count }}"
+                          data-sort-merge-count="{{ item.in_team_merge_nodes }}"
+                          data-sort-cycle-count="{{ item.cycle_count }}"
+                          data-sort-block-count="{{ item.block_count }}"
+                        >
                           <summary class="team-graph-ranked-table-row">
-                            <span>{{ loop.index }}. {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}</span>
+                            <span>
+                              <span class="team-graph-procedure-order" data-sort-rank>{{ loop.index }}</span>
+                              {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}
+                            </span>
                             <span>{{ item.procedure_count }}</span>
                             <span>{{ item.in_team_merge_nodes }}</span>
                             <span>{{ item.cycle_count }}</span>
@@ -841,18 +1010,97 @@
                                 still surfacing shared-node overlap risk.
                               </div>
                             {% endif %}
-                            <div class="team-graph-ranked-table">
+                            <div class="team-graph-ranked-table" data-sortable-table>
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                                 <span>Procedure</span>
-                                <span>{% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}</span>
-                                <span>Cycle</span>
-                                <span>Links</span>
-                                <span>Blocks</span>
+                                <span>
+                                  <button
+                                    class="team-graph-sort-button"
+                                    type="button"
+                                    data-sort-trigger
+                                    data-sort-key="merge-count"
+                                    data-sort-type="number"
+                                    data-sort-default-order="desc"
+                                  >
+                                    {% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}
+                                  </button>
+                                </span>
+                                <span>
+                                  <button
+                                    class="team-graph-sort-button"
+                                    type="button"
+                                    data-sort-trigger
+                                    data-sort-key="cycle-count"
+                                    data-sort-type="number"
+                                    data-sort-default-order="desc"
+                                  >
+                                    Cycle
+                                  </button>
+                                </span>
+                                <span>
+                                  <button
+                                    class="team-graph-sort-button"
+                                    type="button"
+                                    data-sort-trigger
+                                    data-sort-key="link-count"
+                                    data-sort-type="number"
+                                    data-sort-default-order="desc"
+                                  >
+                                    Links
+                                  </button>
+                                </span>
+                                <span>
+                                  <button
+                                    class="team-graph-sort-button"
+                                    type="button"
+                                    data-sort-trigger
+                                    data-sort-key="block-count"
+                                    data-sort-type="number"
+                                    data-sort-default-order="desc"
+                                  >
+                                    Blocks
+                                  </button>
+                                </span>
                               </div>
+                              <div data-sort-items>
                               {% for proc_item in item.procedure_usage_stats %}
-                                <div class="team-graph-ranked-table-row">
-                                  <span>
-                                    {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id, "P" ~ loop.index) }}
+                                <div
+                                  class="team-graph-ranked-table-row"
+                                  data-sort-item
+                                  data-sort-merge-count="{{ proc_item.in_team_merge_hits }}"
+                                  data-sort-cycle-count="{{ proc_item.cycle_hits }}"
+                                  data-sort-link-count="{{ proc_item.linked_procedure_count }}"
+                                  data-sort-block-count="{{ proc_item.block_count }}"
+                                >
+                                  <span class="team-graph-procedure-row-main">
+                                    <span class="team-graph-procedure-order" data-sort-rank data-sort-rank-prefix="P">P{{ loop.index }}</span>
+                                    {{ render_procedure_caption(proc_item.procedure_name, proc_item.procedure_id) }}
+                                    {% if proc_item.block_type_stats %}
+                                      <span class="team-graph-procedure-block-meta">
+                                        <span class="team-graph-procedure-block-types">
+                                          {% for block_stat in proc_item.block_type_stats %}
+                                            {% set block_label = block_stat.label %}
+                                            {% if block_label == "End (exit)" %}
+                                              {% set block_label = "Exit" %}
+                                            {% elif block_label == "End (all)" %}
+                                              {% set block_label = "End & Exit" %}
+                                            {% elif block_label == "End (intermediate)" %}
+                                              {% set block_label = "Intermediate" %}
+                                            {% elif block_label == "End (postpone)" %}
+                                              {% set block_label = "Postpone" %}
+                                            {% elif block_label == "End (turn_out)" %}
+                                              {% set block_label = "Turn out" %}
+                                            {% endif %}
+                                            <span
+                                              class="team-graph-procedure-block-type"
+                                              style="--team-graph-block-type-color: {{ block_stat.color }}"
+                                            >
+                                              {{ block_label }} · {{ block_stat.count }}
+                                            </span>
+                                          {% endfor %}
+                                        </span>
+                                      </span>
+                                    {% endif %}
                                   </span>
                                   <span>{% if proc_item.in_team_merge_hits %}{{ proc_item.in_team_merge_hits }}{% endif %}</span>
                                   <span>{% if proc_item.cycle_hits %}{{ proc_item.cycle_hits }}{% endif %}</span>
@@ -860,10 +1108,12 @@
                                   <span>{% if proc_item.block_count %}{{ proc_item.block_count }}{% endif %}</span>
                                 </div>
                               {% endfor %}
+                              </div>
                             </div>
                           </div>
                         </details>
                       {% endfor %}
+                      </div>
                     </div>
                   {% else %}
                     <div class="team-graph-empty">No service-level data.</div>
@@ -1008,16 +1258,170 @@
           });
         });
 
-        const overlapMoreToggle = page.querySelector("[data-overlap-more-toggle]");
-        const overlapMoreList = page.querySelector("[data-overlap-more-list]");
-        if (overlapMoreToggle instanceof HTMLButtonElement && overlapMoreList instanceof HTMLElement) {
-          overlapMoreToggle.addEventListener("click", () => {
-            const isExpanded = overlapMoreToggle.getAttribute("aria-expanded") === "true";
-            overlapMoreToggle.setAttribute("aria-expanded", isExpanded ? "false" : "true");
-            overlapMoreList.hidden = isExpanded;
-            overlapMoreToggle.textContent = isExpanded ? "More" : "Less";
+        const toNumber = (value) => {
+          const parsed = Number(value);
+          return Number.isFinite(parsed) ? parsed : 0;
+        };
+
+        const scopedNodes = (root, selector) =>
+          Array.from(root.querySelectorAll(selector)).filter(
+            (node) => node.closest("[data-sortable-table]") === root,
+          );
+
+        const setupSortableTables = () => {
+          const sortableTables = page.querySelectorAll("[data-sortable-table]");
+          sortableTables.forEach((table) => {
+            if (!(table instanceof HTMLElement) || table.dataset.sortInit === "true") {
+              return;
+            }
+
+            const sortItemsContainers = scopedNodes(table, "[data-sort-items]");
+            const sortItemsContainer = sortItemsContainers[0];
+            if (!(sortItemsContainer instanceof HTMLElement)) {
+              return;
+            }
+            const triggers = scopedNodes(table, "[data-sort-trigger]");
+            if (!triggers.length) {
+              return;
+            }
+
+            const getItems = () =>
+              Array.from(sortItemsContainer.querySelectorAll("[data-sort-item]")).filter(
+                (node) => node instanceof HTMLElement,
+              );
+            getItems().forEach((item, index) => {
+              item.dataset.sortIndex = String(index);
+            });
+
+            const setTriggerState = (activeKey, order) => {
+              triggers.forEach((trigger) => {
+                if (!(trigger instanceof HTMLElement)) {
+                  return;
+                }
+                const key = trigger.getAttribute("data-sort-key");
+                const isActive = !!activeKey && key === activeKey;
+                trigger.dataset.sortActive = isActive ? "true" : "false";
+                trigger.dataset.sortOrder = isActive ? order : "";
+                trigger.setAttribute("aria-pressed", isActive ? "true" : "false");
+              });
+            };
+
+            const runSort = (key, type, order) => {
+              const items = getItems();
+              items.sort((left, right) => {
+                const leftRaw = left.getAttribute(`data-sort-${key}`) || "";
+                const rightRaw = right.getAttribute(`data-sort-${key}`) || "";
+                const leftValue =
+                  type === "number" ? toNumber(leftRaw) : leftRaw.trim().toLocaleLowerCase();
+                const rightValue =
+                  type === "number" ? toNumber(rightRaw) : rightRaw.trim().toLocaleLowerCase();
+
+                if (leftValue < rightValue) {
+                  return order === "asc" ? -1 : 1;
+                }
+                if (leftValue > rightValue) {
+                  return order === "asc" ? 1 : -1;
+                }
+
+                return toNumber(left.dataset.sortIndex) - toNumber(right.dataset.sortIndex);
+              });
+              items.forEach((item) => {
+                sortItemsContainer.appendChild(item);
+              });
+              items.forEach((item, index) => {
+                const rankNodes = item.querySelectorAll("[data-sort-rank]");
+                rankNodes.forEach((rankNode) => {
+                  if (!(rankNode instanceof HTMLElement)) {
+                    return;
+                  }
+                  const prefix = rankNode.getAttribute("data-sort-rank-prefix") || "";
+                  const suffix = rankNode.getAttribute("data-sort-rank-suffix") || "";
+                  rankNode.textContent = `${prefix}${index + 1}${suffix}`;
+                });
+              });
+              setTriggerState(key, order);
+              table.dispatchEvent(new CustomEvent("teamgraph:sorted"));
+            };
+
+            triggers.forEach((trigger) => {
+              if (!(trigger instanceof HTMLElement)) {
+                return;
+              }
+              trigger.addEventListener("click", () => {
+                const key = trigger.getAttribute("data-sort-key");
+                if (!key) {
+                  return;
+                }
+                const type = trigger.getAttribute("data-sort-type") || "number";
+                const defaultOrder = trigger.getAttribute("data-sort-default-order") || "desc";
+                const isActive = trigger.dataset.sortActive === "true";
+                const currentOrder = trigger.dataset.sortOrder || "";
+                const nextOrder =
+                  isActive && currentOrder === defaultOrder
+                    ? defaultOrder === "desc"
+                      ? "asc"
+                      : "desc"
+                    : defaultOrder;
+                runSort(key, type, nextOrder);
+              });
+            });
+
+            table.dataset.sortInit = "true";
           });
-        }
+        };
+
+        const setupOverlapVisibility = () => {
+          const overlapTable = page.querySelector("[data-overlap-sortable]");
+          if (!(overlapTable instanceof HTMLElement)) {
+            return;
+          }
+          const overlapTeamsList = overlapTable.querySelector("[data-overlap-team-list]");
+          if (!(overlapTeamsList instanceof HTMLElement)) {
+            return;
+          }
+          const overlapMoreToggle = overlapTable.querySelector("[data-overlap-more-toggle]");
+          const visibleLimit = Math.max(1, toNumber(overlapTable.getAttribute("data-overlap-limit")));
+          const lessLabel = "Show fewer teams";
+
+          const updateTeamsVisibility = () => {
+            const cards = Array.from(overlapTeamsList.querySelectorAll("[data-overlap-team-card]")).filter(
+              (node) => node instanceof HTMLElement,
+            );
+            const hiddenCount = Math.max(0, cards.length - visibleLimit);
+            const expanded =
+              !(overlapMoreToggle instanceof HTMLButtonElement) ||
+              overlapMoreToggle.getAttribute("aria-expanded") === "true";
+
+            cards.forEach((card, index) => {
+              card.hidden = !expanded && index >= visibleLimit;
+              const rankNode = card.querySelector("[data-overlap-rank]");
+              if (rankNode instanceof HTMLElement) {
+                rankNode.textContent = `${index + 1}.`;
+              }
+            });
+
+            if (overlapMoreToggle instanceof HTMLButtonElement) {
+              overlapMoreToggle.hidden = hiddenCount === 0;
+              overlapMoreToggle.textContent = expanded
+                ? lessLabel
+                : `Show ${hiddenCount} more teams`;
+            }
+          };
+
+          if (overlapMoreToggle instanceof HTMLButtonElement) {
+            overlapMoreToggle.addEventListener("click", () => {
+              const isExpanded = overlapMoreToggle.getAttribute("aria-expanded") === "true";
+              overlapMoreToggle.setAttribute("aria-expanded", isExpanded ? "false" : "true");
+              updateTeamsVisibility();
+            });
+          }
+
+          overlapTable.addEventListener("teamgraph:sorted", updateTeamsVisibility);
+          updateTeamsVisibility();
+        };
+
+        setupSortableTables();
+        setupOverlapVisibility();
 
         const graphEntities = Array.from(
           page.querySelectorAll(".team-graph-graph-entity[data-team]"),

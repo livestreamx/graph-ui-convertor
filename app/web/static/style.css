@@ -907,6 +907,11 @@ main {
   gap: 8px;
 }
 
+.team-graph-overlap-teams {
+  display: grid;
+  gap: 8px;
+}
+
 .team-graph-overlap-team {
   border: 1px dashed rgba(255, 255, 255, 0.12);
   border-radius: 10px;
@@ -919,15 +924,14 @@ main {
 }
 
 .team-graph-overlap-entities {
-  max-height: 0;
+  display: none;
   opacity: 0;
-  overflow-y: auto;
   margin-top: 0;
-  transition: max-height 0.24s ease, opacity 0.2s ease, margin-top 0.2s ease;
+  transition: opacity 0.2s ease, margin-top 0.2s ease;
 }
 
 .team-graph-overlap-team.is-open .team-graph-overlap-entities {
-  max-height: 170px;
+  display: grid;
   opacity: 1;
   margin-top: 8px;
 }
@@ -1099,6 +1103,45 @@ main {
   font-size: 11px;
 }
 
+.team-graph-sort-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.team-graph-sort-button::after {
+  content: "↕";
+  font-size: 10px;
+  opacity: 0.55;
+}
+
+.team-graph-sort-button[data-sort-active="true"] {
+  color: var(--text);
+}
+
+.team-graph-sort-button[data-sort-active="true"][data-sort-order="desc"]::after {
+  content: "↓";
+  opacity: 1;
+}
+
+.team-graph-sort-button[data-sort-active="true"][data-sort-order="asc"]::after {
+  content: "↑";
+  opacity: 1;
+}
+
+.team-graph-sort-button:hover {
+  color: var(--text);
+}
+
 .team-graph-ranked-table-item {
   border: 1px dashed rgba(255, 255, 255, 0.14);
   border-radius: 10px;
@@ -1231,7 +1274,7 @@ main {
 
 .team-graph-graphs-row {
   display: grid;
-  grid-template-columns: minmax(200px, 1.6fr) minmax(92px, auto);
+  grid-template-columns: minmax(190px, 1.6fr) minmax(92px, auto) minmax(110px, auto);
   gap: 10px;
   align-items: center;
 }
@@ -1241,7 +1284,7 @@ main {
   text-align: left;
 }
 
-.team-graph-graphs-row > span:last-child {
+.team-graph-graphs-row > span:not(:first-child) {
   justify-self: end;
   text-align: right;
 }
@@ -1380,14 +1423,80 @@ main {
   font-size: 12px;
 }
 
+.team-graph-graphs-merge-count {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  border-left: 1px dashed rgba(255, 255, 255, 0.18);
+  padding-left: 10px;
+}
+
+.team-graph-graphs-merge-count-warning {
+  color: #ffd88e;
+}
+
+.team-graph-graphs-merge-count-warning .team-graph-graphs-count-label {
+  color: #ffd88e;
+}
+
 @media (max-width: 880px) {
   .team-graph-graphs-row {
-    grid-template-columns: minmax(120px, 1fr) minmax(72px, auto);
+    grid-template-columns: minmax(120px, 1fr) minmax(64px, auto) minmax(84px, auto);
     gap: 8px;
   }
 
   .team-graph-graphs-row-header {
     font-size: 10px;
+  }
+}
+
+.team-graph-procedure-block-meta {
+  margin-left: auto;
+  min-width: 0;
+}
+
+.team-graph-procedure-block-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+
+.team-graph-procedure-row-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.team-graph-procedure-row-main .team-graph-procedure-caption {
+  min-width: 0;
+}
+
+.team-graph-procedure-block-type {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--team-graph-block-type-color, rgba(255, 255, 255, 0.24));
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: 10px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--team-graph-block-type-color, #d1ffd6) 22%, transparent);
+}
+
+@media (max-width: 880px) {
+  .team-graph-procedure-row-main {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .team-graph-procedure-block-meta {
+    margin-left: 0;
+  }
+
+  .team-graph-procedure-block-types {
+    justify-content: flex-start;
   }
 }
 

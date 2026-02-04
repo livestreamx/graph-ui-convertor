@@ -411,3 +411,41 @@ def test_dashboard_graph_stats_follow_same_merge_graph_as_diagram() -> None:
 
     assert dashboard_without_all.unique_graph_count == 2
     assert dashboard_with_all.unique_graph_count == 1
+
+
+def test_overloaded_entities_include_block_type_breakdown() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="entry",
+                    start_block_ids=["s1", "s2"],
+                    end_block_ids=["e1::end", "e2::postpone", "e3::exit"],
+                    branches={"s1": ["e1"], "s2": ["e2"]},
+                )
+            ],
+            procedure_graph={"entry": []},
+        )
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha"],
+    )
+
+    assert dashboard.overloaded_services
+    usage = dashboard.overloaded_services[0].procedure_usage_stats[0]
+    assert usage.start_block_count == 2
+    assert usage.end_block_count == 3
+    assert [(item.type_id, item.count) for item in usage.block_type_stats] == [
+        ("start", 2),
+        ("end:end", 1),
+        ("end:exit", 1),
+        ("end:postpone", 1),
+    ]
