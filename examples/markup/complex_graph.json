@@ -211,7 +211,8 @@
       "proc_delta"
     ],
     "proc_gamma": [
-      "proc_delta"
+      "proc_delta",
+      "proc_alpha"
     ],
     "proc_delta": [
       "proc_epsilon"
