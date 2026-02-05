@@ -614,39 +614,78 @@ class BuildTeamProcedureGraph:
 
     def _build_service_graph_document(self, document: MarkupDocument) -> MarkupDocument:
         procedure_meta = document.procedure_meta or {}
-        service_nodes: dict[str, dict[str, object]] = {}
-        service_node_order: list[str] = []
-        service_nodes_by_procedure: dict[str, list[str]] = {}
-        service_graph: dict[str, set[str]] = {}
-        service_nodes_by_key: dict[str, list[str]] = {}
+        procedure_order = [procedure.procedure_id for procedure in document.procedures]
+        order_index = {proc_id: idx for idx, proc_id in enumerate(procedure_order)}
+
+        service_info_by_key: dict[str, dict[str, object]] = {}
+        service_procs: dict[str, set[str]] = {}
+        proc_service_keys: dict[str, list[str]] = {}
 
         for procedure in document.procedures:
             proc_id = procedure.procedure_id
             meta = procedure_meta.get(proc_id, {})
             entries = self._service_entries(meta)
-            service_ids_for_proc: list[str] = []
+            keys: list[str] = []
             for entry in entries:
-                node_id, node_payload, service_key = self._service_node_payload(entry, proc_id)
-                service_nodes_by_key.setdefault(service_key, []).append(node_id)
-                if node_id in service_nodes:
-                    if node_id not in service_ids_for_proc:
-                        service_ids_for_proc.append(node_id)
+                info = self._service_entry_info(entry)
+                service_key = str(info.get("service_key") or "")
+                if not service_key:
                     continue
-                service_nodes[node_id] = node_payload
+                service_info_by_key.setdefault(service_key, info)
+                service_procs.setdefault(service_key, set()).add(proc_id)
+                keys.append(service_key)
+            if not keys:
+                info = self._service_entry_info({})
+                service_key = str(info.get("service_key") or "")
+                if service_key:
+                    service_info_by_key.setdefault(service_key, info)
+                    service_procs.setdefault(service_key, set()).add(proc_id)
+                    keys.append(service_key)
+            proc_service_keys[proc_id] = keys
+
+        undirected: dict[str, set[str]] = {proc_id: set() for proc_id in procedure_order}
+        for source_proc_id, target_proc_ids in document.procedure_graph.items():
+            for target_proc_id in target_proc_ids:
+                if source_proc_id == target_proc_id:
+                    continue
+                undirected.setdefault(source_proc_id, set()).add(target_proc_id)
+                undirected.setdefault(target_proc_id, set()).add(source_proc_id)
+
+        service_nodes: dict[str, dict[str, object]] = {}
+        service_node_order: list[str] = []
+        service_nodes_by_key: dict[str, list[str]] = {}
+        service_nodes_by_procedure: dict[str, list[str]] = {proc_id: [] for proc_id in procedure_order}
+        service_graph: dict[str, set[str]] = {}
+        component_counts: dict[str, int] = {}
+
+        service_key_order: list[str] = []
+        for proc_id in procedure_order:
+            for key in proc_service_keys.get(proc_id, []):
+                if key not in service_key_order:
+                    service_key_order.append(key)
+
+        for service_key in service_key_order:
+            proc_ids = [
+                proc_id
+                for proc_id in procedure_order
+                if proc_id in service_procs.get(service_key, set())
+            ]
+            if not proc_ids:
+                continue
+            components = self._service_components(proc_ids, undirected, order_index)
+            info = service_info_by_key.get(service_key) or self._service_entry_info({})
+            for component in components:
+                component_ids = sorted(component, key=lambda proc_id: order_index.get(proc_id, 0))
+                node_id = self._service_component_node_id(info, component_ids)
+                payload = dict(info)
+                payload["service_key"] = service_key
+                service_nodes[node_id] = payload
                 service_node_order.append(node_id)
+                service_nodes_by_key.setdefault(service_key, []).append(node_id)
                 service_graph.setdefault(node_id, set())
-                service_ids_for_proc.append(node_id)
-            if not service_ids_for_proc:
-                fallback_id, fallback_payload, fallback_key = self._service_node_payload(
-                    {}, proc_id
-                )
-                service_nodes_by_key.setdefault(fallback_key, []).append(fallback_id)
-                if fallback_id not in service_nodes:
-                    service_nodes[fallback_id] = fallback_payload
-                    service_node_order.append(fallback_id)
-                    service_graph.setdefault(fallback_id, set())
-                service_ids_for_proc.append(fallback_id)
-            service_nodes_by_procedure[proc_id] = service_ids_for_proc
+                component_counts[node_id] = len(component_ids)
+                for proc_id in component_ids:
+                    service_nodes_by_procedure.setdefault(proc_id, []).append(node_id)
 
         for source_proc_id, target_proc_ids in document.procedure_graph.items():
             source_services = service_nodes_by_procedure.get(source_proc_id, [])
@@ -717,6 +756,7 @@ class BuildTeamProcedureGraph:
                 "finedog_unit_id": finedog_unit_id,
                 "procedure_color": color,
                 "is_intersection": False,
+                "procedure_count": component_counts.get(service_node_id, 1),
                 "services": [service_payload],
             }
 
@@ -748,9 +788,7 @@ class BuildTeamProcedureGraph:
                 return entries
         return [dict(meta)]
 
-    def _service_node_payload(
-        self, entry: dict[str, object], proc_id: str
-    ) -> tuple[str, dict[str, object], str]:
+    def _service_entry_info(self, entry: dict[str, object]) -> dict[str, object]:
         team_name = str(entry.get("team_name") or "Unknown team").strip() or "Unknown team"
         raw_team_id = entry.get("team_id")
         team_id = raw_team_id if isinstance(raw_team_id, str | int) else None
@@ -761,24 +799,54 @@ class BuildTeamProcedureGraph:
         finedog_unit_id = (
             str(unit_raw).strip() if isinstance(unit_raw, str) and unit_raw.strip() else None
         )
-        team_token = str(team_id).strip() if team_id is not None else team_name
-        service_token = finedog_unit_id if finedog_unit_id else service_name
-        node_id = (
-            f"service::{self._slug_token(team_token)}::"
-            f"{self._slug_token(service_token)}::{self._slug_token(proc_id)}"
-        )
         service_key = self._service_key(team_name, service_name)
-        return (
-            node_id,
-            {
-                "team_name": team_name,
-                "team_id": team_id,
-                "service_name": service_name,
-                "finedog_unit_id": finedog_unit_id,
-                "service_key": service_key,
-            },
-            service_key,
+        return {
+            "team_name": team_name,
+            "team_id": team_id,
+            "service_name": service_name,
+            "finedog_unit_id": finedog_unit_id,
+            "service_key": service_key,
+        }
+
+    def _service_component_node_id(
+        self, info: dict[str, object], proc_ids: list[str]
+    ) -> str:
+        team_token = str(info.get("team_id")).strip() if info.get("team_id") is not None else str(
+            info.get("team_name") or "unknown"
         )
+        service_token = (
+            str(info.get("finedog_unit_id") or "")
+            or str(info.get("service_name") or "unknown")
+        )
+        component_token = self._slug_token("-".join(proc_ids))
+        return (
+            f"service::{self._slug_token(team_token)}::"
+            f"{self._slug_token(service_token)}::graph::{component_token}"
+        )
+
+    def _service_components(
+        self,
+        proc_ids: list[str],
+        adjacency: dict[str, set[str]],
+        order_index: dict[str, int],
+    ) -> list[list[str]]:
+        remaining = set(proc_ids)
+        components: list[list[str]] = []
+        while remaining:
+            start = min(remaining, key=lambda proc_id: order_index.get(proc_id, 0))
+            stack = [start]
+            component: list[str] = []
+            remaining.remove(start)
+            while stack:
+                current = stack.pop()
+                component.append(current)
+                for neighbor in adjacency.get(current, set()):
+                    if neighbor in remaining:
+                        remaining.remove(neighbor)
+                        stack.append(neighbor)
+            components.append(component)
+        components.sort(key=lambda comp: min(order_index.get(proc_id, 0) for proc_id in comp))
+        return components
 
     def _slug_token(self, value: str) -> str:
         chars: list[str] = []

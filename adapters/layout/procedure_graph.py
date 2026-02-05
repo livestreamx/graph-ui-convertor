@@ -82,7 +82,20 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             key=lambda component: min(order_index.get(proc_id, 0) for proc_id in component)
         )
 
+        procedure_meta = document.procedure_meta or {}
         node_size = self._procedure_node_size()
+        base_service_node_size = Size(node_size.width * 3, node_size.height)
+        service_node_sizes: dict[str, Size] = {}
+        if is_service_graph:
+            for proc in procedures:
+                meta = procedure_meta.get(proc.procedure_id, {})
+                count_raw = meta.get("procedure_count")
+                count = count_raw if isinstance(count_raw, int) and count_raw > 0 else 1
+                scale = 1.0 + 0.05 * (count - 1)
+                service_node_sizes[proc.procedure_id] = Size(
+                    base_service_node_size.width * scale,
+                    base_service_node_size.height * scale,
+                )
         lane_span = node_size.width + self.config.lane_gap
         proc_gap_y = self.config.gap_y
         component_gap = max(proc_gap_y, self.config.separator_padding * 2)
@@ -92,7 +105,6 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separator_ys: list[float] = []
         frame_lookup: dict[str, FramePlacement] = {}
         procedure_map = {proc.procedure_id: proc for proc in procedures}
-        procedure_meta = document.procedure_meta or {}
         block_graph_nodes = self._block_graph_nodes(document) if document.block_graph else set()
         owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
         layout_edges_by_proc = self._layout_edges_by_proc(
@@ -237,31 +249,80 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         component_height = max_bottom - origin_y
 
             if not zone_enabled:
-                level_heights: dict[int, float] = {}
-                for lvl, nodes in level_nodes.items():
-                    if not nodes:
-                        level_heights[lvl] = 0.0
-                        continue
-                    total = len(nodes) * node_size.height + proc_gap_y * (len(nodes) - 1)
-                    level_heights[lvl] = total
+                if is_service_graph:
+                    level_heights: dict[int, float] = {}
+                    level_widths: dict[int, float] = {}
+                    for lvl, nodes in level_nodes.items():
+                        if not nodes:
+                            level_heights[lvl] = 0.0
+                            level_widths[lvl] = base_service_node_size.width
+                            continue
+                        widths = [
+                            service_node_sizes.get(proc_id, base_service_node_size).width
+                            for proc_id in nodes
+                        ]
+                        heights = [
+                            service_node_sizes.get(proc_id, base_service_node_size).height
+                            for proc_id in nodes
+                        ]
+                        level_widths[lvl] = max(widths) if widths else base_service_node_size.width
+                        total_height = sum(heights) + proc_gap_y * (len(heights) - 1)
+                        level_heights[lvl] = total_height
 
-                component_height = max(level_heights.values() or [0.0])
-                for lvl, nodes in level_nodes.items():
-                    y = origin_y
-                    for proc_id in nodes:
-                        frame = FramePlacement(
-                            procedure_id=proc_id,
-                            origin=Point(origin_x + lvl * lane_span, y),
-                            size=node_size,
+                    component_height = max(level_heights.values() or [0.0])
+                    level_offsets: dict[int, float] = {}
+                    current_x = origin_x
+                    for lvl in sorted(level_nodes):
+                        level_offsets[lvl] = current_x
+                        current_x += level_widths.get(lvl, base_service_node_size.width)
+                        current_x += self.config.lane_gap
+
+                    for lvl, nodes in level_nodes.items():
+                        y = origin_y
+                        level_width = level_widths.get(lvl, base_service_node_size.width)
+                        x_base = level_offsets.get(lvl, origin_x)
+                        for proc_id in nodes:
+                            size = service_node_sizes.get(proc_id, base_service_node_size)
+                            x = x_base + max(0.0, (level_width - size.width) / 2)
+                            frame = FramePlacement(
+                                procedure_id=proc_id,
+                                origin=Point(x, y),
+                                size=size,
+                            )
+                            component_frames.append(frame)
+                            component_frame_lookup[proc_id] = frame
+                            y += size.height + proc_gap_y
+                    if component_frames:
+                        max_bottom = max(
+                            frame.origin.y + frame.size.height for frame in component_frames
                         )
-                        component_frames.append(frame)
-                        component_frame_lookup[proc_id] = frame
-                        y += node_size.height + proc_gap_y
-                if component_frames:
-                    max_bottom = max(
-                        frame.origin.y + frame.size.height for frame in component_frames
-                    )
-                    component_height = max(component_height, max_bottom - origin_y)
+                        component_height = max(component_height, max_bottom - origin_y)
+                else:
+                    level_heights: dict[int, float] = {}
+                    for lvl, nodes in level_nodes.items():
+                        if not nodes:
+                            level_heights[lvl] = 0.0
+                            continue
+                        total = len(nodes) * node_size.height + proc_gap_y * (len(nodes) - 1)
+                        level_heights[lvl] = total
+
+                    component_height = max(level_heights.values() or [0.0])
+                    for lvl, nodes in level_nodes.items():
+                        y = origin_y
+                        for proc_id in nodes:
+                            frame = FramePlacement(
+                                procedure_id=proc_id,
+                                origin=Point(origin_x + lvl * lane_span, y),
+                                size=node_size,
+                            )
+                            component_frames.append(frame)
+                            component_frame_lookup[proc_id] = frame
+                            y += node_size.height + proc_gap_y
+                    if component_frames:
+                        max_bottom = max(
+                            frame.origin.y + frame.size.height for frame in component_frames
+                        )
+                        component_height = max(component_height, max_bottom - origin_y)
 
             if zone_enabled and component_frames:
                 zones_for_component = self._build_component_service_zones(

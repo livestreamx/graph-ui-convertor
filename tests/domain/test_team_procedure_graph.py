@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from adapters.layout.grid import LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from domain.models import MarkupDocument, Size
@@ -228,7 +230,7 @@ def test_service_graph_splits_multiple_procedures_by_service() -> None:
                     "branches": {"c": ["d"]},
                 },
             ],
-            "procedure_graph": {"p1": ["p2"], "p2": []},
+            "procedure_graph": {"p1": [], "p2": []},
         }
     )
 
@@ -242,9 +244,58 @@ def test_service_graph_splits_multiple_procedures_by_service() -> None:
         "[Alpha] Payments (Graph #2)",
     ]
     by_name = {name: proc_id for proc_id, name in name_lookup.items()}
-    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #1)"]] == [
-        by_name["[Alpha] Payments (Graph #2)"]
-    ]
+    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #1)"]] == []
+    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #2)"]] == []
+
+
+def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service_graph",
+            "service_name": "Services · Alpha",
+            "procedures": [
+                {
+                    "proc_id": "svc-one",
+                    "proc_name": "[Alpha] Payments",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+                {
+                    "proc_id": "svc-ten",
+                    "proc_name": "[Alpha] Payments (Graph #2)",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+                {
+                    "proc_id": "svc-twenty",
+                    "proc_name": "[Alpha] Payments (Graph #3)",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+            ],
+            "procedure_graph": {"svc-one": [], "svc-ten": [], "svc-twenty": []},
+            "procedure_meta": {
+                "svc-one": {"procedure_count": 1},
+                "svc-ten": {"procedure_count": 10},
+                "svc-twenty": {"procedure_count": 20},
+            },
+        }
+    )
+
+    base = LayoutConfig().block_size
+    base_service = Size(base.width * 3, base.height)
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    sizes = {frame.procedure_id: frame.size for frame in plan.frames}
+
+    assert sizes["svc-one"] == base_service
+    assert sizes["svc-ten"].width == pytest.approx(base_service.width * 1.45)
+    assert sizes["svc-ten"].height == pytest.approx(base_service.height * 1.45)
+    assert sizes["svc-twenty"].width == pytest.approx(base_service.width * 1.95)
+    assert sizes["svc-twenty"].height == pytest.approx(base_service.height * 1.95)
 
 
 def test_build_team_procedure_graph_title_limits_team_names() -> None:
