@@ -281,6 +281,44 @@ main {
   margin: 6px 0 0;
 }
 
+.team-graph-actions-card {
+  display: grid;
+  gap: 12px;
+}
+
+.team-graph-actions-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.team-graph-actions-group {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgba(9, 14, 30, 0.9), rgba(16, 22, 43, 0.86));
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.team-graph-actions-group[data-graph-level="service"] {
+  border-color: rgba(115, 206, 196, 0.38);
+  background: linear-gradient(145deg, rgba(8, 18, 24, 0.92), rgba(13, 31, 39, 0.88));
+}
+
+.team-graph-actions-group-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+}
+
+.team-graph-actions-group-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .team-graph-card h3 {
   margin-bottom: 0;
 }
@@ -1857,6 +1895,9 @@ main {
   }
   .team-graph-dashboard-grid,
   .team-graph-split-grid {
+    grid-template-columns: 1fr;
+  }
+  .team-graph-actions-split {
     grid-template-columns: 1fr;
   }
 }

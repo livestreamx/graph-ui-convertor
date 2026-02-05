@@ -60,6 +60,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separators: list[SeparatorPlacement] = []
         scenarios: list[ScenarioPlacement] = []
         service_zones: list[ServiceZonePlacement] = []
+        is_service_graph = str(document.markup_type or "").strip().lower() == "service_graph"
 
         procedures = list(document.procedures)
         if not procedures:
@@ -121,7 +122,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             service_info_by_key, proc_service_keys = self._component_service_info(
                 component, procedure_meta
             )
-            zone_enabled = len(service_info_by_key) > 1
+            zone_enabled = not is_service_graph and len(service_info_by_key) > 1
             component_frames: list[FramePlacement] = []
             component_frame_lookup: dict[str, FramePlacement] = {}
             component_height = 0.0
@@ -303,7 +304,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         ]
 
             scenario_total_height = 0.0
-            if component_frames:
+            if component_frames and not is_service_graph:
                 scenario = self._scenario_with_services(
                     component=component,
                     component_index=idx + 1,

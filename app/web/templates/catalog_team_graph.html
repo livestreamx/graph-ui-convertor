@@ -1131,13 +1131,35 @@
     <div class="detail-card team-graph-actions-card">
       <h3>Step 4. Use diagram</h3>
       {% if diagram_ready %}
-        <div class="button-row">
-          <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">
-            Open {{ diagram_label }}
-          </a>
-          <a class="ghost-button" href="/api/teams/graph?{{ team_query }}&download=true">
-            Download {{ diagram_ext }}
-          </a>
+        <div class="team-graph-actions-split">
+          <article class="team-graph-actions-group" data-graph-level="procedure">
+            <div class="team-graph-actions-group-title">Procedure-level diagram</div>
+            <p class="team-graph-actions-group-subtitle">
+              Detailed flow between procedures with full dashboard context from Step 3.
+            </p>
+            <div class="button-row">
+              <a class="primary-button" target="_blank" href="{{ procedure_diagram_open_url }}">
+                Open {{ diagram_label }}
+              </a>
+              <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&download=true">
+                Download {{ diagram_ext }}
+              </a>
+            </div>
+          </article>
+          <article class="team-graph-actions-group" data-graph-level="service">
+            <div class="team-graph-actions-group-title">Service-level diagram</div>
+            <p class="team-graph-actions-group-subtitle">
+              High-level service map: service nodes aggregate all selected service graphs.
+            </p>
+            <div class="button-row">
+              <a class="primary-button" target="_blank" href="{{ service_diagram_open_url }}">
+                Open {{ diagram_label }}
+              </a>
+              <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&download=true">
+                Download {{ diagram_ext }}
+              </a>
+            </div>
+          </article>
         </div>
       {% else %}
         <p class="team-graph-subtitle">Merge graphs in Step 3 to enable open/download actions.</p>

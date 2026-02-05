@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 from domain.models import MarkupDocument, Procedure, merge_end_types
 from domain.services.shared_node_merge_rules import (
@@ -21,6 +21,7 @@ _SERVICE_COLORS = [
     "#e5f0ff",
 ]
 _INTERSECTION_COLOR = "#ffd6d6"
+GraphLevel = Literal["procedure", "service"]
 
 
 class BuildTeamProcedureGraph:
@@ -29,6 +30,7 @@ class BuildTeamProcedureGraph:
         documents: Sequence[MarkupDocument],
         merge_documents: Sequence[MarkupDocument] | None = None,
         merge_selected_markups: bool = True,
+        graph_level: GraphLevel = "procedure",
     ) -> MarkupDocument:
         procedures: list[Procedure] = []
         procedure_meta: dict[str, dict[str, object]] = {}
@@ -187,7 +189,7 @@ class BuildTeamProcedureGraph:
         if team_name is None and team_id is not None:
             team_name = str(team_id)
 
-        return MarkupDocument(
+        merged_document = MarkupDocument(
             markup_type="procedure_graph",
             service_name=title,
             team_id=team_id,
@@ -196,6 +198,9 @@ class BuildTeamProcedureGraph:
             procedure_graph=procedure_graph,
             procedure_meta=procedure_meta,
         )
+        if graph_level == "service":
+            return self._build_service_graph_document(merged_document)
+        return merged_document
 
     def _drop_intermediate_procedures(
         self,
@@ -460,11 +465,7 @@ class BuildTeamProcedureGraph:
         procedure_services: dict[str, dict[str, dict[str, object]]],
         service_keys: set[str],
     ) -> dict[str, str]:
-        service_key_list = sorted(service_keys, key=lambda value: value.lower())
-        service_colors = {
-            key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
-            for idx, key in enumerate(service_key_list)
-        }
+        service_colors = self._service_color_map(service_keys)
         for service_map in procedure_services.values():
             for service_key, payload in service_map.items():
                 color = service_colors.get(service_key)
@@ -610,6 +611,174 @@ class BuildTeamProcedureGraph:
             return " + ".join(team_list)
         extra_count = len(team_list) - 3
         return " + ".join(team_list[:3]) + f" + еще {extra_count} команд"
+
+    def _build_service_graph_document(self, document: MarkupDocument) -> MarkupDocument:
+        procedure_meta = document.procedure_meta or {}
+        service_nodes: dict[str, dict[str, object]] = {}
+        service_node_order: list[str] = []
+        service_nodes_by_procedure: dict[str, list[str]] = {}
+        service_graph: dict[str, set[str]] = {}
+
+        for procedure in document.procedures:
+            proc_id = procedure.procedure_id
+            meta = procedure_meta.get(proc_id, {})
+            entries = self._service_entries(meta)
+            service_ids_for_proc: list[str] = []
+            for entry in entries:
+                node_id, node_payload = self._service_node_payload(entry)
+                if node_id in service_nodes:
+                    if node_id not in service_ids_for_proc:
+                        service_ids_for_proc.append(node_id)
+                    continue
+                service_nodes[node_id] = node_payload
+                service_node_order.append(node_id)
+                service_graph.setdefault(node_id, set())
+                service_ids_for_proc.append(node_id)
+            if not service_ids_for_proc:
+                fallback_id, fallback_payload = self._service_node_payload({})
+                if fallback_id not in service_nodes:
+                    service_nodes[fallback_id] = fallback_payload
+                    service_node_order.append(fallback_id)
+                    service_graph.setdefault(fallback_id, set())
+                service_ids_for_proc.append(fallback_id)
+            service_nodes_by_procedure[proc_id] = service_ids_for_proc
+
+        for source_proc_id, target_proc_ids in document.procedure_graph.items():
+            source_services = service_nodes_by_procedure.get(source_proc_id, [])
+            if not source_services:
+                continue
+            for target_proc_id in target_proc_ids:
+                target_services = service_nodes_by_procedure.get(target_proc_id, [])
+                if not target_services:
+                    continue
+                for source_service in source_services:
+                    for target_service in target_services:
+                        if source_service == target_service:
+                            continue
+                        service_graph.setdefault(source_service, set()).add(target_service)
+
+        for service_ids in service_nodes_by_procedure.values():
+            if len(service_ids) <= 1:
+                continue
+            for left_idx, left in enumerate(service_ids):
+                for right in service_ids[left_idx + 1 :]:
+                    if left == right:
+                        continue
+                    service_graph.setdefault(left, set()).add(right)
+                    service_graph.setdefault(right, set()).add(left)
+
+        service_key_set = set(service_node_order)
+        service_colors = self._service_color_map(service_key_set)
+        service_procedures: list[Procedure] = []
+        service_meta: dict[str, dict[str, object]] = {}
+        for service_node_id in service_node_order:
+            payload = service_nodes[service_node_id]
+            team_name = str(payload.get("team_name") or "Unknown team")
+            service_name = str(payload.get("service_name") or "Unknown service")
+            label = (
+                f"{team_name} / {service_name}"
+                if team_name and team_name != "Unknown team"
+                else service_name
+            )
+            color = service_colors.get(service_node_id, _SERVICE_COLORS[0])
+            team_id = payload.get("team_id")
+            finedog_unit_id = payload.get("finedog_unit_id")
+            service_payload: dict[str, object] = {
+                "team_name": team_name,
+                "service_name": service_name,
+                "team_id": team_id,
+                "finedog_unit_id": finedog_unit_id,
+                "service_color": color,
+            }
+            service_procedures.append(
+                Procedure(
+                    procedure_id=service_node_id,
+                    procedure_name=label,
+                    start_block_ids=[],
+                    end_block_ids=[],
+                    branches={},
+                )
+            )
+            service_meta[service_node_id] = {
+                "team_name": team_name,
+                "service_name": service_name,
+                "team_id": team_id,
+                "finedog_unit_id": finedog_unit_id,
+                "procedure_color": color,
+                "is_intersection": False,
+                "services": [service_payload],
+            }
+
+        service_graph_payload: dict[str, list[str]] = {}
+        for service_node_id in service_node_order:
+            targets = service_graph.get(service_node_id, set())
+            service_graph_payload[service_node_id] = sorted(targets)
+
+        title = document.service_name.strip() if document.service_name else ""
+        graph_title = f"Services · {title}" if title else "Services"
+        return MarkupDocument(
+            markup_type="service_graph",
+            service_name=graph_title,
+            team_id=document.team_id,
+            team_name=document.team_name,
+            procedures=service_procedures,
+            procedure_graph=service_graph_payload,
+            procedure_meta=service_meta,
+        )
+
+    def _service_entries(self, meta: dict[str, object]) -> list[dict[str, object]]:
+        services = meta.get("services")
+        if isinstance(services, list):
+            entries: list[dict[str, object]] = []
+            for item in services:
+                if isinstance(item, dict):
+                    entries.append(dict(item))
+            if entries:
+                return entries
+        return [dict(meta)]
+
+    def _service_node_payload(self, entry: dict[str, object]) -> tuple[str, dict[str, object]]:
+        team_name = str(entry.get("team_name") or "Unknown team").strip() or "Unknown team"
+        raw_team_id = entry.get("team_id")
+        team_id = raw_team_id if isinstance(raw_team_id, str | int) else None
+        service_name = (
+            str(entry.get("service_name") or "Unknown service").strip() or "Unknown service"
+        )
+        unit_raw = entry.get("finedog_unit_id")
+        finedog_unit_id = (
+            str(unit_raw).strip() if isinstance(unit_raw, str) and unit_raw.strip() else None
+        )
+        team_token = str(team_id).strip() if team_id is not None else team_name
+        service_token = finedog_unit_id if finedog_unit_id else service_name
+        node_id = f"service::{self._slug_token(team_token)}::{self._slug_token(service_token)}"
+        return (
+            node_id,
+            {
+                "team_name": team_name,
+                "team_id": team_id,
+                "service_name": service_name,
+                "finedog_unit_id": finedog_unit_id,
+            },
+        )
+
+    def _slug_token(self, value: str) -> str:
+        chars: list[str] = []
+        for char in value.lower():
+            if char.isalnum():
+                chars.append(char)
+                continue
+            if chars and chars[-1] == "_":
+                continue
+            chars.append("_")
+        slug = "".join(chars).strip("_")
+        return slug if slug else "unknown"
+
+    def _service_color_map(self, service_keys: set[str]) -> dict[str, str]:
+        service_key_list = sorted(service_keys, key=lambda value: value.lower())
+        return {
+            key: _SERVICE_COLORS[idx % len(_SERVICE_COLORS)]
+            for idx, key in enumerate(service_key_list)
+        }
 
     def _procedure_payload(self, proc: Procedure) -> dict[str, Any]:
         return {

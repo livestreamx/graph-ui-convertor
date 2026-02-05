@@ -33,7 +33,7 @@ from domain.services.build_cross_team_graph_dashboard import (
     BuildCrossTeamGraphDashboard,
     CrossTeamGraphDashboard,
 )
-from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, GraphLevel
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
@@ -245,6 +245,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         diagram_ext = None
         open_mode = None
         team_query = ""
+        procedure_team_query = ""
+        service_team_query = ""
+        procedure_diagram_open_url = None
+        service_diagram_open_url = None
         error_message = None
         team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
@@ -275,15 +279,27 @@ def create_app(settings: AppSettings) -> FastAPI:
                     diagram_label = resolve_diagram_label(diagram_format)
                     diagram_ext = resolve_diagram_extension(diagram_format)
                     diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
-                    team_query = build_team_query(
+                    procedure_team_query = build_team_query(
                         team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
+                        graph_level="procedure",
                     )
+                    service_team_query = build_team_query(
+                        team_ids,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
+                        graph_level="service",
+                    )
+                    team_query = procedure_team_query
                     diagram_open_url = diagram_base_url
+                    procedure_diagram_open_url = diagram_base_url
+                    service_diagram_open_url = diagram_base_url
                     open_mode = "manual"
                     if is_same_origin(request, diagram_base_url):
                         diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
+                        procedure_diagram_open_url = diagram_open_url
+                        service_diagram_open_url = f"/catalog/teams/graph/open?{service_team_query}"
                         open_mode = "local_storage"
                     elif diagram_format == "excalidraw":
                         payload = build_team_diagram_payload(
@@ -296,14 +312,35 @@ def create_app(settings: AppSettings) -> FastAPI:
                             document_cache=document_cache,
                         )
                         diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
+                        procedure_diagram_open_url = diagram_open_url
                         if (
                             len(diagram_open_url)
                             > context.settings.catalog.excalidraw_max_url_length
                         ):
                             diagram_open_url = diagram_base_url
+                            procedure_diagram_open_url = diagram_base_url
                             open_mode = "manual"
                         else:
                             open_mode = "direct"
+
+                        service_payload = build_team_diagram_payload(
+                            context,
+                            items,
+                            diagram_format,
+                            merge_nodes_all_markups=merge_nodes_all_markups,
+                            merge_selected_markups=merge_selected_markups,
+                            graph_level="service",
+                            merge_items=index_data.items if merge_nodes_all_markups else None,
+                            document_cache=document_cache,
+                        )
+                        service_diagram_open_url = build_excalidraw_url(
+                            diagram_base_url, service_payload
+                        )
+                        if (
+                            len(service_diagram_open_url)
+                            > context.settings.catalog.excalidraw_max_url_length
+                        ):
+                            service_diagram_open_url = diagram_base_url
                     diagram_ready = True
         return templates.TemplateResponse(
             request,
@@ -322,6 +359,10 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "selected_team_count": selected_team_count,
                 "selected_markups_count": selected_markups_count,
                 "team_query": team_query,
+                "procedure_team_query": procedure_team_query,
+                "service_team_query": service_team_query,
+                "procedure_diagram_open_url": procedure_diagram_open_url,
+                "service_diagram_open_url": service_diagram_open_url,
                 "error_message": error_message,
                 "merge_nodes_all_markups": merge_nodes_all_markups,
                 "merge_selected_markups": merge_selected_markups,
@@ -429,6 +470,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
+        graph_level: GraphLevel = Query(default="procedure"),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
@@ -442,6 +484,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             team_ids,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
+            graph_level=graph_level,
         )
         return templates.TemplateResponse(
             request,
@@ -498,6 +541,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
+        graph_level: GraphLevel = Query(default="procedure"),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -517,13 +561,15 @@ def create_app(settings: AppSettings) -> FastAPI:
             diagram_format,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
+            graph_level=graph_level,
             merge_items=index_data.items if merge_nodes_all_markups else None,
         )
         headers = {}
         if download:
             extension = resolve_diagram_extension(diagram_format)
             suffix = "_".join(team_ids)
-            filename = f"team-graph_{suffix}{extension}" if suffix else f"team-graph{extension}"
+            graph_name = "team-service-graph" if graph_level == "service" else "team-graph"
+            filename = f"{graph_name}_{suffix}{extension}" if suffix else f"{graph_name}{extension}"
             headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
 
@@ -827,6 +873,7 @@ def build_team_diagram_payload(
     diagram_format: str,
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
+    graph_level: GraphLevel = "procedure",
     merge_items: list[CatalogItem] | None = None,
     document_cache: dict[str, MarkupDocument] | None = None,
 ) -> dict[str, Any]:
@@ -851,6 +898,7 @@ def build_team_diagram_payload(
             documents,
             merge_documents=merge_documents,
             merge_selected_markups=merge_selected_markups,
+            graph_level=graph_level,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -893,6 +941,7 @@ def build_team_query(
     team_ids: list[str],
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
+    graph_level: GraphLevel = "procedure",
 ) -> str:
     if not team_ids:
         return ""
@@ -901,6 +950,8 @@ def build_team_query(
         payload["merge_nodes_all_markups"] = "true"
     if merge_selected_markups:
         payload["merge_selected_markups"] = "true"
+    if graph_level == "service":
+        payload["graph_level"] = graph_level
     return urlencode(payload)
 
 

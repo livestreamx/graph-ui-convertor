@@ -90,6 +90,119 @@ def test_build_team_procedure_graph_sets_team_id_for_single_team() -> None:
     assert merged.team_name == "Alpha"
 
 
+def test_build_team_service_graph_aggregates_by_service() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "finedog_unit_id": "svc-pay",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "proc_name": "Entry",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"entry": ["shared"], "shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Refunds",
+            "finedog_unit_id": "svc-ref",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([doc_alpha, doc_beta], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    assert merged.service_name is not None
+    assert merged.service_name.startswith("Services")
+    assert len(merged.procedures) == 2
+    by_service_name = {
+        str(meta.get("service_name")): proc_id for proc_id, meta in merged.procedure_meta.items()
+    }
+    alpha_id = by_service_name["Payments"]
+    beta_id = by_service_name["Refunds"]
+    assert merged.procedure_graph[alpha_id] == [beta_id]
+    assert merged.procedure_graph[beta_id] == []
+    assert merged.procedure_meta[alpha_id]["is_intersection"] is False
+    assert merged.procedure_meta[beta_id]["is_intersection"] is False
+
+
+def test_service_graph_layout_skips_left_dashboard_panels() -> None:
+    payload = {
+        "markup_type": "service_graph",
+        "service_name": "Services · Alpha + Beta",
+        "procedures": [
+            {
+                "proc_id": "service::alpha::payments",
+                "proc_name": "Alpha / Payments",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "service::beta::refunds",
+                "proc_name": "Beta / Refunds",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+        ],
+        "procedure_graph": {
+            "service::alpha::payments": ["service::beta::refunds"],
+            "service::beta::refunds": [],
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "service::alpha::payments": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                },
+                "service::beta::refunds": {
+                    "team_name": "Beta",
+                    "service_name": "Refunds",
+                    "procedure_color": "#e3f7d9",
+                },
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    assert not plan.scenarios
+    assert not plan.service_zones
+
+    scene = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    roles = {
+        str(element.get("customData", {}).get("cjm", {}).get("role"))
+        for element in scene.elements
+        if isinstance(element.get("customData", {}).get("cjm", {}), dict)
+    }
+    assert "service_zone" not in roles
+    assert not any(role.startswith("scenario_") for role in roles)
+
+
 def test_build_team_procedure_graph_title_limits_team_names() -> None:
     documents = []
     for idx, team_name in enumerate(["Alpha", "Beta", "Gamma", "Zeta"], start=1):
