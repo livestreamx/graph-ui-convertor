@@ -227,6 +227,111 @@ def test_catalog_team_graph_api(
         stubber.deactivate()
 
 
+def test_catalog_team_graph_excluded_teams_preselected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-1",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Authorize",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p1": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Refunds",
+            "team_id": "team-2",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
+    }
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+            builder_excluded_team_ids=["team-2"],
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get("/catalog/teams/graph")
+        assert response.status_code == 200
+        html = response.text
+        assert "Disable teams from analytics" in html
+        exclude_match = re.search(r'id="team-graph-exclude-select".*?</select>', html, re.S)
+        assert exclude_match is not None
+        assert 'value="team-2" selected' in exclude_match.group(0)
+        select_match = re.search(r'id="team-graph-select".*?</select>', html, re.S)
+        assert select_match is not None
+        assert 'value="team-2"' not in select_match.group(0)
+        assert 'id="team-graph-exclude-input"' in html
+        assert 'value="team-2"' in html
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_merge_nodes_use_all_markups(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

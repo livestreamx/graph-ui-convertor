@@ -115,10 +115,14 @@ catalog:
 - Detail view includes downloads for `.excalidraw`/`.unidraw` and the original `markup.json`.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
-  `/api/teams/graph`, `team_ids` supports comma-separated values). Step 4 now has two action
-  subsections: procedure-level diagram (left) and service-level diagram (right).
+  `/api/teams/graph`, `team_ids` supports comma-separated values). The builder also accepts
+  `excluded_team_ids` to remove teams from analytics and merge-node detection. Step 4 now has two
+  action subsections: procedure-level diagram (left) and service-level diagram (right).
 - The cross-team builder keeps selection details under the help tooltip next to the heading and
   colors procedures by service; shared procedures are highlighted in light red.
+- The team selection step includes a "Disable teams from analytics" subsection. Disabled teams are
+  omitted from all builder metrics, merge-node detection, and overlap stats. Defaults can be set
+  via `catalog.builder_excluded_team_ids` (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`, comma-separated).
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
@@ -184,6 +188,7 @@ export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'
+export CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS="team-alpha,team-beta"
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 

@@ -78,6 +78,7 @@ class CatalogSettings(BaseModel):
     unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
+    builder_excluded_team_ids: list[str] = Field(default_factory=list)
     procedure_link_path: LinkPath | None = Field(
         default=None,
         validation_alias=AliasChoices("procedure_link_path", "procedure_link_template"),
@@ -111,7 +112,7 @@ class CatalogSettings(BaseModel):
         raw = str(value or "excalidraw").strip().lower()
         return raw if raw in {"excalidraw", "unidraw"} else "excalidraw"
 
-    @field_validator("group_by", "tag_fields", mode="before")
+    @field_validator("group_by", "tag_fields", "builder_excluded_team_ids", mode="before")
     @classmethod
     def normalize_lists(cls, value: object) -> list[str]:
         if value is None:

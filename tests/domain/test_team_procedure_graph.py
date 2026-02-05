@@ -238,7 +238,7 @@ def test_service_graph_splits_multiple_procedures_by_service() -> None:
 
     assert merged.markup_type == "service_graph"
     name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
-    names = sorted(name_lookup.values())
+    names = sorted(name for name in name_lookup.values() if name is not None)
     assert names == [
         "[Alpha] Payments (Graph #1)",
         "[Alpha] Payments (Graph #2)",

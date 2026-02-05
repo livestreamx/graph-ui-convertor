@@ -298,15 +298,15 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         )
                         component_height = max(component_height, max_bottom - origin_y)
                 else:
-                    level_heights: dict[int, float] = {}
+                    level_heights_simple: dict[int, float] = {}
                     for lvl, nodes in level_nodes.items():
                         if not nodes:
-                            level_heights[lvl] = 0.0
+                            level_heights_simple[lvl] = 0.0
                             continue
                         total = len(nodes) * node_size.height + proc_gap_y * (len(nodes) - 1)
-                        level_heights[lvl] = total
+                        level_heights_simple[lvl] = total
 
-                    component_height = max(level_heights.values() or [0.0])
+                    component_height = max(level_heights_simple.values() or [0.0])
                     for lvl, nodes in level_nodes.items():
                         y = origin_y
                         for proc_id in nodes:

@@ -208,6 +208,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
@@ -222,12 +223,39 @@ def create_app(settings: AppSettings) -> FastAPI:
                     "settings": context.settings,
                 },
             )
-        _, team_options = build_filter_options(index_data.items, index_data.unknown_value)
-        team_lookup = dict(team_options)
-        team_ids = normalize_team_ids(team_ids)
+        _, all_team_options = build_filter_options(index_data.items, index_data.unknown_value)
+        team_lookup = dict(all_team_options)
+        disabled_team_ids = normalize_team_ids(excluded_team_ids)
+        if (
+            "excluded_team_ids" not in request.query_params
+            and context.settings.catalog.builder_excluded_team_ids
+        ):
+            disabled_team_ids = normalize_team_ids(
+                context.settings.catalog.builder_excluded_team_ids
+            )
+        if disabled_team_ids:
+            missing = [
+                (team_id, team_id) for team_id in disabled_team_ids if team_id not in team_lookup
+            ]
+            if missing:
+                all_team_options = sorted(
+                    [*all_team_options, *missing], key=lambda entry: entry[1].lower()
+                )
+                team_lookup = dict(all_team_options)
+        disabled_team_set = set(disabled_team_ids)
+        filtered_items = [
+            item for item in index_data.items if item.team_id not in disabled_team_set
+        ]
+        _, team_options = build_filter_options(filtered_items, index_data.unknown_value)
+        team_ids = [
+            team_id for team_id in normalize_team_ids(team_ids) if team_id not in disabled_team_set
+        ]
         team_counts: dict[str, int] = {}
-        for item in index_data.items:
+        for item in filtered_items:
             team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
+        all_team_counts: dict[str, int] = {}
+        for item in index_data.items:
+            all_team_counts[item.team_id] = all_team_counts.get(item.team_id, 0) + 1
         selected_teams = [
             {
                 "id": team_id,
@@ -238,6 +266,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         ]
         selected_team_count = len(team_ids)
         selected_markups_count = sum(team_counts.get(team_id, 0) for team_id in team_ids)
+        disabled_team_count = len(disabled_team_ids)
+        disabled_markups_count = sum(
+            all_team_counts.get(team_id, 0) for team_id in disabled_team_ids
+        )
 
         diagram_ready = False
         diagram_open_url = None
@@ -252,7 +284,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         error_message = None
         team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
-            items = filter_items_by_team_ids(index_data.items, team_ids)
+            items = filter_items_by_team_ids(filtered_items, team_ids)
             if not items:
                 error_message = "No scenes for selected teams."
             else:
@@ -260,9 +292,9 @@ def create_app(settings: AppSettings) -> FastAPI:
                 try:
                     selected_documents = load_markup_documents(context, items, cache=document_cache)
                     all_documents = selected_documents
-                    if len(items) < len(index_data.items):
+                    if len(items) < len(filtered_items):
                         all_documents = load_markup_documents(
-                            context, index_data.items, cache=document_cache
+                            context, filtered_items, cache=document_cache
                         )
                 except HTTPException as exc:
                     detail = str(exc.detail) if exc.detail is not None else "Unable to load markup."
@@ -281,12 +313,14 @@ def create_app(settings: AppSettings) -> FastAPI:
                     diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
                     procedure_team_query = build_team_query(
                         team_ids,
+                        excluded_team_ids=disabled_team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
                         graph_level="procedure",
                     )
                     service_team_query = build_team_query(
                         team_ids,
+                        excluded_team_ids=disabled_team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
                         graph_level="service",
@@ -308,7 +342,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             diagram_format,
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
-                            merge_items=index_data.items if merge_nodes_all_markups else None,
+                            merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
                         )
                         diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
@@ -330,7 +364,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
                             graph_level="service",
-                            merge_items=index_data.items if merge_nodes_all_markups else None,
+                            merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
                         )
                         service_diagram_open_url = build_excalidraw_url(
@@ -354,10 +388,16 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "diagram_open_url": diagram_open_url,
                 "open_mode": open_mode,
                 "team_options": team_options,
+                "all_team_options": all_team_options,
+                "team_counts": team_counts,
+                "all_team_counts": all_team_counts,
                 "team_ids": team_ids,
+                "disabled_team_ids": disabled_team_ids,
                 "selected_teams": selected_teams,
                 "selected_team_count": selected_team_count,
                 "selected_markups_count": selected_markups_count,
+                "disabled_team_count": disabled_team_count,
+                "disabled_markups_count": disabled_markups_count,
                 "team_query": team_query,
                 "procedure_team_query": procedure_team_query,
                 "service_team_query": service_team_query,
@@ -468,12 +508,17 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_team_graph_open(
         request: Request,
         team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
         graph_level: GraphLevel = Query(default="procedure"),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
+        excluded_team_ids = normalize_team_ids(excluded_team_ids)
+        if excluded_team_ids:
+            excluded_team_set = set(excluded_team_ids)
+            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         diagram_format = resolve_diagram_format(context.settings)
@@ -482,6 +527,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             return RedirectResponse(url=diagram_url)
         team_query = build_team_query(
             team_ids,
+            excluded_team_ids=excluded_team_ids,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
             graph_level=graph_level,
@@ -539,6 +585,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/teams/graph")
     def api_team_graph(
         team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
         graph_level: GraphLevel = Query(default="procedure"),
@@ -546,12 +593,22 @@ def create_app(settings: AppSettings) -> FastAPI:
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         team_ids = normalize_team_ids(team_ids)
+        excluded_team_ids = normalize_team_ids(excluded_team_ids)
+        if excluded_team_ids:
+            excluded_team_set = set(excluded_team_ids)
+            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        items = filter_items_by_team_ids(index_data.items, team_ids)
+        if excluded_team_ids:
+            filtered_items = [
+                item for item in index_data.items if item.team_id not in excluded_team_set
+            ]
+        else:
+            filtered_items = index_data.items
+        items = filter_items_by_team_ids(filtered_items, team_ids)
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
         diagram_format = resolve_diagram_format(context.settings)
@@ -562,7 +619,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
             graph_level=graph_level,
-            merge_items=index_data.items if merge_nodes_all_markups else None,
+            merge_items=filtered_items if merge_nodes_all_markups else None,
         )
         headers = {}
         if download:
@@ -939,6 +996,7 @@ def load_markup_documents(
 
 def build_team_query(
     team_ids: list[str],
+    excluded_team_ids: list[str] | None = None,
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
     graph_level: GraphLevel = "procedure",
@@ -946,6 +1004,8 @@ def build_team_query(
     if not team_ids:
         return ""
     payload: dict[str, str] = {"team_ids": ",".join(team_ids)}
+    if excluded_team_ids:
+        payload["excluded_team_ids"] = ",".join(excluded_team_ids)
     if merge_nodes_all_markups:
         payload["merge_nodes_all_markups"] = "true"
     if merge_selected_markups:
