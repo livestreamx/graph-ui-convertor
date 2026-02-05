@@ -149,11 +149,12 @@ catalog:
   (`L#`, relative to graph roots) exactly as in the diagram.
   `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
-- In `External team overlaps`, each team row shows three counters: `total`,
-  `external → selected` (outside team depends on selected teams), and `selected → external`
-  (selected teams depend on the outside team). The two directional counters always add up to
-  `total`. Expanded team details show all services with no internal scroll. By default only the
-  top 10 external teams are shown; the rest are revealed with `Show N more teams`.
+- In `External team overlaps`, each team row shows four counters: `external → selected`,
+  `selected → external`, `total`, and `overlap %`. `overlap %` is the share of unique procedure
+  IDs from the currently selected teams that intersect with the given external team markups.
+  The two directional counters always add up to `total`. Expanded team details show all services
+  with no internal scroll. By default only the top 10 external teams are shown; the rest are
+  revealed with `Show N more teams`.
 - Cross-team graph downloads append the selected `team_ids` to the filename (for example
   `team-graph_alpha_beta.excalidraw`).
 

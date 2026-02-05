@@ -33,6 +33,7 @@ class TeamIntersectionStat:
     count: int
     external_depends_on_selected_count: int = 0
     selected_depends_on_external_count: int = 0
+    overlap_procedure_percent: float = 0.0
     services: tuple[ServiceIntersectionStat, ...] = ()
 
 
@@ -42,6 +43,7 @@ class ServiceIntersectionStat:
     count: int
     external_depends_on_selected_count: int = 0
     selected_depends_on_external_count: int = 0
+    overlap_procedure_percent: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -536,6 +538,12 @@ class BuildCrossTeamGraphDashboard:
         external_team_services: dict[str, Counter[str]] = {}
         external_team_services_external_depends: dict[str, Counter[str]] = {}
         external_team_services_selected_depends: dict[str, Counter[str]] = {}
+        external_team_overlap_proc_ids: dict[str, set[str]] = {}
+        external_team_service_overlap_proc_ids: dict[str, dict[str, set[str]]] = {}
+        selected_unique_procedure_ids = {
+            proc_id for snapshot in selected_snapshots for proc_id in snapshot.procedure_ids
+        }
+        selected_unique_procedure_total = len(selected_unique_procedure_ids)
         for snapshot in selected_snapshots:
             has_internal = False
             has_external = False
@@ -587,6 +595,13 @@ class BuildCrossTeamGraphDashboard:
                     service.team_name,
                     Counter(),
                 )[service.service_name] += selected_depends_count
+                external_team_overlap_proc_ids.setdefault(service.team_name, set()).update(
+                    shared_proc_ids
+                )
+                external_team_service_overlap_proc_ids.setdefault(
+                    service.team_name,
+                    {},
+                ).setdefault(service.service_name, set()).update(shared_proc_ids)
             service = all_services.get(snapshot.service_key)
             entity_label = _entity_label(
                 snapshot.team_name,
@@ -662,6 +677,15 @@ class BuildCrossTeamGraphDashboard:
                 selected_depends_on_external_count=external_team_selected_depends_counter.get(
                     name, 0
                 ),
+                overlap_procedure_percent=(
+                    (
+                        len(external_team_overlap_proc_ids.get(name, set()))
+                        * 100
+                        / selected_unique_procedure_total
+                    )
+                    if selected_unique_procedure_total > 0
+                    else 0.0
+                ),
                 services=tuple(
                     ServiceIntersectionStat(
                         service_name=service_name,
@@ -672,6 +696,20 @@ class BuildCrossTeamGraphDashboard:
                         selected_depends_on_external_count=external_team_services_selected_depends.get(
                             name, Counter()
                         ).get(service_name, 0),
+                        overlap_procedure_percent=(
+                            (
+                                len(
+                                    external_team_service_overlap_proc_ids.get(name, {}).get(
+                                        service_name,
+                                        set(),
+                                    )
+                                )
+                                * 100
+                                / selected_unique_procedure_total
+                            )
+                            if selected_unique_procedure_total > 0
+                            else 0.0
+                        ),
                     )
                     for service_name, service_count in sorted(
                         external_team_services.get(name, Counter()).items(),

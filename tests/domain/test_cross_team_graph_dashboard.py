@@ -123,6 +123,7 @@ def test_build_cross_team_graph_dashboard() -> None:
     overlap = dashboard.external_team_intersections[0]
     assert overlap.external_depends_on_selected_count == 1
     assert overlap.selected_depends_on_external_count == 2
+    assert round(overlap.overlap_procedure_percent, 1) == 16.7
     assert (
         overlap.external_depends_on_selected_count + overlap.selected_depends_on_external_count
         == overlap.count
@@ -134,6 +135,7 @@ def test_build_cross_team_graph_dashboard() -> None:
     service_overlap = dashboard.external_team_intersections[0].services[0]
     assert service_overlap.external_depends_on_selected_count == 1
     assert service_overlap.selected_depends_on_external_count == 2
+    assert round(service_overlap.overlap_procedure_percent, 1) == 16.7
     assert (
         service_overlap.external_depends_on_selected_count
         + service_overlap.selected_depends_on_external_count

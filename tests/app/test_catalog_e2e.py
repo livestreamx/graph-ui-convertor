@@ -6,21 +6,11 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
-from adapters.excalidraw.repository import FileSystemExcalidrawRepository
-from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
-from adapters.layout.grid import GridLayoutEngine
-from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from app.config import AppSettings
-from app.web_main import create_app
-from domain.catalog import CatalogIndexConfig
-from domain.models import MarkupDocument
-from domain.services.build_catalog_index import BuildCatalogIndex
-from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-from tests.adapters.s3.s3_utils import stub_s3_catalog
+from tests.app.catalog_test_setup import build_catalog_test_context
 
 
 def test_catalog_open_e2e(
@@ -28,75 +18,19 @@ def test_catalog_open_e2e(
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
 ) -> None:
-    excalidraw_in_dir = tmp_path / "excalidraw_in"
-    excalidraw_out_dir = tmp_path / "excalidraw_out"
-    roundtrip_dir = tmp_path / "roundtrip"
-    index_path = tmp_path / "catalog" / "index.json"
-
-    excalidraw_in_dir.mkdir(parents=True)
-    excalidraw_out_dir.mkdir(parents=True)
-    roundtrip_dir.mkdir(parents=True)
-
-    payload = {
-        "markup_type": "service",
-        "finedog_unit_meta": {"service_name": "Billing"},
-        "procedures": [
-            {
-                "proc_id": "p1",
-                "start_block_ids": ["a"],
-                "end_block_ids": ["b"],
-                "branches": {"a": ["b"]},
-            }
-        ],
-    }
-    objects = {"markup/billing.json": payload}
-    client, stubber = stub_s3_catalog(
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
         monkeypatch=monkeypatch,
-        objects=objects,
-        bucket="cjm-bucket",
-        prefix="markup/",
-        list_repeats=1,
-    )
-
-    markup_doc = MarkupDocument.model_validate(payload)
-    excal_doc = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup_doc)
-    expected_elements = len(excal_doc.elements)
-    excal_path = excalidraw_in_dir / "billing.excalidraw"
-    FileSystemExcalidrawRepository().save(excal_doc, excal_path)
-
-    config = CatalogIndexConfig(
-        markup_dir=Path("markup"),
-        excalidraw_in_dir=excalidraw_in_dir,
-        index_path=index_path,
-        group_by=["markup_type"],
-        title_field="finedog_unit_meta.service_name",
-        tag_fields=[],
-        sort_by="title",
-        sort_order="asc",
-        unknown_value="unknown",
-    )
-    try:
-        BuildCatalogIndex(
-            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
-            FileSystemCatalogIndexRepository(),
-        ).build(config)
-
-        index = FileSystemCatalogIndexRepository().load(index_path)
-        scene_id = index.items[0].scene_id
-
-        settings = app_settings_factory(
-            excalidraw_in_dir=excalidraw_in_dir,
-            excalidraw_out_dir=excalidraw_out_dir,
-            roundtrip_dir=roundtrip_dir,
-            index_path=index_path,
-            excalidraw_base_url="/excalidraw",
-            excalidraw_proxy_upstream="http://excalidraw.local",
-            excalidraw_proxy_prefix="/excalidraw",
-        )
-
-        client_api = TestClient(create_app(settings))
-        open_html = client_api.get(f"/catalog/{scene_id}/open").text
-        scene_json = client_api.get(f"/api/scenes/{scene_id}").json()
+        app_settings_factory=app_settings_factory,
+        settings_overrides={
+            "excalidraw_base_url": "/excalidraw",
+            "excalidraw_proxy_upstream": "http://excalidraw.local",
+            "excalidraw_proxy_prefix": "/excalidraw",
+        },
+    ) as context:
+        assert context.expected_element_count is not None
+        open_html = context.client.get(f"/catalog/{context.scene_id}/open").text
+        scene_json = context.client.get(f"/api/scenes/{context.scene_id}").json()
 
         excalidraw_html = (
             "<html><body>"
@@ -158,12 +92,10 @@ def test_catalog_open_e2e(
                     headers={"Content-Type": "text/html"},
                 ),
             )
-            page.goto(f"http://catalog.local/catalog/{scene_id}/open")
+            page.goto(f"http://catalog.local/catalog/{context.scene_id}/open")
             page.wait_for_url(re.compile(r".*/excalidraw/?$"), timeout=10000)
             page.wait_for_selector("#status", timeout=10000)
             text = page.text_content("#status")
             browser.close()
-    finally:
-        stubber.deactivate()
 
-    assert text == f"elements:{expected_elements}"
+    assert text == f"elements:{context.expected_element_count}"

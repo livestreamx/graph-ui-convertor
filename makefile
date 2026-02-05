@@ -5,6 +5,7 @@ PYTHON_BOOTSTRAP ?= python3.14
 POETRY_VERSION ?=
 
 PROJECT ?= cjm_ui_convertor
+COV_FAIL_UNDER ?= 87
 
 # ---- UI (Excalidraw) ----
 EXCALIDRAW_CONTAINER ?= excalidraw
@@ -157,7 +158,12 @@ dirs:
 
 .PHONY: test
 test:
-	@$(VENV_BIN)/pytest -n 3
+	@$(VENV_BIN)/pytest -n 3 \
+		--cov=app --cov=domain --cov=adapters \
+		--cov-report=
+	@COV_PCT=$$($(VENV_BIN)/coverage report --format=total --precision=2); \
+		echo "Coverage: $${COV_PCT}%"; \
+		$(VENV_BIN)/python -c "import sys; cov=float(sys.argv[1]); threshold=float(sys.argv[2]); sys.exit(0 if cov >= threshold else 1)" "$$COV_PCT" "$(COV_FAIL_UNDER)"
 
 .PHONY: lint
 lint:

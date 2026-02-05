@@ -740,6 +740,18 @@
                             Total
                           </button>
                         </span>
+                        <span>
+                          <button
+                            class="team-graph-sort-button"
+                            type="button"
+                            data-sort-trigger
+                            data-sort-key="overlap-percent"
+                            data-sort-type="number"
+                            data-sort-default-order="desc"
+                          >
+                            Overlap %
+                          </button>
+                        </span>
                       </div>
                       <div class="team-graph-overlap-teams" data-sort-items data-overlap-team-list>
                       {% for item in team_dashboard.external_team_intersections %}
@@ -750,6 +762,7 @@
                           data-sort-external-count="{{ item.external_depends_on_selected_count }}"
                           data-sort-selected-count="{{ item.selected_depends_on_external_count }}"
                           data-sort-total-count="{{ item.count }}"
+                          data-sort-overlap-percent="{{ item.overlap_procedure_percent }}"
                         >
                           <button
                             class="team-graph-overlap-row team-graph-overlap-toggle-row"
@@ -764,6 +777,7 @@
                             <span class="team-graph-overlap-value">{{ item.external_depends_on_selected_count }}</span>
                             <span class="team-graph-overlap-value">{{ item.selected_depends_on_external_count }}</span>
                             <span class="team-graph-overlap-value">{{ item.count }}</span>
+                            <span class="team-graph-overlap-value">{{ item.overlap_procedure_percent | round(1) }}%</span>
                           </button>
                           {% if item.services %}
                             <div class="team-graph-overlap-entities" data-overlap-team-details>
@@ -775,6 +789,7 @@
                                   <span class="team-graph-overlap-count">{{ service.external_depends_on_selected_count }}</span>
                                   <span class="team-graph-overlap-count">{{ service.selected_depends_on_external_count }}</span>
                                   <span class="team-graph-overlap-count">{{ service.count }}</span>
+                                  <span class="team-graph-overlap-count">{{ service.overlap_procedure_percent | round(1) }}%</span>
                                 </div>
                               {% endfor %}
                             </div>

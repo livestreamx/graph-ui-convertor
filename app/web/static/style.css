@@ -944,7 +944,7 @@ main {
 
 .team-graph-overlap-row {
   display: grid;
-  grid-template-columns: minmax(240px, 3.2fr) repeat(3, minmax(64px, 0.75fr));
+  grid-template-columns: minmax(220px, 3fr) repeat(4, minmax(64px, 0.75fr));
   gap: 10px;
   align-items: baseline;
   font-size: 12px;
@@ -1028,7 +1028,7 @@ main {
 
 @media (max-width: 880px) {
   .team-graph-overlap-row {
-    grid-template-columns: minmax(128px, 1fr) repeat(3, minmax(52px, auto));
+    grid-template-columns: minmax(108px, 1fr) repeat(4, minmax(52px, auto));
     gap: 8px;
   }
 
