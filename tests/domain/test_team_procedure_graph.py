@@ -145,6 +145,9 @@ def test_build_team_service_graph_aggregates_by_service() -> None:
     assert merged.procedure_graph[beta_id] == []
     assert merged.procedure_meta[alpha_id]["is_intersection"] is False
     assert merged.procedure_meta[beta_id]["is_intersection"] is False
+    name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
+    assert name_lookup[alpha_id] == "[Alpha] Payments"
+    assert name_lookup[beta_id] == "[Beta] Refunds"
 
 
 def test_service_graph_layout_skips_left_dashboard_panels() -> None:
@@ -153,34 +156,34 @@ def test_service_graph_layout_skips_left_dashboard_panels() -> None:
         "service_name": "Services · Alpha + Beta",
         "procedures": [
             {
-                "proc_id": "service::alpha::payments",
-                "proc_name": "Alpha / Payments",
+                "proc_id": "service::alpha::payments::entry",
+                "proc_name": "[Alpha] Payments",
                 "start_block_ids": [],
                 "end_block_ids": [],
                 "branches": {},
             },
             {
-                "proc_id": "service::beta::refunds",
-                "proc_name": "Beta / Refunds",
+                "proc_id": "service::beta::refunds::shared",
+                "proc_name": "[Beta] Refunds",
                 "start_block_ids": [],
                 "end_block_ids": [],
                 "branches": {},
             },
         ],
         "procedure_graph": {
-            "service::alpha::payments": ["service::beta::refunds"],
-            "service::beta::refunds": [],
+            "service::alpha::payments::entry": ["service::beta::refunds::shared"],
+            "service::beta::refunds::shared": [],
         },
     }
     document = MarkupDocument.model_validate(payload).model_copy(
         update={
             "procedure_meta": {
-                "service::alpha::payments": {
+                "service::alpha::payments::entry": {
                     "team_name": "Alpha",
                     "service_name": "Payments",
                     "procedure_color": "#d9f5ff",
                 },
-                "service::beta::refunds": {
+                "service::beta::refunds::shared": {
                     "team_name": "Beta",
                     "service_name": "Refunds",
                     "procedure_color": "#e3f7d9",
@@ -201,6 +204,47 @@ def test_service_graph_layout_skips_left_dashboard_panels() -> None:
     }
     assert "service_zone" not in roles
     assert not any(role.startswith("scenario_") for role in roles)
+
+
+def test_service_graph_splits_multiple_procedures_by_service() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "p1",
+                    "proc_name": "Flow 1",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                },
+                {
+                    "proc_id": "p2",
+                    "proc_name": "Flow 2",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                },
+            ],
+            "procedure_graph": {"p1": ["p2"], "p2": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
+    names = sorted(name_lookup.values())
+    assert names == [
+        "[Alpha] Payments (Graph #1)",
+        "[Alpha] Payments (Graph #2)",
+    ]
+    by_name = {name: proc_id for proc_id, name in name_lookup.items()}
+    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #1)"]] == [
+        by_name["[Alpha] Payments (Graph #2)"]
+    ]
 
 
 def test_build_team_procedure_graph_title_limits_team_names() -> None:

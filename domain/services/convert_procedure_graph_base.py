@@ -172,6 +172,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         merge_numbers: dict[str, list[int]] | None = None,
     ) -> dict[str, str]:
         frame_ids: dict[str, str] = {}
+        is_service_graph = str(document.markup_type or "").strip().lower() == "service_graph"
         procedure_meta = document.procedure_meta or {}
         for frame in frames:
             frame_id = self._stable_id("frame", frame.procedure_id)
@@ -191,6 +192,42 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             is_intersection = meta.get("is_intersection") is True
             if is_intersection:
                 frame_meta["is_intersection"] = True
+            if is_service_graph:
+                group_id = self._stable_id("service-frame-group", frame.procedure_id)
+                frame_metadata = self._with_base_metadata(frame_meta, base_metadata)
+                registry.add(
+                    self._rectangle_element(
+                        element_id=frame_id,
+                        position=frame.origin,
+                        size=frame.size,
+                        frame_id=None,
+                        group_ids=[group_id],
+                        metadata=frame_metadata,
+                        background_color=color if isinstance(color, str) and color else None,
+                        stroke_color="#1e1e1e",
+                        fill_style="solid",
+                        roundness={"type": 3},
+                    )
+                )
+                text_id = self._stable_id("service-frame-text", frame.procedure_id)
+                registry.add(
+                    self._text_element(
+                        element_id=text_id,
+                        text=label,
+                        center=self._center(frame.origin, frame.size.width, frame.size.height),
+                        container_id=frame_id,
+                        frame_id=None,
+                        group_ids=[group_id],
+                        metadata=self._with_base_metadata(
+                            {**frame_meta, "role": "frame_label"},
+                            base_metadata,
+                        ),
+                        max_width=frame.size.width - 24.0,
+                        max_height=frame.size.height - 20.0,
+                        font_size=18.0,
+                    )
+                )
+                continue
             registry.add(
                 self._frame_element(
                     element_id=frame_id,

@@ -618,6 +618,7 @@ class BuildTeamProcedureGraph:
         service_node_order: list[str] = []
         service_nodes_by_procedure: dict[str, list[str]] = {}
         service_graph: dict[str, set[str]] = {}
+        service_nodes_by_key: dict[str, list[str]] = {}
 
         for procedure in document.procedures:
             proc_id = procedure.procedure_id
@@ -625,7 +626,8 @@ class BuildTeamProcedureGraph:
             entries = self._service_entries(meta)
             service_ids_for_proc: list[str] = []
             for entry in entries:
-                node_id, node_payload = self._service_node_payload(entry)
+                node_id, node_payload, service_key = self._service_node_payload(entry, proc_id)
+                service_nodes_by_key.setdefault(service_key, []).append(node_id)
                 if node_id in service_nodes:
                     if node_id not in service_ids_for_proc:
                         service_ids_for_proc.append(node_id)
@@ -635,7 +637,10 @@ class BuildTeamProcedureGraph:
                 service_graph.setdefault(node_id, set())
                 service_ids_for_proc.append(node_id)
             if not service_ids_for_proc:
-                fallback_id, fallback_payload = self._service_node_payload({})
+                fallback_id, fallback_payload, fallback_key = self._service_node_payload(
+                    {}, proc_id
+                )
+                service_nodes_by_key.setdefault(fallback_key, []).append(fallback_id)
                 if fallback_id not in service_nodes:
                     service_nodes[fallback_id] = fallback_payload
                     service_node_order.append(fallback_id)
@@ -667,20 +672,26 @@ class BuildTeamProcedureGraph:
                     service_graph.setdefault(left, set()).add(right)
                     service_graph.setdefault(right, set()).add(left)
 
-        service_key_set = set(service_node_order)
+        service_key_set = set(service_nodes_by_key.keys())
         service_colors = self._service_color_map(service_key_set)
+        service_graph_index: dict[str, int] = {}
+        service_graph_total: dict[str, int] = {
+            key: len(nodes) for key, nodes in service_nodes_by_key.items()
+        }
         service_procedures: list[Procedure] = []
         service_meta: dict[str, dict[str, object]] = {}
         for service_node_id in service_node_order:
             payload = service_nodes[service_node_id]
             team_name = str(payload.get("team_name") or "Unknown team")
             service_name = str(payload.get("service_name") or "Unknown service")
-            label = (
-                f"{team_name} / {service_name}"
-                if team_name and team_name != "Unknown team"
-                else service_name
-            )
-            color = service_colors.get(service_node_id, _SERVICE_COLORS[0])
+            service_key = str(payload.get("service_key") or "")
+            current_index = service_graph_index.get(service_key, 0) + 1
+            service_graph_index[service_key] = current_index
+            total_graphs = service_graph_total.get(service_key, 1)
+            label = f"[{team_name}] {service_name}"
+            if total_graphs > 1:
+                label = f"{label} (Graph #{current_index})"
+            color = service_colors.get(service_key, _SERVICE_COLORS[0])
             team_id = payload.get("team_id")
             finedog_unit_id = payload.get("finedog_unit_id")
             service_payload: dict[str, object] = {
@@ -737,7 +748,9 @@ class BuildTeamProcedureGraph:
                 return entries
         return [dict(meta)]
 
-    def _service_node_payload(self, entry: dict[str, object]) -> tuple[str, dict[str, object]]:
+    def _service_node_payload(
+        self, entry: dict[str, object], proc_id: str
+    ) -> tuple[str, dict[str, object], str]:
         team_name = str(entry.get("team_name") or "Unknown team").strip() or "Unknown team"
         raw_team_id = entry.get("team_id")
         team_id = raw_team_id if isinstance(raw_team_id, str | int) else None
@@ -750,7 +763,11 @@ class BuildTeamProcedureGraph:
         )
         team_token = str(team_id).strip() if team_id is not None else team_name
         service_token = finedog_unit_id if finedog_unit_id else service_name
-        node_id = f"service::{self._slug_token(team_token)}::{self._slug_token(service_token)}"
+        node_id = (
+            f"service::{self._slug_token(team_token)}::"
+            f"{self._slug_token(service_token)}::{self._slug_token(proc_id)}"
+        )
+        service_key = self._service_key(team_name, service_name)
         return (
             node_id,
             {
@@ -758,7 +775,9 @@ class BuildTeamProcedureGraph:
                 "team_id": team_id,
                 "service_name": service_name,
                 "finedog_unit_id": finedog_unit_id,
+                "service_key": service_key,
             },
+            service_key,
         )
 
     def _slug_token(self, value: str) -> str:
