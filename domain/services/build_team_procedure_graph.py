@@ -614,6 +614,7 @@ class BuildTeamProcedureGraph:
 
     def _build_service_graph_document(self, document: MarkupDocument) -> MarkupDocument:
         procedure_meta = document.procedure_meta or {}
+        procedure_lookup = {procedure.procedure_id: procedure for procedure in document.procedures}
         procedure_order = [procedure.procedure_id for procedure in document.procedures]
         order_index = {proc_id: idx for idx, proc_id in enumerate(procedure_order)}
 
@@ -654,9 +655,12 @@ class BuildTeamProcedureGraph:
         service_nodes: dict[str, dict[str, object]] = {}
         service_node_order: list[str] = []
         service_nodes_by_key: dict[str, list[str]] = {}
-        service_nodes_by_procedure: dict[str, list[str]] = {proc_id: [] for proc_id in procedure_order}
+        service_nodes_by_procedure: dict[str, list[str]] = {
+            proc_id: [] for proc_id in procedure_order
+        }
         service_graph: dict[str, set[str]] = {}
         component_counts: dict[str, int] = {}
+        component_stats: dict[str, dict[str, int]] = {}
 
         service_key_order: list[str] = []
         for proc_id in procedure_order:
@@ -684,6 +688,24 @@ class BuildTeamProcedureGraph:
                 service_nodes_by_key.setdefault(service_key, []).append(node_id)
                 service_graph.setdefault(node_id, set())
                 component_counts[node_id] = len(component_ids)
+                stats = {"start": 0, "branch": 0, "end": 0, "postpone": 0}
+                for proc_id in component_ids:
+                    proc = procedure_lookup.get(proc_id)
+                    if proc is None:
+                        continue
+                    stats["start"] += len(proc.start_block_ids)
+                    stats["branch"] += sum(len(targets) for targets in proc.branches.values())
+                    stats["postpone"] += sum(
+                        1
+                        for block_id in proc.end_block_ids
+                        if proc.end_block_types.get(block_id) == "postpone"
+                    )
+                    stats["end"] += sum(
+                        1
+                        for block_id in proc.end_block_ids
+                        if proc.end_block_types.get(block_id) != "postpone"
+                    )
+                component_stats[node_id] = stats
                 for proc_id in component_ids:
                     service_nodes_by_procedure.setdefault(proc_id, []).append(node_id)
 
@@ -757,6 +779,9 @@ class BuildTeamProcedureGraph:
                 "procedure_color": color,
                 "is_intersection": False,
                 "procedure_count": component_counts.get(service_node_id, 1),
+                "graph_stats": component_stats.get(
+                    service_node_id, {"start": 0, "branch": 0, "end": 0, "postpone": 0}
+                ),
                 "services": [service_payload],
             }
 
@@ -808,15 +833,14 @@ class BuildTeamProcedureGraph:
             "service_key": service_key,
         }
 
-    def _service_component_node_id(
-        self, info: dict[str, object], proc_ids: list[str]
-    ) -> str:
-        team_token = str(info.get("team_id")).strip() if info.get("team_id") is not None else str(
-            info.get("team_name") or "unknown"
+    def _service_component_node_id(self, info: dict[str, object], proc_ids: list[str]) -> str:
+        team_token = (
+            str(info.get("team_id")).strip()
+            if info.get("team_id") is not None
+            else str(info.get("team_name") or "unknown")
         )
-        service_token = (
-            str(info.get("finedog_unit_id") or "")
-            or str(info.get("service_name") or "unknown")
+        service_token = str(info.get("finedog_unit_id") or "") or str(
+            info.get("service_name") or "unknown"
         )
         component_token = self._slug_token("-".join(proc_ids))
         return (

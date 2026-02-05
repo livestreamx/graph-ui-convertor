@@ -210,11 +210,15 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                     )
                 )
                 text_id = self._stable_id("service-frame-text", frame.procedure_id)
+                label_center = Point(
+                    x=frame.origin.x + frame.size.width / 2,
+                    y=frame.origin.y + frame.size.height * 0.32,
+                )
                 registry.add(
                     self._text_element(
                         element_id=text_id,
                         text=label,
-                        center=self._center(frame.origin, frame.size.width, frame.size.height),
+                        center=label_center,
                         container_id=frame_id,
                         frame_id=None,
                         group_ids=[group_id],
@@ -223,7 +227,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                             base_metadata,
                         ),
                         max_width=frame.size.width - 24.0,
-                        max_height=frame.size.height - 20.0,
+                        max_height=frame.size.height * 0.45,
                         font_size=18.0,
                     )
                 )
@@ -407,6 +411,16 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         registry: ElementRegistry,
         base_metadata: Metadata,
     ) -> None:
+        is_service_graph = str(document.markup_type or "").strip().lower() == "service_graph"
+        if is_service_graph:
+            self._build_service_graph_stats(
+                document=document,
+                frames=frames,
+                frame_ids=frame_ids,
+                registry=registry,
+                base_metadata=base_metadata,
+            )
+            return
         procedure_map = {proc.procedure_id: proc for proc in document.procedures}
         stat_size = Size(92.0, 42.0)
         stat_gap = 12.0
@@ -489,6 +503,124 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                         container_id=element_id,
                         frame_id=frame_ids.get(frame.procedure_id),
                         group_ids=[group_id],
+                        metadata=stat_meta,
+                        max_width=stat_size.width - 10.0,
+                        max_height=stat_size.height - 8.0,
+                        font_size=14.0,
+                    )
+                )
+
+    def _build_service_graph_stats(
+        self,
+        document: MarkupDocument,
+        frames: list[FramePlacement],
+        frame_ids: dict[str, str],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+    ) -> None:
+        procedure_meta = document.procedure_meta or {}
+        stat_size = Size(92.0, 42.0)
+        stat_gap = 12.0
+        bottom_padding = 16.0
+        labels = {
+            "start": ("start", "#d1ffd6"),
+            "branch": ("branch", "#cce5ff"),
+            "end": ("end", END_TYPE_COLORS[END_TYPE_DEFAULT]),
+            "postpone": ("postpone", END_TYPE_COLORS["postpone"]),
+        }
+        plurals = {
+            "start": "starts",
+            "branch": "branches",
+            "end": "ends",
+            "postpone": "postpones",
+        }
+        for frame in frames:
+            meta = procedure_meta.get(frame.procedure_id, {})
+            stats_meta = meta.get("graph_stats")
+            if not isinstance(stats_meta, dict):
+                continue
+            stats = [
+                ("start", stats_meta.get("start", 0)),
+                ("branch", stats_meta.get("branch", 0)),
+                ("end", stats_meta.get("end", 0)),
+                ("postpone", stats_meta.get("postpone", 0)),
+            ]
+            stats = [
+                (stat_key, value)
+                for stat_key, value in stats
+                if isinstance(value, int) and value > 0
+            ]
+            procedure_count = meta.get("procedure_count")
+            items: list[tuple[str, str, int]] = []
+            if isinstance(procedure_count, int) and procedure_count > 0:
+                items.append(("rect", "procedure_count", procedure_count))
+            for stat_key, value in stats:
+                items.append(("oval", stat_key, value))
+            if not items:
+                continue
+            count = len(items)
+            total_width = stat_size.width * count + stat_gap * (count - 1)
+            start_x = frame.origin.x + (frame.size.width - total_width) / 2
+            stat_y = frame.origin.y + frame.size.height - bottom_padding - stat_size.height
+            group_id = self._stable_id("service-frame-group", frame.procedure_id)
+            for idx, (shape, stat_key, value) in enumerate(items):
+                color = "#f2f2f2"
+                if shape == "rect":
+                    label_text = "procedure" if value == 1 else "procedures"
+                else:
+                    label, color = labels[stat_key]
+                    label_text = label if value == 1 else plurals.get(label, f"{label}s")
+                element_id = self._stable_id("service-stat", frame.procedure_id, stat_key)
+                stat_group_id = self._stable_id("service-stat-group", frame.procedure_id, stat_key)
+                stat_meta = self._with_base_metadata(
+                    {
+                        "procedure_id": frame.procedure_id,
+                        "role": "procedure_stat",
+                        "stat_type": stat_key,
+                        "stat_value": value,
+                    },
+                    base_metadata,
+                )
+                position = Point(
+                    x=start_x + idx * (stat_size.width + stat_gap),
+                    y=stat_y,
+                )
+                if shape == "rect":
+                    registry.add(
+                        self._rectangle_element(
+                            element_id=element_id,
+                            position=position,
+                            size=stat_size,
+                            frame_id=frame_ids.get(frame.procedure_id),
+                            metadata=stat_meta,
+                            group_ids=[group_id, stat_group_id],
+                            background_color=color,
+                            stroke_color="#1e1e1e",
+                            fill_style="solid",
+                            roundness={"type": 2},
+                        )
+                    )
+                else:
+                    registry.add(
+                        self._ellipse_element(
+                            element_id=element_id,
+                            position=position,
+                            size=stat_size,
+                            frame_id=frame_ids.get(frame.procedure_id),
+                            metadata=stat_meta,
+                            group_ids=[group_id, stat_group_id],
+                            background_color=color,
+                        )
+                    )
+                text_id = self._stable_id("service-stat-text", frame.procedure_id, stat_key)
+                registry.add(
+                    self._text_element(
+                        element_id=text_id,
+                        text=f"{value} {label_text}",
+                        center=self._center(position, stat_size.width, stat_size.height),
+                        container_id=element_id,
+                        frame_id=frame_ids.get(frame.procedure_id),
+                        group_ids=[group_id, stat_group_id],
                         metadata=stat_meta,
                         max_width=stat_size.width - 10.0,
                         max_height=stat_size.height - 8.0,

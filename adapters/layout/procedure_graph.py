@@ -84,7 +84,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
 
         procedure_meta = document.procedure_meta or {}
         node_size = self._procedure_node_size()
-        base_service_node_size = Size(node_size.width * 3, node_size.height)
+        base_service_node_size = Size(node_size.width * 3, node_size.height * 1.2)
         service_node_sizes: dict[str, Size] = {}
         if is_service_graph:
             for proc in procedures:

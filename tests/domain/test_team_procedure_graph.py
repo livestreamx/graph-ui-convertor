@@ -286,7 +286,7 @@ def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
     )
 
     base = LayoutConfig().block_size
-    base_service = Size(base.width * 3, base.height)
+    base_service = Size(base.width * 3, base.height * 1.2)
 
     plan = ProcedureGraphLayoutEngine().build_plan(document)
     sizes = {frame.procedure_id: frame.size for frame in plan.frames}
@@ -296,6 +296,43 @@ def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
     assert sizes["svc-ten"].height == pytest.approx(base_service.height * 1.45)
     assert sizes["svc-twenty"].width == pytest.approx(base_service.width * 1.95)
     assert sizes["svc-twenty"].height == pytest.approx(base_service.height * 1.95)
+
+
+def test_service_graph_collects_component_stats() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "p1",
+                    "proc_name": "Authorize",
+                    "start_block_ids": ["s1", "s2"],
+                    "end_block_ids": ["e1"],
+                    "branches": {"s1": ["b1", "b2"]},
+                    "end_block_types": {"e1": "end"},
+                },
+                {
+                    "proc_id": "p2",
+                    "proc_name": "Capture",
+                    "start_block_ids": ["s3"],
+                    "end_block_ids": ["e2", "e3"],
+                    "branches": {"s3": ["b3"]},
+                    "end_block_types": {"e2": "postpone", "e3": "end"},
+                },
+            ],
+            "procedure_graph": {"p1": ["p2"], "p2": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    assert len(merged.procedures) == 1
+    service_id = merged.procedures[0].procedure_id
+    stats = merged.procedure_meta[service_id]["graph_stats"]
+    assert stats == {"start": 3, "branch": 3, "end": 2, "postpone": 1}
 
 
 def test_build_team_procedure_graph_title_limits_team_names() -> None:
