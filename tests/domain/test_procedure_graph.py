@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def _sample_markup() -> MarkupDocument:
@@ -30,14 +28,6 @@ def _sample_markup() -> MarkupDocument:
         "procedure_graph": {"p2": ["p1"]},
     }
     return MarkupDocument.model_validate(payload)
-
-
-def _load_markup_fixture(name: str) -> MarkupDocument:
-    for parent in Path(__file__).resolve().parents:
-        fixture = parent / "examples" / "markup" / name
-        if fixture.exists():
-            return MarkupDocument.model_validate(json.loads(fixture.read_text(encoding="utf-8")))
-    raise RuntimeError("Repository root not found")
 
 
 def test_procedure_graph_orders_frames_and_edges() -> None:
@@ -300,7 +290,7 @@ def test_intermediate_procedure_shifted_for_cross_edge() -> None:
 
 
 def test_complex_graph_gamma_shift_and_triage_position() -> None:
-    markup = _load_markup_fixture("complex_graph.json")
+    markup = load_markup_fixture("complex_graph.json")
     plan = GridLayoutEngine().build_plan(markup)
     frames = {frame.procedure_id: frame for frame in plan.frames}
     assert frames["proc_gamma"].origin.y > frames["proc_beta"].origin.y

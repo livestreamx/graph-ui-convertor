@@ -1,22 +1,8 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import END_TYPE_DEFAULT, END_TYPE_TURN_OUT, MarkerPlacement, MarkupDocument
-
-
-def repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError("Repository root not found")
-
-
-def load_markup_fixture(name: str) -> MarkupDocument:
-    fixture_path = repo_root() / "examples" / "markup" / name
-    return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_layout_orders_targets_by_incoming_neighbors() -> None:

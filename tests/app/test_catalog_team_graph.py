@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Callable
 from pathlib import Path
@@ -16,19 +15,15 @@ from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
 from tests.adapters.s3.s3_utils import add_get_object, stub_s3_catalog
-
-
-def _repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError("Repository root not found")
+from tests.helpers.markup_fixtures import load_markup_payload, repo_root
 
 
 def _load_fixture(name: str) -> dict[str, object]:
-    path = _repo_root() / "examples" / "markup" / name
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    return cast(dict[str, object], payload)
+    return cast(dict[str, object], load_markup_payload(name))
+
+
+def _repo_root() -> Path:
+    return repo_root()
 
 
 def test_catalog_team_graph_api(

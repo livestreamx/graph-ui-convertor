@@ -1,36 +1,13 @@
 from __future__ import annotations
 
-import json
 from collections import Counter
-from pathlib import Path
 from typing import Any
 
 import pytest
 
 from adapters.layout.grid import GridLayoutEngine
-from domain.models import MarkupDocument
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-
-
-def repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError("Repository root not found")
-
-
-def load_markup_fixture(name: str) -> MarkupDocument:
-    fixture_path = repo_root() / "examples" / "markup" / name
-    return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
-
-
-def load_expected_fixture(name: str) -> dict[str, Any]:
-    expected_name = name.replace(".json", ".expected.json")
-    fixture_path = repo_root() / "examples" / "markup_expected" / expected_name
-    payload = json.loads(fixture_path.read_text(encoding="utf-8"))
-    if not isinstance(payload, dict):
-        raise TypeError(f"Expected dict payload in {fixture_path}")
-    return payload
+from tests.helpers.markup_fixtures import load_expected_fixture, load_markup_fixture
 
 
 def _meta(element: dict[str, Any]) -> dict[str, Any]:

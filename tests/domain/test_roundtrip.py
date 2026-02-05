@@ -1,25 +1,14 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any
+
+import pytest
 
 from adapters.layout.grid import GridLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
-
-
-def repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError("Repository root not found")
-
-
-def load_markup_fixture(name: str) -> MarkupDocument:
-    fixture_path = repo_root() / "examples" / "markup" / name
-    return MarkupDocument.model_validate(json.loads(fixture_path.read_text(encoding="utf-8")))
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def normalize(document: MarkupDocument) -> dict[str, Any]:
@@ -184,32 +173,9 @@ def test_service_name_title_skipped_without_name() -> None:
     assert not title_elements
 
 
-def test_roundtrip_complex_graph_fixture() -> None:
-    markup = load_markup_fixture("complex_graph.json")
-    layout = GridLayoutEngine()
-    forward = MarkupToExcalidrawConverter(layout)
-    backward = ExcalidrawToMarkupConverter()
-
-    excal = forward.convert(markup)
-    reconstructed = backward.convert(excal.to_dict())
-
-    assert normalize(reconstructed) == normalize(markup)
-
-
-def test_roundtrip_graphs_set_fixture() -> None:
-    markup = load_markup_fixture("graphs_set.json")
-    layout = GridLayoutEngine()
-    forward = MarkupToExcalidrawConverter(layout)
-    backward = ExcalidrawToMarkupConverter()
-
-    excal = forward.convert(markup)
-    reconstructed = backward.convert(excal.to_dict())
-
-    assert normalize(reconstructed) == normalize(markup)
-
-
-def test_roundtrip_forest_fixture() -> None:
-    markup = load_markup_fixture("forest.json")
+@pytest.mark.parametrize("fixture_name", ["complex_graph.json", "graphs_set.json", "forest.json"])
+def test_roundtrip_fixture(fixture_name: str) -> None:
+    markup = load_markup_fixture(fixture_name)
     layout = GridLayoutEngine()
     forward = MarkupToExcalidrawConverter(layout)
     backward = ExcalidrawToMarkupConverter()

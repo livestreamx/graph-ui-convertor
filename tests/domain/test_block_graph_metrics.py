@@ -1,24 +1,11 @@
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from domain.models import MarkupDocument
 from domain.services.graph_metrics import compute_graph_metrics
-
-
-def _repo_root() -> Path:
-    for parent in Path(__file__).resolve().parents:
-        if (parent / "pyproject.toml").exists():
-            return parent
-    raise RuntimeError("Repository root not found")
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_basic_block_graph_metrics() -> None:
-    payload = json.loads(
-        (_repo_root() / "examples" / "markup" / "basic.json").read_text(encoding="utf-8")
-    )
-    document = MarkupDocument.model_validate(payload)
+    document = load_markup_fixture("basic.json")
     metrics = compute_graph_metrics(document.block_graph)
 
     assert metrics.directed is True
@@ -41,10 +28,7 @@ def test_basic_block_graph_metrics() -> None:
 
 
 def test_complex_graph_cycle_count() -> None:
-    payload = json.loads(
-        (_repo_root() / "examples" / "markup" / "complex_graph.json").read_text(encoding="utf-8")
-    )
-    document = MarkupDocument.model_validate(payload)
+    document = load_markup_fixture("complex_graph.json")
     metrics = compute_graph_metrics(document.block_graph)
 
     assert metrics.is_acyclic is False
