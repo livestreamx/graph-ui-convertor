@@ -91,6 +91,8 @@ def test_catalog_team_graph_api(
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -129,6 +131,27 @@ def test_catalog_team_graph_api(
             for element in elements
         )
 
+        service_response = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-1,team-2", "graph_level": "service"},
+        )
+        assert service_response.status_code == 200
+        service_elements = service_response.json()["elements"]
+        service_frames = [
+            element.get("customData", {}).get("cjm", {}).get("procedure_id")
+            for element in service_elements
+            if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+        ]
+        assert len(service_frames) == 2
+        assert all(
+            isinstance(proc_id, str) and proc_id.startswith("service::")
+            for proc_id in service_frames
+        )
+        assert not any(
+            str(element.get("customData", {}).get("cjm", {}).get("role", "")).startswith("scenario")
+            for element in service_elements
+        )
+
         html_response = client_api.get(
             "/catalog/teams/graph",
             params={"team_ids": "team-1,team-2"},
@@ -149,6 +172,10 @@ def test_catalog_team_graph_api(
         assert "Render merge nodes from all available markups" in html_response.text
         assert "Step 3. Merge graphs" in html_response.text
         assert "Step 4. Use diagram" in html_response.text
+        assert "Procedure-level diagram" in html_response.text
+        assert "Service-level diagram" in html_response.text
+        assert "graph_level=service" in html_response.text
+        assert "graph_level=procedure" not in html_response.text
         assert "Graphs info" in html_response.text
         assert "Entity Integrity" in html_response.text
         assert "Risk Hotspots" in html_response.text
@@ -196,6 +223,111 @@ def test_catalog_team_graph_api(
         assert "data-merge-button" in no_selection_response.text
         assert 'disabled aria-disabled="true"' in no_selection_response.text
         assert "Select at least one team to enable Merge." in no_selection_response.text
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_excluded_teams_preselected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-1",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Authorize",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p1": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Refunds",
+            "team_id": "team-2",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
+    }
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+            builder_excluded_team_ids=["team-2"],
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get("/catalog/teams/graph")
+        assert response.status_code == 200
+        html = response.text
+        assert "Disable teams from analytics" in html
+        exclude_match = re.search(r'id="team-graph-exclude-select".*?</select>', html, re.S)
+        assert exclude_match is not None
+        assert 'value="team-2" selected' in exclude_match.group(0)
+        select_match = re.search(r'id="team-graph-select".*?</select>', html, re.S)
+        assert select_match is not None
+        assert 'value="team-2"' not in select_match.group(0)
+        assert 'id="team-graph-exclude-input"' in html
+        assert 'value="team-2"' in html
     finally:
         stubber.deactivate()
 
@@ -419,6 +551,70 @@ def test_catalog_team_graph_open_preserves_selected_merge_flag_in_scene_api_url(
         assert response.status_code == 200
         assert "\\u0026merge_selected_markups=true" in response.text
         assert "amp;merge_selected_markups" not in response.text
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_open_preserves_graph_level_in_scene_api_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    objects = {
+        "markup/basic.json": payload_basic,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="/excalidraw",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/catalog/teams/graph/open",
+            params={"team_ids": "team-alpha", "graph_level": "service"},
+        )
+        assert response.status_code == 200
+        assert "\\u0026graph_level=service" in response.text
+        assert "amp;graph_level" not in response.text
     finally:
         stubber.deactivate()
 
@@ -663,6 +859,8 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-merge-button:disabled" in styles
     assert ".team-graph-procedure-order" in styles
     assert ".team-graph-sort-button" in styles
+    assert ".team-graph-actions-split" in styles
+    assert '.team-graph-actions-group[data-graph-level="service"]' in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(

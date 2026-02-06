@@ -181,6 +181,85 @@ main {
   min-height: 140px;
 }
 
+.team-graph-select-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.team-graph-select-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.team-graph-select-toggle {
+  white-space: nowrap;
+}
+
+.team-graph-select-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(260px, 2fr) minmax(200px, 1fr);
+}
+
+.team-graph-select-grid.is-collapsed {
+  grid-template-columns: minmax(260px, 1fr);
+}
+
+.team-graph-select-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.team-graph-select-group-muted {
+  background: rgba(255, 255, 255, 0.02);
+  border-style: dashed;
+}
+
+.team-graph-select-group.is-collapsed {
+  display: none;
+}
+
+.team-graph-select-header {
+  display: grid;
+  gap: 4px;
+}
+
+.team-graph-select-title {
+  font-weight: 600;
+}
+
+.team-graph-select-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.team-graph-select-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.team-graph-select-summary-value {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.team-graph-select-summary-label {
+  font-weight: 500;
+}
+
+.team-graph-select-summary-muted {
+  color: var(--muted);
+}
+
 .team-graph-actions {
   display: flex;
   align-items: center;
@@ -279,6 +358,44 @@ main {
   color: var(--muted);
   font-size: 13px;
   margin: 6px 0 0;
+}
+
+.team-graph-actions-card {
+  display: grid;
+  gap: 12px;
+}
+
+.team-graph-actions-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.team-graph-actions-group {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgba(9, 14, 30, 0.9), rgba(16, 22, 43, 0.86));
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.team-graph-actions-group[data-graph-level="service"] {
+  border-color: rgba(115, 206, 196, 0.38);
+  background: linear-gradient(145deg, rgba(8, 18, 24, 0.92), rgba(13, 31, 39, 0.88));
+}
+
+.team-graph-actions-group-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+}
+
+.team-graph-actions-group-subtitle {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .team-graph-card h3 {
@@ -1833,6 +1950,9 @@ main {
   .team-graph-form {
     grid-template-columns: 1fr;
   }
+  .team-graph-select-grid {
+    grid-template-columns: 1fr;
+  }
   .team-graph-flag-grid {
     grid-template-columns: 1fr;
   }
@@ -1857,6 +1977,9 @@ main {
   }
   .team-graph-dashboard-grid,
   .team-graph-split-grid {
+    grid-template-columns: 1fr;
+  }
+  .team-graph-actions-split {
     grid-template-columns: 1fr;
   }
 }

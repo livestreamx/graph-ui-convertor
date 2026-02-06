@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from adapters.layout.grid import LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from domain.models import MarkupDocument, Size
@@ -88,6 +90,249 @@ def test_build_team_procedure_graph_sets_team_id_for_single_team() -> None:
 
     assert merged.team_id == "team-alpha"
     assert merged.team_name == "Alpha"
+
+
+def test_build_team_service_graph_aggregates_by_service() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "finedog_unit_id": "svc-pay",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "entry",
+                    "proc_name": "Entry",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"entry": ["shared"], "shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Refunds",
+            "finedog_unit_id": "svc-ref",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([doc_alpha, doc_beta], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    assert merged.service_name is not None
+    assert merged.service_name.startswith("Services")
+    assert len(merged.procedures) == 2
+    by_service_name = {
+        str(meta.get("service_name")): proc_id for proc_id, meta in merged.procedure_meta.items()
+    }
+    alpha_id = by_service_name["Payments"]
+    beta_id = by_service_name["Refunds"]
+    assert merged.procedure_graph[alpha_id] == [beta_id]
+    assert merged.procedure_graph[beta_id] == []
+    assert merged.procedure_meta[alpha_id]["is_intersection"] is False
+    assert merged.procedure_meta[beta_id]["is_intersection"] is False
+    name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
+    assert name_lookup[alpha_id] == "[Alpha] Payments"
+    assert name_lookup[beta_id] == "[Beta] Refunds"
+
+
+def test_service_graph_layout_skips_left_dashboard_panels() -> None:
+    payload = {
+        "markup_type": "service_graph",
+        "service_name": "Services · Alpha + Beta",
+        "procedures": [
+            {
+                "proc_id": "service::alpha::payments::entry",
+                "proc_name": "[Alpha] Payments",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "service::beta::refunds::shared",
+                "proc_name": "[Beta] Refunds",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+        ],
+        "procedure_graph": {
+            "service::alpha::payments::entry": ["service::beta::refunds::shared"],
+            "service::beta::refunds::shared": [],
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "service::alpha::payments::entry": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                },
+                "service::beta::refunds::shared": {
+                    "team_name": "Beta",
+                    "service_name": "Refunds",
+                    "procedure_color": "#e3f7d9",
+                },
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    assert not plan.scenarios
+    assert not plan.service_zones
+
+    scene = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    roles = {
+        str(element.get("customData", {}).get("cjm", {}).get("role"))
+        for element in scene.elements
+        if isinstance(element.get("customData", {}).get("cjm", {}), dict)
+    }
+    assert "service_zone" not in roles
+    assert not any(role.startswith("scenario_") for role in roles)
+
+
+def test_service_graph_splits_multiple_procedures_by_service() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "p1",
+                    "proc_name": "Flow 1",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                },
+                {
+                    "proc_id": "p2",
+                    "proc_name": "Flow 2",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                },
+            ],
+            "procedure_graph": {"p1": [], "p2": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
+    names = sorted(name for name in name_lookup.values() if name is not None)
+    assert names == [
+        "[Alpha] Payments (Graph #1)",
+        "[Alpha] Payments (Graph #2)",
+    ]
+    by_name = {name: proc_id for proc_id, name in name_lookup.items()}
+    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #1)"]] == []
+    assert merged.procedure_graph[by_name["[Alpha] Payments (Graph #2)"]] == []
+
+
+def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service_graph",
+            "service_name": "Services · Alpha",
+            "procedures": [
+                {
+                    "proc_id": "svc-one",
+                    "proc_name": "[Alpha] Payments",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+                {
+                    "proc_id": "svc-ten",
+                    "proc_name": "[Alpha] Payments (Graph #2)",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+                {
+                    "proc_id": "svc-twenty",
+                    "proc_name": "[Alpha] Payments (Graph #3)",
+                    "start_block_ids": [],
+                    "end_block_ids": [],
+                    "branches": {},
+                },
+            ],
+            "procedure_graph": {"svc-one": [], "svc-ten": [], "svc-twenty": []},
+            "procedure_meta": {
+                "svc-one": {"procedure_count": 1},
+                "svc-ten": {"procedure_count": 10},
+                "svc-twenty": {"procedure_count": 20},
+            },
+        }
+    )
+
+    base = LayoutConfig().block_size
+    base_service = Size(base.width * 3, base.height * 1.2)
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    sizes = {frame.procedure_id: frame.size for frame in plan.frames}
+
+    assert sizes["svc-one"] == base_service
+    assert sizes["svc-ten"].width == pytest.approx(base_service.width * 1.45)
+    assert sizes["svc-ten"].height == pytest.approx(base_service.height * 1.45)
+    assert sizes["svc-twenty"].width == pytest.approx(base_service.width * 1.95)
+    assert sizes["svc-twenty"].height == pytest.approx(base_service.height * 1.95)
+
+
+def test_service_graph_collects_component_stats() -> None:
+    document = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "p1",
+                    "proc_name": "Authorize",
+                    "start_block_ids": ["s1", "s2"],
+                    "end_block_ids": ["e1"],
+                    "branches": {"s1": ["b1", "b2"]},
+                    "end_block_types": {"e1": "end"},
+                },
+                {
+                    "proc_id": "p2",
+                    "proc_name": "Capture",
+                    "start_block_ids": ["s3"],
+                    "end_block_ids": ["e2", "e3"],
+                    "branches": {"s3": ["b3"]},
+                    "end_block_types": {"e2": "postpone", "e3": "end"},
+                },
+            ],
+            "procedure_graph": {"p1": ["p2"], "p2": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build([document], graph_level="service")
+
+    assert merged.markup_type == "service_graph"
+    assert len(merged.procedures) == 1
+    service_id = merged.procedures[0].procedure_id
+    stats = merged.procedure_meta[service_id]["graph_stats"]
+    assert stats == {"start": 3, "branch": 3, "end": 2, "postpone": 1}
 
 
 def test_build_team_procedure_graph_title_limits_team_names() -> None:

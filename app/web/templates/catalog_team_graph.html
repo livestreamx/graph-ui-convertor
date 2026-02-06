@@ -92,6 +92,7 @@
               </div>
               <div class="team-graph-help-hint">
                 Builds a procedure-level graph using <code>procedure_graph</code> across selected teams.
+                Disabled teams are fully omitted from builder analytics.
               </div>
             </div>
           </div>
@@ -109,20 +110,106 @@
         hx-push-url="true"
         hx-indicator="#team-graph-merge-loader"
       >
-        <label class="filter-control">
-          <select id="team-graph-select" multiple size="8" form="team-graph-form">
-            {% for team_key, team_label in team_options %}
-              <option value="{{ team_key }}" {% if team_key in team_ids %}selected{% endif %}>
-                {{ team_label }}
-              </option>
-            {% endfor %}
-          </select>
-        </label>
+        <div class="team-graph-select-toolbar">
+          <div class="team-graph-select-toolbar-spacer"></div>
+          <button
+            class="ghost-button team-graph-select-toggle"
+            type="button"
+            data-exclude-toggle
+            aria-expanded="{% if disabled_team_count %}true{% else %}false{% endif %}"
+          >
+            {% if disabled_team_count %}Hide disabled teams{% else %}Disable teams{% endif %}
+          </button>
+        </div>
+        <div
+          class="team-graph-select-grid {% if not disabled_team_count %}is-collapsed{% endif %}"
+          data-exclude-grid
+        >
+          <div class="team-graph-select-group">
+            <div class="team-graph-select-header">
+              <div class="team-graph-select-title">Teams to merge</div>
+              <div class="team-graph-select-hint">
+                Included in graph build and analytics.
+              </div>
+            </div>
+            <label class="filter-control">
+              <select id="team-graph-select" multiple size="8" form="team-graph-form">
+                {% for team_key, team_label in team_options %}
+                  <option
+                    value="{{ team_key }}"
+                    data-markups="{{ team_counts.get(team_key, 0) }}"
+                    {% if team_key in team_ids %}selected{% endif %}
+                  >
+                    {{ team_label }}
+                  </option>
+                {% endfor %}
+              </select>
+            </label>
+            <div class="team-graph-select-summary">
+              <span class="team-graph-select-summary-value" data-summary-value="included-teams">
+                {{ selected_team_count }}
+              </span>
+              <span class="team-graph-select-summary-label">included teams</span>
+              <span class="team-graph-select-summary-muted">
+                ·
+                <span data-summary-value="included-markups">
+                  {{ selected_markups_count }}
+                </span>
+                markups
+              </span>
+            </div>
+          </div>
+          <div
+            class="team-graph-select-group team-graph-select-group-muted {% if not disabled_team_count %}is-collapsed{% endif %}"
+            data-exclude-panel
+          >
+            <div class="team-graph-select-header">
+              <div class="team-graph-select-title">Disable teams from analytics</div>
+              <div class="team-graph-select-hint">
+                Ignored in all builder metrics, merge-node detection, and overlap stats.
+              </div>
+            </div>
+            <div class="team-graph-select-body">
+              <label class="filter-control">
+                <select id="team-graph-exclude-select" multiple size="6" form="team-graph-form">
+                  {% for team_key, team_label in all_team_options %}
+                    <option
+                      value="{{ team_key }}"
+                      data-markups="{{ all_team_counts.get(team_key, 0) }}"
+                      {% if team_key in disabled_team_ids %}selected{% endif %}
+                    >
+                      {{ team_label }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </label>
+              <div class="team-graph-select-summary">
+                <span class="team-graph-select-summary-value" data-summary-value="disabled-teams">
+                  {{ disabled_team_count }}
+                </span>
+                <span class="team-graph-select-summary-label">disabled teams</span>
+                <span class="team-graph-select-summary-muted">
+                  ·
+                  <span data-summary-value="disabled-markups">
+                    {{ disabled_markups_count }}
+                  </span>
+                  markups
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
         <input
           type="hidden"
           id="team-graph-input"
           name="team_ids"
           value="{{ team_ids | join(',') }}"
+        />
+        <input
+          type="hidden"
+          id="team-graph-exclude-input"
+          name="excluded_team_ids"
+          value="{{ disabled_team_ids | join(',') }}"
         />
       </form>
     </div>
@@ -1131,13 +1218,35 @@
     <div class="detail-card team-graph-actions-card">
       <h3>Step 4. Use diagram</h3>
       {% if diagram_ready %}
-        <div class="button-row">
-          <a class="primary-button" target="_blank" href="{{ diagram_open_url }}">
-            Open {{ diagram_label }}
-          </a>
-          <a class="ghost-button" href="/api/teams/graph?{{ team_query }}&download=true">
-            Download {{ diagram_ext }}
-          </a>
+        <div class="team-graph-actions-split">
+          <article class="team-graph-actions-group" data-graph-level="procedure">
+            <div class="team-graph-actions-group-title">Procedure-level diagram</div>
+            <p class="team-graph-actions-group-subtitle">
+              Detailed flow between procedures with full dashboard context from Step 3.
+            </p>
+            <div class="button-row">
+              <a class="primary-button" target="_blank" href="{{ procedure_diagram_open_url }}">
+                Open {{ diagram_label }}
+              </a>
+              <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&download=true">
+                Download {{ diagram_ext }}
+              </a>
+            </div>
+          </article>
+          <article class="team-graph-actions-group" data-graph-level="service">
+            <div class="team-graph-actions-group-title">Service-level diagram</div>
+            <p class="team-graph-actions-group-subtitle">
+              High-level service map: service nodes aggregate all selected service graphs.
+            </p>
+            <div class="button-row">
+              <a class="primary-button" target="_blank" href="{{ service_diagram_open_url }}">
+                Open {{ diagram_label }}
+              </a>
+              <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&download=true">
+                Download {{ diagram_ext }}
+              </a>
+            </div>
+          </article>
         </div>
       {% else %}
         <p class="team-graph-subtitle">Merge graphs in Step 3 to enable open/download actions.</p>
@@ -1172,16 +1281,24 @@
         const form = page.querySelector("#team-graph-form");
         const select = page.querySelector("#team-graph-select");
         const input = page.querySelector("#team-graph-input");
+        const excludeSelect = page.querySelector("#team-graph-exclude-select");
+        const excludeInput = page.querySelector("#team-graph-exclude-input");
         if (
           !(form instanceof HTMLFormElement) ||
           !(select instanceof HTMLSelectElement) ||
-          !(input instanceof HTMLInputElement)
+          !(input instanceof HTMLInputElement) ||
+          !(excludeSelect instanceof HTMLSelectElement) ||
+          !(excludeInput instanceof HTMLInputElement)
         ) {
           return;
         }
 
         const mergeButton = page.querySelector("[data-merge-button]");
         const teamRequiredMessage = page.querySelector("[data-team-required-message]");
+        const excludeToggle = page.querySelector("[data-exclude-toggle]");
+        const excludePanel = page.querySelector("[data-exclude-panel]");
+        const excludeGrid = page.querySelector("[data-exclude-grid]");
+        const excludeBody = excludePanel?.querySelector(".team-graph-select-body");
 
         const updateMergeAvailability = (selectedCount) => {
           const hasSelection = selectedCount > 0;
@@ -1194,12 +1311,66 @@
           }
         };
 
+        const updateSummary = (key, value) => {
+          const target = page.querySelector(`[data-summary-value="${key}"]`);
+          if (target instanceof HTMLElement) {
+            target.textContent = String(value);
+          }
+        };
+
+        const sumMarkups = (options) =>
+          options.reduce((total, option) => {
+            const raw = option.getAttribute("data-markups") || "0";
+            const parsed = Number(raw);
+            return total + (Number.isFinite(parsed) ? parsed : 0);
+          }, 0);
+
         const sync = () => {
           const values = Array.from(select.selectedOptions).map((option) => option.value);
           input.value = values.join(",");
+          const excludedOptions = Array.from(excludeSelect.selectedOptions);
+          const excluded = excludedOptions.map((option) => option.value);
+          excludeInput.value = excluded.join(",");
           updateMergeAvailability(values.length);
+          updateSummary("included-teams", values.length);
+          updateSummary("included-markups", sumMarkups(Array.from(select.selectedOptions)));
+          updateSummary("disabled-teams", excluded.length);
+          updateSummary("disabled-markups", sumMarkups(excludedOptions));
         };
+
+        const setExcludeOpen = (isOpen) => {
+          if (excludeToggle instanceof HTMLButtonElement) {
+            excludeToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+            excludeToggle.textContent = isOpen ? "Hide disabled teams" : "Disable teams";
+          }
+          if (excludePanel instanceof HTMLElement) {
+            excludePanel.classList.toggle("is-collapsed", !isOpen);
+          }
+          if (excludeGrid instanceof HTMLElement) {
+            excludeGrid.classList.toggle("is-collapsed", !isOpen);
+          }
+          if (excludeBody instanceof HTMLElement) {
+            excludeBody.classList.toggle("is-hidden", !isOpen);
+          }
+        };
+
+        const initialOpen = excludeToggle?.getAttribute("aria-expanded") === "true";
+        setExcludeOpen(initialOpen);
         select.addEventListener("change", sync);
+        excludeSelect.addEventListener("change", sync);
+        excludeSelect.addEventListener("dblclick", (event) => {
+          const option = event.target;
+          if (option instanceof HTMLOptionElement) {
+            option.selected = !option.selected;
+            sync();
+          }
+        });
+        if (excludeToggle instanceof HTMLButtonElement) {
+          excludeToggle.addEventListener("click", () => {
+            const isOpen = excludeToggle.getAttribute("aria-expanded") === "true";
+            setExcludeOpen(!isOpen);
+          });
+        }
         form.addEventListener("submit", sync);
         sync();
 

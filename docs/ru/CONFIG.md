@@ -113,9 +113,15 @@ catalog:
 - В деталях диаграммы доступны скачивания `.excalidraw`/`.unidraw` и оригинального `markup.json`.
 - На странице каталога есть отдельный раздел для кросс-командных диаграмм: можно выбрать несколько
   команд и открыть общий граф процедур на основе `procedure_graph` (`/catalog/teams/graph`,
-  `/api/teams/graph`, `team_ids` поддерживает значения через запятую).
+  `/api/teams/graph`, `team_ids` поддерживает значения через запятую). В билдере доступен параметр
+  `excluded_team_ids` для исключения команд из аналитики и расчета merge-nodes. На Step 4 действия
+  теперь разбиты на два подраздела: диаграмма по процедурам (слева) и диаграмма по услугам (справа).
 - В сборщике кросс-командного графа детали выбора доступны через подсказку рядом с заголовком;
   процедуры подсвечиваются по услугам, пересечения выделяются светло-красным.
+- В Step 1 добавлен подраздел "Disable teams from analytics": отключенные команды полностью
+  исключаются из метрик, расчета merge-nodes и внешних пересечений. Значения по умолчанию
+  задаются через `catalog.builder_excluded_team_ids`
+  (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`, список через запятую).
 - В сборщике кросс-командного графа есть секция Feature flags: каждый флаг оформлен отдельной
   карточкой с кнопкой Enable/Disable; карточки имеют оконтовку как подразделы, при включении
   получают легкий зеленый оттенок, а кнопка переключается в темный стиль.
@@ -155,6 +161,10 @@ catalog:
   топ-10 внешних команд, остальные раскрываются кнопкой `Show N more teams`.
 - Скачивание общего графа добавляет выбранные `team_ids` в имя файла (например,
   `team-graph_alpha_beta.excalidraw`).
+- Для `/api/teams/graph` и `/catalog/teams/graph/open` поддерживается `graph_level=service`:
+  строится верхнеуровневая диаграмма услуг, где узлы агрегируют все выбранные графы одной услуги.
+  Флаги `merge_selected_markups` и `merge_nodes_all_markups` учитываются на нижнем слое
+  (граф процедур), после чего применяется агрегация на уровень услуг.
 
 ## Разрешение dot-path
 
@@ -177,6 +187,7 @@ export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'
+export CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS="team-alpha,team-beta"
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 
