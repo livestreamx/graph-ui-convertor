@@ -121,7 +121,8 @@ catalog:
 - В Step 1 добавлен подраздел "Disable teams from analytics": отключенные команды полностью
   исключаются из метрик, расчета merge-nodes и внешних пересечений. Значения по умолчанию
   задаются через `catalog.builder_excluded_team_ids`
-  (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`, список через запятую).
+  (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`: список через запятую, JSON-массив
+  или bracket-формат вида `[team-forest]`).
 - В сборщике кросс-командного графа есть секция Feature flags: каждый флаг оформлен отдельной
   карточкой с кнопкой Enable/Disable; карточки имеют оконтовку как подразделы, при включении
   получают легкий зеленый оттенок, а кнопка переключается в темный стиль.
@@ -194,6 +195,7 @@ export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ## Локальные env-файлы
 
 Локальные переопределения для демо лежат в `config/catalog/env.local` и подхватываются `make demo` / `make catalog-up`.
+Если добавляете новую важную переменную `CJM_*` в конфиг приложения, обязательно прокиньте ее в `makefile` (`CATALOG_ENV_EXTRA` / `docker run -e ...`), иначе значение не попадет в Catalog UI внутри Docker.
 Если запускаете приложение напрямую (без Docker), подключите файл перед запуском:
 
 ```bash

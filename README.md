@@ -188,6 +188,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 - Pre-commit: `pre-commit install` (config в `.pre-commit-config.yaml`).
 - E2E (Playwright): `poetry run playwright install` для загрузки браузеров; тесты пропускаются без браузеров.
 - Локальный S3 stub (MinIO) запускается `make demo`, конфиг — `config/catalog/app.s3.yaml`.
+- Если добавляете новую важную `CJM_*` переменную в конфиг приложения, прокидывайте ее в `makefile` для `docker run` (`CATALOG_ENV_EXTRA`), иначе в `make demo` значение не попадет в контейнер Catalog UI.
 - Переопределение текстов Catalog UI: `CJM_CATALOG__UI_TEXT_OVERRIDES` (JSON-словарь).
 - Рендер C4 диаграмм: `make c4-render` (вывод в `docs/en/c4/rendered` и `docs/ru/c4/rendered`).
 
@@ -231,7 +232,8 @@ cjm catalog serve --config config/catalog/app.s3.yaml
    на основе `procedure_graph`.
 5. В Step 1 есть подраздел "Disable teams from analytics": отключенные команды полностью исключаются
    из метрик, расчета merge-nodes и внешних пересечений. Значения по умолчанию можно задать через
-   `CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS` (список `finedog_unit_id` через запятую).
+   `CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS` (список `finedog_unit_id` через запятую, JSON-массив
+   или bracket-формат вроде `[team-forest]`).
 6. В сборщике кросс-командного графа есть секция Feature flags: каждый флаг оформлен карточкой с
    оконтовкой как подразделом, кнопкой Enable/Disable и подсветкой активного состояния. При включении
    карточка получает легкий зеленый оттенок, а кнопка становится темной.

@@ -64,3 +64,29 @@ def test_builder_excluded_team_ids_env_json_array_does_not_break_catalog_ui_star
     with TestClient(create_app(settings)) as client:
         response = client.get("/catalog/teams/graph")
     assert response.status_code in {200, 503}
+
+
+def test_builder_excluded_team_ids_env_bracket_list_without_json_quotes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CJM_CONFIG_PATH", raising=False)
+    monkeypatch.setenv("CJM_CATALOG__AUTO_BUILD_INDEX", "false")
+    monkeypatch.setenv("CJM_CATALOG__INDEX_PATH", str(tmp_path / "index.json"))
+    monkeypatch.setenv("CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS", "[team-forest]")
+
+    settings = load_settings()
+    assert settings.catalog.builder_excluded_team_ids == ["team-forest"]
+
+
+def test_builder_excluded_team_ids_env_quoted_bracket_list(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("CJM_CONFIG_PATH", raising=False)
+    monkeypatch.setenv("CJM_CATALOG__AUTO_BUILD_INDEX", "false")
+    monkeypatch.setenv("CJM_CATALOG__INDEX_PATH", str(tmp_path / "index.json"))
+    monkeypatch.setenv("CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS", '"[team-forest]"')
+
+    settings = load_settings()
+    assert settings.catalog.builder_excluded_team_ids == ["team-forest"]

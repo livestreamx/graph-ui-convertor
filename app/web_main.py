@@ -1019,8 +1019,19 @@ def normalize_team_ids(team_ids: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw in team_ids:
-        for part in str(raw).split(","):
-            value = part.strip()
+        raw_text = str(raw).strip()
+        if not raw_text:
+            continue
+        # Support bracket-based list payloads like "[team-a,team-b]" and quoted variants.
+        if (
+            (raw_text.startswith('"') and raw_text.endswith('"'))
+            or (raw_text.startswith("'") and raw_text.endswith("'"))
+        ) and len(raw_text) >= 2:
+            raw_text = raw_text[1:-1].strip()
+        if raw_text.startswith("[") and raw_text.endswith("]"):
+            raw_text = raw_text[1:-1].strip()
+        for part in raw_text.split(","):
+            value = part.strip().strip("'").strip('"')
             if not value or value in seen:
                 continue
             seen.add(value)
@@ -1200,9 +1211,13 @@ def build_filter_options(
         if not item.team_id or item.team_id == unknown_value:
             continue
         display_name = item.team_name
-        if not display_name or display_name == unknown_value:
-            display_name = item.team_id
-        teams[item.team_id] = display_name
+        has_named_team = bool(display_name and display_name != unknown_value)
+        current = teams.get(item.team_id)
+        if has_named_team:
+            teams[item.team_id] = str(display_name)
+            continue
+        if current is None:
+            teams[item.team_id] = item.team_id
     team_options = sorted(teams.items(), key=lambda entry: entry[1].lower())
     return criticality_levels, team_options
 
