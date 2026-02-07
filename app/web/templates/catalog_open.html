@@ -4,6 +4,10 @@
   <section class="detail-card">
     <h3>Opening {{ diagram_label }}…</h3>
     <p class="note">Preparing the scene in local storage and redirecting.</p>
+    <p class="note" id="open-error" style="display: none; color: #b42318;">
+      Failed to load the latest scene. Please retry.
+    </p>
+    <button id="retry-open" type="button" style="display: none;">Retry</button>
   </section>
   <script>
     (async () => {
@@ -12,25 +16,83 @@
       const diagramStorageKey = {{ diagram_storage_key | tojson }};
       const diagramStateKey = {{ diagram_state_key | tojson }};
       const diagramVersionKey = {{ diagram_version_key | tojson }};
+      const openError = document.getElementById("open-error");
+      const retryButton = document.getElementById("retry-open");
 
-      const response = await fetch(sceneApiUrl, { credentials: "same-origin" });
-      if (!response.ok) {
-        window.location.href = diagramUrl;
-        return;
-      }
-      const scene = await response.json();
-      const payload = {
-        elements: scene.elements || [],
-        appState: scene.appState || {},
+      const redirectToDiagram = () => {
+        const targetUrl = new URL(diagramUrl, window.location.origin);
+        targetUrl.searchParams.set("_open_ts", String(Date.now()));
+        window.location.replace(targetUrl.toString());
       };
-      try {
-        localStorage.setItem(diagramStorageKey, JSON.stringify(payload.elements));
-        localStorage.setItem(diagramStateKey, JSON.stringify(payload.appState));
-        localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
-      } catch (err) {
-        console.error(err);
+
+      const showRetry = () => {
+        if (openError) {
+          openError.style.display = "block";
+        }
+        if (retryButton) {
+          retryButton.style.display = "inline-block";
+          retryButton.disabled = false;
+        }
+      };
+
+      const hideRetry = () => {
+        if (openError) {
+          openError.style.display = "none";
+        }
+        if (retryButton) {
+          retryButton.style.display = "none";
+        }
+      };
+
+      const openDiagram = async () => {
+        hideRetry();
+        if (retryButton) {
+          retryButton.disabled = true;
+        }
+        const requestUrl = new URL(sceneApiUrl, window.location.origin);
+        requestUrl.searchParams.set("_ts", String(Date.now()));
+
+        try {
+          localStorage.removeItem(diagramStorageKey);
+          localStorage.removeItem(diagramStateKey);
+          localStorage.removeItem(diagramVersionKey);
+        } catch (err) {
+          console.error(err);
+        }
+
+        try {
+          const response = await fetch(requestUrl.toString(), {
+            credentials: "same-origin",
+            cache: "no-store",
+            headers: { "Cache-Control": "no-cache" },
+          });
+          if (!response.ok) {
+            showRetry();
+            return;
+          }
+          const scene = await response.json();
+          const payload = {
+            elements: scene.elements || [],
+            appState: scene.appState || {},
+          };
+          localStorage.setItem(diagramStorageKey, JSON.stringify(payload.elements));
+          localStorage.setItem(diagramStateKey, JSON.stringify(payload.appState));
+          localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
+        } catch (err) {
+          console.error(err);
+          showRetry();
+          return;
+        }
+        redirectToDiagram();
+      };
+
+      if (retryButton) {
+        retryButton.addEventListener("click", () => {
+          openDiagram();
+        });
       }
-      window.location.href = diagramUrl;
+
+      openDiagram();
     })();
   </script>
 {% endblock %}

@@ -93,7 +93,7 @@ def test_catalog_open_e2e(
                 ),
             )
             page.goto(f"http://catalog.local/catalog/{context.scene_id}/open")
-            page.wait_for_url(re.compile(r".*/excalidraw/?$"), timeout=10000)
+            page.wait_for_url(re.compile(r".*/excalidraw/?(?:\\?.*)?$"), timeout=10000)
             page.wait_for_selector("#status", timeout=10000)
             text = page.text_content("#status")
             browser.close()

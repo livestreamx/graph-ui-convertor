@@ -107,6 +107,7 @@ catalog:
 ## Large diagrams
 
 - Same-origin Excalidraw allows scene injection via localStorage, bypassing URL length limits.
+- The open endpoint also uses cache-busting query params and `fetch(..., { cache: "no-store" })` to reduce stale-scene issues.
 - Cross-origin Excalidraw uses `#json` only while the URL is short enough; otherwise users should download and import the `.excalidraw` file.
 - Very large scenes can exceed browser localStorage limits (often ~5MB) or be slow to render; rely on the manual import flow in that case.
 

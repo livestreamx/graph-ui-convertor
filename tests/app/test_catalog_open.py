@@ -30,3 +30,9 @@ def test_catalog_detail_uses_open_route_same_origin(
         assert open_response.status_code == 200
         assert "version-dataState" in open_response.text
         assert "excalidraw-state" in open_response.text
+        assert 'cache: "no-store"' in open_response.text
+        assert "localStorage.removeItem" in open_response.text
+        assert "_open_ts" in open_response.text
+        assert "Failed to load the latest scene. Please retry." in open_response.text
+        assert 'id="retry-open"' in open_response.text
+        assert "showRetry" in open_response.text

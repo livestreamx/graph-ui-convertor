@@ -87,6 +87,7 @@ then run `make convert-to-unidraw` to work with Unidraw scenes.
 ## Large diagrams
 
 - Same-origin Excalidraw (via `/excalidraw` proxy) uses localStorage injection (`/catalog/{scene_id}/open`) to avoid URL length limits.
+- The open flow appends cache-busting params and uses `fetch(..., { cache: "no-store" })` to avoid stale scene payloads between repeated opens.
 - Cross-origin Excalidraw falls back to `#json` URL only when shorter than `excalidraw_max_url_length`; otherwise use Download + Import.
 - Very large scenes may exceed browser localStorage limits or be slow to load; use the manual import flow in that case.
 
@@ -207,6 +208,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 ## Большие диаграммы
 
 - При same-origin Excalidraw (через прокси `/excalidraw`) используется инъекция сцены через localStorage (`/catalog/{scene_id}/open`), чтобы обойти лимиты длины URL.
+- Сценарий открытия добавляет cache-busting параметры и использует `fetch(..., { cache: "no-store" })`, чтобы не показывать устаревшую сцену при повторных открытиях.
 - При cross-origin Excalidraw используется `#json` только если URL короче `excalidraw_max_url_length`; иначе нужен сценарий Download + Import.
 - Очень большие сцены могут превышать лимиты localStorage или загружаться медленно; в таком случае используйте ручной импорт.
 
