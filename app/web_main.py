@@ -242,16 +242,15 @@ def create_app(settings: AppSettings) -> FastAPI:
                     [*all_team_options, *missing], key=lambda entry: entry[1].lower()
                 )
                 team_lookup = dict(all_team_options)
-        disabled_team_set = set(disabled_team_ids)
+        team_ids = normalize_team_ids(team_ids)
+        effective_disabled_team_ids = effective_excluded_team_ids(disabled_team_ids, team_ids)
+        effective_disabled_team_set = set(effective_disabled_team_ids)
         filtered_items = [
-            item for item in index_data.items if item.team_id not in disabled_team_set
+            item for item in index_data.items if item.team_id not in effective_disabled_team_set
         ]
-        _, team_options = build_filter_options(filtered_items, index_data.unknown_value)
-        team_ids = [
-            team_id for team_id in normalize_team_ids(team_ids) if team_id not in disabled_team_set
-        ]
+        team_options = all_team_options
         team_counts: dict[str, int] = {}
-        for item in filtered_items:
+        for item in index_data.items:
             team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
         all_team_counts: dict[str, int] = {}
         for item in index_data.items:
@@ -284,7 +283,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         error_message = None
         team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
-            items = filter_items_by_team_ids(filtered_items, team_ids)
+            items = filter_items_by_team_ids(index_data.items, team_ids)
             if not items:
                 error_message = "No scenes for selected teams."
             else:
@@ -516,9 +515,6 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
         excluded_team_ids = normalize_team_ids(excluded_team_ids)
-        if excluded_team_ids:
-            excluded_team_set = set(excluded_team_ids)
-            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         diagram_format = resolve_diagram_format(context.settings)
@@ -594,21 +590,20 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> ORJSONResponse:
         team_ids = normalize_team_ids(team_ids)
         excluded_team_ids = normalize_team_ids(excluded_team_ids)
-        if excluded_team_ids:
-            excluded_team_set = set(excluded_team_ids)
-            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        if excluded_team_ids:
+        effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
+        if effective_excluded_ids:
+            excluded_team_set = set(effective_excluded_ids)
             filtered_items = [
                 item for item in index_data.items if item.team_id not in excluded_team_set
             ]
         else:
             filtered_items = index_data.items
-        items = filter_items_by_team_ids(filtered_items, team_ids)
+        items = filter_items_by_team_ids(index_data.items, team_ids)
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
         diagram_format = resolve_diagram_format(context.settings)
@@ -1037,6 +1032,15 @@ def normalize_team_ids(team_ids: list[str]) -> list[str]:
             seen.add(value)
             normalized.append(value)
     return normalized
+
+
+def effective_excluded_team_ids(
+    excluded_team_ids: list[str], selected_team_ids: list[str]
+) -> list[str]:
+    if not excluded_team_ids or not selected_team_ids:
+        return excluded_team_ids
+    selected_team_set = set(selected_team_ids)
+    return [team_id for team_id in excluded_team_ids if team_id not in selected_team_set]
 
 
 def filter_items_by_team_ids(items: list[CatalogItem], team_ids: list[str]) -> list[CatalogItem]:

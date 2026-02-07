@@ -124,6 +124,7 @@ catalog:
   omitted from all builder metrics, merge-node detection, and overlap stats. Defaults can be set
   via `catalog.builder_excluded_team_ids` (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`: comma-separated,
   JSON array, or bracket format like `[team-forest]`).
+  If a disabled team is explicitly selected in "Teams to merge", selection wins for graph build.
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
