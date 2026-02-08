@@ -528,6 +528,31 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_selected_markups=merge_selected_markups,
             graph_level=graph_level,
         )
+        scene_payload: dict[str, Any] | None = None
+        try:
+            index_data = load_index(context)
+            if index_data is not None:
+                effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
+                if effective_excluded_ids:
+                    excluded_team_set = set(effective_excluded_ids)
+                    filtered_items = [
+                        item for item in index_data.items if item.team_id not in excluded_team_set
+                    ]
+                else:
+                    filtered_items = index_data.items
+                items = filter_items_by_team_ids(index_data.items, team_ids)
+                if items:
+                    scene_payload = build_team_diagram_payload(
+                        context,
+                        items,
+                        diagram_format,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
+                        graph_level=graph_level,
+                        merge_items=filtered_items if merge_nodes_all_markups else None,
+                    )
+        except Exception:
+            scene_payload = None
         return templates.TemplateResponse(
             request,
             "catalog_open.html",
@@ -541,6 +566,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "diagram_storage_key": resolve_diagram_storage_key(diagram_format),
                 "diagram_state_key": resolve_diagram_state_key(diagram_format),
                 "diagram_version_key": resolve_diagram_version_key(diagram_format),
+                "scene_payload": scene_payload,
             },
         )
 

@@ -908,6 +908,7 @@ def test_catalog_team_graph_open_preserves_graph_level_in_scene_api_url(
         assert response.status_code == 200
         assert "\\u0026graph_level=service" in response.text
         assert "amp;graph_level" not in response.text
+        assert "const inlineScene = {" in response.text
     finally:
         stubber.deactivate()
 

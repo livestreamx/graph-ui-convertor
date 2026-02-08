@@ -12,12 +12,14 @@
   <script>
     (async () => {
       const sceneApiUrl = {{ scene_api_url | tojson }};
+      const inlineScene = {{ scene_payload | default(None) | tojson }};
       const diagramUrl = {{ diagram_url | tojson }};
       const diagramStorageKey = {{ diagram_storage_key | tojson }};
       const diagramStateKey = {{ diagram_state_key | tojson }};
       const diagramVersionKey = {{ diagram_version_key | tojson }};
       const openError = document.getElementById("open-error");
       const retryButton = document.getElementById("retry-open");
+      const defaultErrorText = "Failed to load the latest scene. Please retry.";
 
       const redirectToDiagram = () => {
         const targetUrl = new URL(diagramUrl, window.location.origin);
@@ -25,8 +27,10 @@
         window.location.replace(targetUrl.toString());
       };
 
-      const showRetry = () => {
+      const showRetry = (reason = null) => {
         if (openError) {
+          const details = typeof reason === "string" ? reason.trim() : "";
+          openError.textContent = details ? `${defaultErrorText} Reason: ${details}` : defaultErrorText;
           openError.style.display = "block";
         }
         if (retryButton) {
@@ -37,10 +41,44 @@
 
       const hideRetry = () => {
         if (openError) {
+          openError.textContent = defaultErrorText;
           openError.style.display = "none";
         }
         if (retryButton) {
           retryButton.style.display = "none";
+        }
+      };
+
+      const extractResponseDetail = async (response) => {
+        const status = response.statusText ? `HTTP ${response.status} ${response.statusText}` : `HTTP ${response.status}`;
+        try {
+          const rawText = await response.text();
+          if (!rawText) {
+            return status;
+          }
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const parsed = JSON.parse(rawText);
+            if (typeof parsed === "string" && parsed.trim()) {
+              return `${status}: ${parsed.trim()}`;
+            }
+            if (parsed && typeof parsed === "object") {
+              const detailValue = parsed.detail;
+              if (typeof detailValue === "string" && detailValue.trim()) {
+                return `${status}: ${detailValue.trim()}`;
+              }
+            }
+          }
+          const trimmed = rawText.trim();
+          if (!trimmed) {
+            return status;
+          }
+          return `${status}: ${trimmed.slice(0, 300)}`;
+        } catch (err) {
+          if (err instanceof Error && err.message) {
+            return `${status}: ${err.message}`;
+          }
+          return status;
         }
       };
 
@@ -61,16 +99,22 @@
         }
 
         try {
-          const response = await fetch(requestUrl.toString(), {
-            credentials: "same-origin",
-            cache: "no-store",
-            headers: { "Cache-Control": "no-cache" },
-          });
-          if (!response.ok) {
-            showRetry();
-            return;
+          let scene = null;
+          if (inlineScene && typeof inlineScene === "object") {
+            scene = inlineScene;
+          } else {
+            const response = await fetch(requestUrl.toString(), {
+              credentials: "same-origin",
+              cache: "no-store",
+              headers: { "Cache-Control": "no-cache" },
+            });
+            if (!response.ok) {
+              const errorDetails = await extractResponseDetail(response);
+              showRetry(errorDetails);
+              return;
+            }
+            scene = await response.json();
           }
-          const scene = await response.json();
           const payload = {
             elements: scene.elements || [],
             appState: scene.appState || {},
@@ -80,7 +124,11 @@
           localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
         } catch (err) {
           console.error(err);
-          showRetry();
+          if (err instanceof Error && err.message) {
+            showRetry(err.message);
+          } else {
+            showRetry(String(err));
+          }
           return;
         }
         redirectToDiagram();

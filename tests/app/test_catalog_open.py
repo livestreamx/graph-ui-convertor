@@ -34,5 +34,8 @@ def test_catalog_detail_uses_open_route_same_origin(
         assert "localStorage.removeItem" in open_response.text
         assert "_open_ts" in open_response.text
         assert "Failed to load the latest scene. Please retry." in open_response.text
+        assert "Reason:" in open_response.text
+        assert "extractResponseDetail" in open_response.text
+        assert "HTTP ${response.status}" in open_response.text
         assert 'id="retry-open"' in open_response.text
         assert "showRetry" in open_response.text
