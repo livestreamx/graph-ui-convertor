@@ -82,6 +82,59 @@
         }
       };
 
+      const isQuotaExceededError = (error) => {
+        if (!error) {
+          return false;
+        }
+        if (typeof DOMException !== "undefined" && error instanceof DOMException) {
+          return error.name === "QuotaExceededError" || error.code === 22 || error.code === 1014;
+        }
+        const message = String(error.message || error);
+        return message.includes("QuotaExceededError") || message.includes("exceeded the quota");
+      };
+
+      const clearDiagramScopedStorage = () => {
+        const scopedPrefix = `${diagramStorageKey}-`;
+        const keysToRemove = [];
+        for (let idx = 0; idx < localStorage.length; idx += 1) {
+          const key = localStorage.key(idx);
+          if (!key) {
+            continue;
+          }
+          if (
+            key === diagramStorageKey ||
+            key === diagramStateKey ||
+            key === diagramVersionKey ||
+            key.startsWith(scopedPrefix) ||
+            key.startsWith(diagramStorageKey)
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+        for (const key of keysToRemove) {
+          localStorage.removeItem(key);
+        }
+      };
+
+      const persistScenePayload = (payload) => {
+        const elementsJson = JSON.stringify(payload.elements || []);
+        const appStateJson = JSON.stringify(payload.appState || {});
+        try {
+          localStorage.setItem(diagramStorageKey, elementsJson);
+          localStorage.setItem(diagramStateKey, appStateJson);
+          localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
+          return;
+        } catch (error) {
+          if (!isQuotaExceededError(error)) {
+            throw error;
+          }
+        }
+        localStorage.clear();
+        localStorage.setItem(diagramStorageKey, elementsJson);
+        localStorage.setItem(diagramStateKey, appStateJson);
+        localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
+      };
+
       const openDiagram = async () => {
         hideRetry();
         if (retryButton) {
@@ -91,9 +144,7 @@
         requestUrl.searchParams.set("_ts", String(Date.now()));
 
         try {
-          localStorage.removeItem(diagramStorageKey);
-          localStorage.removeItem(diagramStateKey);
-          localStorage.removeItem(diagramVersionKey);
+          clearDiagramScopedStorage();
         } catch (err) {
           console.error(err);
         }
@@ -115,13 +166,10 @@
             }
             scene = await response.json();
           }
-          const payload = {
+          persistScenePayload({
             elements: scene.elements || [],
             appState: scene.appState || {},
-          };
-          localStorage.setItem(diagramStorageKey, JSON.stringify(payload.elements));
-          localStorage.setItem(diagramStateKey, JSON.stringify(payload.appState));
-          localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
+          });
         } catch (err) {
           console.error(err);
           if (err instanceof Error && err.message) {
