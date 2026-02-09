@@ -15,7 +15,7 @@ from pydantic import (
     TypeAdapter,
     field_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 from pydantic_settings.sources import PydanticBaseSettingsSource, YamlConfigSettingsSource
 
 from domain.catalog import CatalogIndexConfig
@@ -23,6 +23,23 @@ from domain.catalog import CatalogIndexConfig
 DEFAULT_CONFIG_PATH = Path("config/catalog/app.s3.yaml")
 
 _HTTP_URL_ADAPTER = TypeAdapter(HttpUrl)
+
+
+def _split_string_list_value(raw_value: str) -> list[str]:
+    raw = raw_value.strip()
+    if not raw:
+        return []
+    if (
+        (raw.startswith('"') and raw.endswith('"')) or (raw.startswith("'") and raw.endswith("'"))
+    ) and len(raw) >= 2:
+        raw = raw[1:-1].strip()
+    if raw.startswith("[") and raw.endswith("]"):
+        raw = raw[1:-1].strip()
+    if not raw:
+        return []
+    return [
+        token for token in (part.strip().strip("'").strip('"') for part in raw.split(",")) if token
+    ]
 
 
 def _validate_link_path(value: str) -> str:
@@ -78,7 +95,7 @@ class CatalogSettings(BaseModel):
     unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
-    builder_excluded_team_ids: list[str] = Field(default_factory=list)
+    builder_excluded_team_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
     procedure_link_path: LinkPath | None = Field(
         default=None,
         validation_alias=AliasChoices("procedure_link_path", "procedure_link_template"),
@@ -118,8 +135,13 @@ class CatalogSettings(BaseModel):
         if value is None:
             return []
         if isinstance(value, list):
-            return [str(item) for item in value]
-        return [str(value)]
+            normalized: list[str] = []
+            for item in value:
+                normalized.extend(_split_string_list_value(str(item)))
+            return normalized
+        if isinstance(value, str):
+            return _split_string_list_value(value)
+        return _split_string_list_value(str(value))
 
     @field_validator("ui_text_overrides", mode="before")
     @classmethod

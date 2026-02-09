@@ -322,12 +322,305 @@ def test_catalog_team_graph_excluded_teams_preselected(
         assert "Disable teams from analytics" in html
         exclude_match = re.search(r'id="team-graph-exclude-select".*?</select>', html, re.S)
         assert exclude_match is not None
-        assert 'value="team-2" selected' in exclude_match.group(0)
+        assert re.search(r'value="team-2"[^>]*selected', exclude_match.group(0))
         select_match = re.search(r'id="team-graph-select".*?</select>', html, re.S)
         assert select_match is not None
-        assert 'value="team-2"' not in select_match.group(0)
+        assert 'value="team-2"' in select_match.group(0)
         assert 'id="team-graph-exclude-input"' in html
         assert 'value="team-2"' in html
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_excluded_team_name_not_overridden_by_unknown_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_beta_named = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Refunds",
+            "team_id": "team-2",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
+    }
+    payload_beta_unknown = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Chargebacks",
+            "team_id": "team-2",
+            "team_name": "unknown",
+        },
+        "procedures": [
+            {
+                "proc_id": "p3",
+                "proc_name": "Chargeback",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f"],
+                "branches": {"e": ["f"]},
+            }
+        ],
+        "procedure_graph": {"p3": []},
+    }
+    objects = {
+        "markup/beta-named.json": payload_beta_named,
+        "markup/beta-unknown.json": payload_beta_unknown,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+            builder_excluded_team_ids=["team-2"],
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get("/catalog/teams/graph")
+        assert response.status_code == 200
+        html = response.text
+        exclude_match = re.search(r'id="team-graph-exclude-select".*?</select>', html, re.S)
+        assert exclude_match is not None
+        option_match = re.search(
+            r'<option[^>]*value="team-2"[^>]*>\s*([^<]+?)\s*</option>',
+            exclude_match.group(0),
+            re.S,
+        )
+        assert option_match is not None
+        assert option_match.group(1).strip() == "Beta"
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_excluded_team_ids_query_bracket_value(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-1",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Authorize",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p1": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Refunds",
+            "team_id": "team-2",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
+    }
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get("/catalog/teams/graph?excluded_team_ids=[team-2]")
+        assert response.status_code == 200
+        html = response.text
+
+        exclude_match = re.search(r'id="team-graph-exclude-select".*?</select>', html, re.S)
+        assert exclude_match is not None
+        option_match = re.search(
+            r'<option[^>]*value="team-2"[^>]*>\s*([^<]+?)\s*</option>',
+            exclude_match.group(0),
+            re.S,
+        )
+        assert option_match is not None
+        assert option_match.group(1).strip() == "Beta"
+        assert re.search(r'value="team-2"[^>]*selected', exclude_match.group(0))
+    finally:
+        stubber.deactivate()
+
+
+def test_api_team_graph_keeps_selected_teams_even_when_excluded(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Refunds",
+            "team_id": "team-2",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p2",
+                "proc_name": "Refund",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p2": []},
+    }
+    objects = {"markup/beta.json": payload_beta}
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-2", "excluded_team_ids": "team-2"},
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+        assert any(
+            element.get("customData", {}).get("cjm", {}).get("role") == "procedure_stat"
+            for element in elements
+        )
     finally:
         stubber.deactivate()
 
@@ -615,6 +908,7 @@ def test_catalog_team_graph_open_preserves_graph_level_in_scene_api_url(
         assert response.status_code == 200
         assert "\\u0026graph_level=service" in response.text
         assert "amp;graph_level" not in response.text
+        assert "const inlineScene = {" in response.text
     finally:
         stubber.deactivate()
 

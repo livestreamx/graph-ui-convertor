@@ -242,16 +242,15 @@ def create_app(settings: AppSettings) -> FastAPI:
                     [*all_team_options, *missing], key=lambda entry: entry[1].lower()
                 )
                 team_lookup = dict(all_team_options)
-        disabled_team_set = set(disabled_team_ids)
+        team_ids = normalize_team_ids(team_ids)
+        effective_disabled_team_ids = effective_excluded_team_ids(disabled_team_ids, team_ids)
+        effective_disabled_team_set = set(effective_disabled_team_ids)
         filtered_items = [
-            item for item in index_data.items if item.team_id not in disabled_team_set
+            item for item in index_data.items if item.team_id not in effective_disabled_team_set
         ]
-        _, team_options = build_filter_options(filtered_items, index_data.unknown_value)
-        team_ids = [
-            team_id for team_id in normalize_team_ids(team_ids) if team_id not in disabled_team_set
-        ]
+        team_options = all_team_options
         team_counts: dict[str, int] = {}
-        for item in filtered_items:
+        for item in index_data.items:
             team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
         all_team_counts: dict[str, int] = {}
         for item in index_data.items:
@@ -284,7 +283,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         error_message = None
         team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
-            items = filter_items_by_team_ids(filtered_items, team_ids)
+            items = filter_items_by_team_ids(index_data.items, team_ids)
             if not items:
                 error_message = "No scenes for selected teams."
             else:
@@ -516,9 +515,6 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
         excluded_team_ids = normalize_team_ids(excluded_team_ids)
-        if excluded_team_ids:
-            excluded_team_set = set(excluded_team_ids)
-            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         diagram_format = resolve_diagram_format(context.settings)
@@ -532,6 +528,31 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_selected_markups=merge_selected_markups,
             graph_level=graph_level,
         )
+        scene_payload: dict[str, Any] | None = None
+        try:
+            index_data = load_index(context)
+            if index_data is not None:
+                effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
+                if effective_excluded_ids:
+                    excluded_team_set = set(effective_excluded_ids)
+                    filtered_items = [
+                        item for item in index_data.items if item.team_id not in excluded_team_set
+                    ]
+                else:
+                    filtered_items = index_data.items
+                items = filter_items_by_team_ids(index_data.items, team_ids)
+                if items:
+                    scene_payload = build_team_diagram_payload(
+                        context,
+                        items,
+                        diagram_format,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
+                        graph_level=graph_level,
+                        merge_items=filtered_items if merge_nodes_all_markups else None,
+                    )
+        except Exception:
+            scene_payload = None
         return templates.TemplateResponse(
             request,
             "catalog_open.html",
@@ -545,6 +566,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "diagram_storage_key": resolve_diagram_storage_key(diagram_format),
                 "diagram_state_key": resolve_diagram_state_key(diagram_format),
                 "diagram_version_key": resolve_diagram_version_key(diagram_format),
+                "scene_payload": scene_payload,
             },
         )
 
@@ -594,21 +616,20 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> ORJSONResponse:
         team_ids = normalize_team_ids(team_ids)
         excluded_team_ids = normalize_team_ids(excluded_team_ids)
-        if excluded_team_ids:
-            excluded_team_set = set(excluded_team_ids)
-            team_ids = [team_id for team_id in team_ids if team_id not in excluded_team_set]
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        if excluded_team_ids:
+        effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
+        if effective_excluded_ids:
+            excluded_team_set = set(effective_excluded_ids)
             filtered_items = [
                 item for item in index_data.items if item.team_id not in excluded_team_set
             ]
         else:
             filtered_items = index_data.items
-        items = filter_items_by_team_ids(filtered_items, team_ids)
+        items = filter_items_by_team_ids(index_data.items, team_ids)
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
         diagram_format = resolve_diagram_format(context.settings)
@@ -1019,13 +1040,33 @@ def normalize_team_ids(team_ids: list[str]) -> list[str]:
     normalized: list[str] = []
     seen: set[str] = set()
     for raw in team_ids:
-        for part in str(raw).split(","):
-            value = part.strip()
+        raw_text = str(raw).strip()
+        if not raw_text:
+            continue
+        # Support bracket-based list payloads like "[team-a,team-b]" and quoted variants.
+        if (
+            (raw_text.startswith('"') and raw_text.endswith('"'))
+            or (raw_text.startswith("'") and raw_text.endswith("'"))
+        ) and len(raw_text) >= 2:
+            raw_text = raw_text[1:-1].strip()
+        if raw_text.startswith("[") and raw_text.endswith("]"):
+            raw_text = raw_text[1:-1].strip()
+        for part in raw_text.split(","):
+            value = part.strip().strip("'").strip('"')
             if not value or value in seen:
                 continue
             seen.add(value)
             normalized.append(value)
     return normalized
+
+
+def effective_excluded_team_ids(
+    excluded_team_ids: list[str], selected_team_ids: list[str]
+) -> list[str]:
+    if not excluded_team_ids or not selected_team_ids:
+        return excluded_team_ids
+    selected_team_set = set(selected_team_ids)
+    return [team_id for team_id in excluded_team_ids if team_id not in selected_team_set]
 
 
 def filter_items_by_team_ids(items: list[CatalogItem], team_ids: list[str]) -> list[CatalogItem]:
@@ -1200,9 +1241,13 @@ def build_filter_options(
         if not item.team_id or item.team_id == unknown_value:
             continue
         display_name = item.team_name
-        if not display_name or display_name == unknown_value:
-            display_name = item.team_id
-        teams[item.team_id] = display_name
+        has_named_team = bool(display_name and display_name != unknown_value)
+        current = teams.get(item.team_id)
+        if has_named_team:
+            teams[item.team_id] = str(display_name)
+            continue
+        if current is None:
+            teams[item.team_id] = item.team_id
     team_options = sorted(teams.items(), key=lambda entry: entry[1].lower())
     return criticality_levels, team_options
 

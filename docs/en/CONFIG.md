@@ -107,6 +107,7 @@ catalog:
 ## Large diagrams
 
 - Same-origin Excalidraw allows scene injection via localStorage, bypassing URL length limits.
+- The open endpoint also uses cache-busting query params and `fetch(..., { cache: "no-store" })` to reduce stale-scene issues.
 - Cross-origin Excalidraw uses `#json` only while the URL is short enough; otherwise users should download and import the `.excalidraw` file.
 - Very large scenes can exceed browser localStorage limits (often ~5MB) or be slow to render; rely on the manual import flow in that case.
 
@@ -122,7 +123,9 @@ catalog:
   colors procedures by service; shared procedures are highlighted in light red.
 - The team selection step includes a "Disable teams from analytics" subsection. Disabled teams are
   omitted from all builder metrics, merge-node detection, and overlap stats. Defaults can be set
-  via `catalog.builder_excluded_team_ids` (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`, comma-separated).
+  via `catalog.builder_excluded_team_ids` (`CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS`: comma-separated,
+  JSON array, or bracket format like `[team-forest]`).
+  If a disabled team is explicitly selected in "Teams to merge", selection wins for graph build.
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
@@ -195,6 +198,7 @@ export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ## Local env files
 
 Local demo overrides live in `config/catalog/env.local` and are loaded by `make demo` / `make catalog-up`.
+When adding a new important `CJM_*` variable to app config, also pass it through in `makefile` (`CATALOG_ENV_EXTRA` / `docker run -e ...`), otherwise the value will not reach the Dockerized Catalog UI.
 When running the app directly (without Docker), source the file before starting:
 
 ```bash

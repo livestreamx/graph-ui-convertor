@@ -4,33 +4,191 @@
   <section class="detail-card">
     <h3>Opening {{ diagram_label }}…</h3>
     <p class="note">Preparing the scene in local storage and redirecting.</p>
+    <p class="note" id="open-error" style="display: none; color: #b42318;">
+      Failed to load the latest scene. Please retry.
+    </p>
+    <button id="retry-open" type="button" style="display: none;">Retry</button>
   </section>
   <script>
     (async () => {
       const sceneApiUrl = {{ scene_api_url | tojson }};
+      const inlineScene = {{ scene_payload | default(None) | tojson }};
       const diagramUrl = {{ diagram_url | tojson }};
       const diagramStorageKey = {{ diagram_storage_key | tojson }};
       const diagramStateKey = {{ diagram_state_key | tojson }};
       const diagramVersionKey = {{ diagram_version_key | tojson }};
+      const openError = document.getElementById("open-error");
+      const retryButton = document.getElementById("retry-open");
+      const defaultErrorText = "Failed to load the latest scene. Please retry.";
 
-      const response = await fetch(sceneApiUrl, { credentials: "same-origin" });
-      if (!response.ok) {
-        window.location.href = diagramUrl;
-        return;
-      }
-      const scene = await response.json();
-      const payload = {
-        elements: scene.elements || [],
-        appState: scene.appState || {},
+      const redirectToDiagram = () => {
+        const targetUrl = new URL(diagramUrl, window.location.origin);
+        targetUrl.searchParams.set("_open_ts", String(Date.now()));
+        window.location.replace(targetUrl.toString());
       };
-      try {
-        localStorage.setItem(diagramStorageKey, JSON.stringify(payload.elements));
-        localStorage.setItem(diagramStateKey, JSON.stringify(payload.appState));
+
+      const showRetry = (reason = null) => {
+        if (openError) {
+          const details = typeof reason === "string" ? reason.trim() : "";
+          openError.textContent = details ? `${defaultErrorText} Reason: ${details}` : defaultErrorText;
+          openError.style.display = "block";
+        }
+        if (retryButton) {
+          retryButton.style.display = "inline-block";
+          retryButton.disabled = false;
+        }
+      };
+
+      const hideRetry = () => {
+        if (openError) {
+          openError.textContent = defaultErrorText;
+          openError.style.display = "none";
+        }
+        if (retryButton) {
+          retryButton.style.display = "none";
+        }
+      };
+
+      const extractResponseDetail = async (response) => {
+        const status = response.statusText ? `HTTP ${response.status} ${response.statusText}` : `HTTP ${response.status}`;
+        try {
+          const rawText = await response.text();
+          if (!rawText) {
+            return status;
+          }
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            const parsed = JSON.parse(rawText);
+            if (typeof parsed === "string" && parsed.trim()) {
+              return `${status}: ${parsed.trim()}`;
+            }
+            if (parsed && typeof parsed === "object") {
+              const detailValue = parsed.detail;
+              if (typeof detailValue === "string" && detailValue.trim()) {
+                return `${status}: ${detailValue.trim()}`;
+              }
+            }
+          }
+          const trimmed = rawText.trim();
+          if (!trimmed) {
+            return status;
+          }
+          return `${status}: ${trimmed.slice(0, 300)}`;
+        } catch (err) {
+          if (err instanceof Error && err.message) {
+            return `${status}: ${err.message}`;
+          }
+          return status;
+        }
+      };
+
+      const isQuotaExceededError = (error) => {
+        if (!error) {
+          return false;
+        }
+        if (typeof DOMException !== "undefined" && error instanceof DOMException) {
+          return error.name === "QuotaExceededError" || error.code === 22 || error.code === 1014;
+        }
+        const message = String(error.message || error);
+        return message.includes("QuotaExceededError") || message.includes("exceeded the quota");
+      };
+
+      const clearDiagramScopedStorage = () => {
+        const scopedPrefix = `${diagramStorageKey}-`;
+        const keysToRemove = [];
+        for (let idx = 0; idx < localStorage.length; idx += 1) {
+          const key = localStorage.key(idx);
+          if (!key) {
+            continue;
+          }
+          if (
+            key === diagramStorageKey ||
+            key === diagramStateKey ||
+            key === diagramVersionKey ||
+            key.startsWith(scopedPrefix) ||
+            key.startsWith(diagramStorageKey)
+          ) {
+            keysToRemove.push(key);
+          }
+        }
+        for (const key of keysToRemove) {
+          localStorage.removeItem(key);
+        }
+      };
+
+      const persistScenePayload = (payload) => {
+        const elementsJson = JSON.stringify(payload.elements || []);
+        const appStateJson = JSON.stringify(payload.appState || {});
+        try {
+          localStorage.setItem(diagramStorageKey, elementsJson);
+          localStorage.setItem(diagramStateKey, appStateJson);
+          localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
+          return;
+        } catch (error) {
+          if (!isQuotaExceededError(error)) {
+            throw error;
+          }
+        }
+        localStorage.clear();
+        localStorage.setItem(diagramStorageKey, elementsJson);
+        localStorage.setItem(diagramStateKey, appStateJson);
         localStorage.setItem(diagramVersionKey, JSON.stringify(Date.now()));
-      } catch (err) {
-        console.error(err);
+      };
+
+      const openDiagram = async () => {
+        hideRetry();
+        if (retryButton) {
+          retryButton.disabled = true;
+        }
+        const requestUrl = new URL(sceneApiUrl, window.location.origin);
+        requestUrl.searchParams.set("_ts", String(Date.now()));
+
+        try {
+          clearDiagramScopedStorage();
+        } catch (err) {
+          console.error(err);
+        }
+
+        try {
+          let scene = null;
+          if (inlineScene && typeof inlineScene === "object") {
+            scene = inlineScene;
+          } else {
+            const response = await fetch(requestUrl.toString(), {
+              credentials: "same-origin",
+              cache: "no-store",
+              headers: { "Cache-Control": "no-cache" },
+            });
+            if (!response.ok) {
+              const errorDetails = await extractResponseDetail(response);
+              showRetry(errorDetails);
+              return;
+            }
+            scene = await response.json();
+          }
+          persistScenePayload({
+            elements: scene.elements || [],
+            appState: scene.appState || {},
+          });
+        } catch (err) {
+          console.error(err);
+          if (err instanceof Error && err.message) {
+            showRetry(err.message);
+          } else {
+            showRetry(String(err));
+          }
+          return;
+        }
+        redirectToDiagram();
+      };
+
+      if (retryButton) {
+        retryButton.addEventListener("click", () => {
+          openDiagram();
+        });
       }
-      window.location.href = diagramUrl;
+
+      openDiagram();
     })();
   </script>
 {% endblock %}
