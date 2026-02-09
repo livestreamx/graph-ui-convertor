@@ -754,6 +754,65 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
     assert merge_node.entities == ("Alpha / Payments", "Beta / Routing")
 
 
+def test_graph_groups_merge_threshold_keeps_single_chain_representative() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(
+                    procedure_id="shared_a",
+                    procedure_name="Shared A",
+                    branches={"a1": ["a2"]},
+                ),
+                Procedure(
+                    procedure_id="shared_b",
+                    procedure_name="Shared B",
+                    branches={"a3": ["a4"]},
+                ),
+            ],
+            procedure_graph={"shared_a": ["shared_b"], "shared_b": []},
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Routing",
+            unit_id="svc-routing",
+            procedures=[
+                Procedure(
+                    procedure_id="shared_a",
+                    procedure_name="Shared A",
+                    branches={"b1": ["b2"]},
+                ),
+                Procedure(
+                    procedure_id="shared_b",
+                    procedure_name="Shared B",
+                    branches={"b3": ["b4"]},
+                ),
+            ],
+            procedure_graph={"shared_a": ["shared_b"], "shared_b": []},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
+    )
+
+    merged_group = next(
+        item for item in dashboard.graph_groups if "Alpha / Payments + Beta / Routing" in item.label
+    )
+    component = merged_group.components[0]
+    assert [node.procedure_id for node in component.merge_nodes] == ["shared_a"]
+
+
 def test_dashboard_graph_stats_follow_same_merge_graph_as_diagram() -> None:
     selected_documents = [
         _doc(

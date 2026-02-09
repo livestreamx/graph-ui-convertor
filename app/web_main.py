@@ -211,6 +211,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data = load_index(context)
@@ -304,6 +305,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         all_documents=all_documents,
                         selected_team_ids=team_ids,
                         merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
                         merge_documents=all_documents if merge_nodes_all_markups else None,
                     )
                     diagram_format = resolve_diagram_format(context.settings)
@@ -315,6 +317,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         excluded_team_ids=disabled_team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level="procedure",
                     )
                     service_team_query = build_team_query(
@@ -322,6 +325,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         excluded_team_ids=disabled_team_ids,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level="service",
                     )
                     team_query = procedure_team_query
@@ -341,6 +345,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             diagram_format,
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
+                            merge_node_min_chain_size=merge_node_min_chain_size,
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
                         )
@@ -362,6 +367,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             diagram_format,
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
+                            merge_node_min_chain_size=merge_node_min_chain_size,
                             graph_level="service",
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
@@ -405,6 +411,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "error_message": error_message,
                 "merge_nodes_all_markups": merge_nodes_all_markups,
                 "merge_selected_markups": merge_selected_markups,
+                "merge_node_min_chain_size": merge_node_min_chain_size,
                 "team_dashboard": team_dashboard,
             },
         )
@@ -510,6 +517,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         graph_level: GraphLevel = Query(default="procedure"),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
@@ -526,6 +534,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             excluded_team_ids=excluded_team_ids,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
         )
         scene_payload: dict[str, Any] | None = None
@@ -548,6 +557,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         diagram_format,
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level=graph_level,
                         merge_items=filtered_items if merge_nodes_all_markups else None,
                     )
@@ -610,6 +620,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         graph_level: GraphLevel = Query(default="procedure"),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
@@ -639,6 +650,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             diagram_format,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
             merge_items=filtered_items if merge_nodes_all_markups else None,
         )
@@ -951,6 +963,7 @@ def build_team_diagram_payload(
     diagram_format: str,
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
+    merge_node_min_chain_size: int = 1,
     graph_level: GraphLevel = "procedure",
     merge_items: list[CatalogItem] | None = None,
     document_cache: dict[str, MarkupDocument] | None = None,
@@ -976,6 +989,7 @@ def build_team_diagram_payload(
             documents,
             merge_documents=merge_documents,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
         )
     except ValueError as exc:
@@ -1020,6 +1034,7 @@ def build_team_query(
     excluded_team_ids: list[str] | None = None,
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
+    merge_node_min_chain_size: int = 1,
     graph_level: GraphLevel = "procedure",
 ) -> str:
     if not team_ids:
@@ -1031,6 +1046,8 @@ def build_team_query(
         payload["merge_nodes_all_markups"] = "true"
     if merge_selected_markups:
         payload["merge_selected_markups"] = "true"
+    if merge_node_min_chain_size != 1:
+        payload["merge_node_min_chain_size"] = str(merge_node_min_chain_size)
     if graph_level == "service":
         payload["graph_level"] = graph_level
     return urlencode(payload)

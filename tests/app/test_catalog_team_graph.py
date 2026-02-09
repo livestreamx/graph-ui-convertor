@@ -165,6 +165,17 @@ def test_catalog_team_graph_api(
         assert "Cross-team graphs builder" in html_response.text
         assert "Step 1. Select teams" in html_response.text
         assert "Step 2. Feature flags" in html_response.text
+        assert "Merge node chain threshold" in html_response.text
+        assert "How merge chain threshold works" in html_response.text
+        assert "Cycles are excluded from merge-chain detection." in html_response.text
+        assert "Branch/fork and join procedures are treated as chain boundaries" in (
+            html_response.text
+        )
+        assert 'id="merge_node_min_chain_size"' in html_response.text
+        assert 'name="merge_node_min_chain_size"' in html_response.text
+        assert 'min="0"' in html_response.text
+        assert 'max="10"' in html_response.text
+        assert 'step="1"' in html_response.text
         assert "Merge markups by shared nodes" in html_response.text
         assert "How selected graphs render their components in according to shared nodes." in (
             html_response.text
@@ -848,6 +859,70 @@ def test_catalog_team_graph_open_preserves_selected_merge_flag_in_scene_api_url(
         stubber.deactivate()
 
 
+def test_catalog_team_graph_open_preserves_merge_threshold_in_scene_api_url(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    objects = {
+        "markup/basic.json": payload_basic,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="/excalidraw",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/catalog/teams/graph/open",
+            params={"team_ids": "team-alpha", "merge_node_min_chain_size": "3"},
+        )
+        assert response.status_code == 200
+        assert "\\u0026merge_node_min_chain_size=3" in response.text
+        assert "amp;merge_node_min_chain_size" not in response.text
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_open_preserves_graph_level_in_scene_api_url(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1143,6 +1218,10 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-cta-action" in styles
     assert "justify-self: end;" in styles
     assert ".team-graph-merge-button" in styles
+    assert ".team-graph-merge-threshold-card" in styles
+    assert ".team-graph-merge-threshold-title-row" in styles
+    assert ".team-graph-merge-threshold-rules" in styles
+    assert '.team-graph-merge-threshold-input input[type="range"]' in styles
     assert ".team-graph-flag-item.is-on" in styles
     assert "outline-color: rgba(129, 237, 155, 0.34);" in styles
     assert '.team-graph-flag-button[data-state="on"]' in styles
@@ -1390,6 +1469,122 @@ def test_catalog_team_graph_can_merge_selected_markups_by_flag(
             if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
         ]
         assert frame_ids == ["shared"]
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_team_graph_merge_threshold_zero_disables_shared_node_merging(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Loans",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={
+                "team_ids": "team-alpha,team-beta",
+                "merge_selected_markups": "true",
+                "merge_node_min_chain_size": "0",
+            },
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+        frame_ids = [
+            element.get("customData", {}).get("cjm", {}).get("procedure_id")
+            for element in elements
+            if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+        ]
+        shared_ids = [
+            proc_id
+            for proc_id in frame_ids
+            if isinstance(proc_id, str) and proc_id.startswith("shared::doc")
+        ]
+        assert len(shared_ids) == 2
+        assert "shared" not in frame_ids
     finally:
         stubber.deactivate()
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from hashlib import sha1
 from typing import Any, Literal
 
 from domain.models import MarkupDocument, Procedure, merge_end_types
@@ -30,6 +31,7 @@ class BuildTeamProcedureGraph:
         documents: Sequence[MarkupDocument],
         merge_documents: Sequence[MarkupDocument] | None = None,
         merge_selected_markups: bool = True,
+        merge_node_min_chain_size: int = 1,
         graph_level: GraphLevel = "procedure",
     ) -> MarkupDocument:
         procedures: list[Procedure] = []
@@ -45,6 +47,16 @@ class BuildTeamProcedureGraph:
         source_proc_by_scoped: dict[str, str] | None = None
         merge_services: dict[str, dict[str, dict[str, object]]] = {}
         merge_node_ids: set[str] = set()
+        merge_scope = merge_documents if merge_documents is not None else documents
+        if merge_scope:
+            merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
+            self._apply_service_colors(merge_services, merge_service_keys)
+            merge_node_ids = self._resolve_merge_node_ids(
+                merge_scope,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+            )
+
         if merge_selected_markups:
             (
                 procedure_payloads,
@@ -52,7 +64,11 @@ class BuildTeamProcedureGraph:
                 selected_graph,
                 procedure_services,
                 service_keys,
-            ) = self._collect_documents(documents, include_graph_nodes=False)
+            ) = self._collect_documents(
+                documents,
+                include_graph_nodes=False,
+                merge_node_ids=merge_node_ids,
+            )
             procedure_graph = selected_graph
         else:
             (
@@ -81,7 +97,11 @@ class BuildTeamProcedureGraph:
                 merge_graph,
                 merge_services,
                 merge_service_keys,
-            ) = self._collect_documents(merge_documents, include_graph_nodes=True)
+            ) = self._collect_documents(
+                merge_documents,
+                include_graph_nodes=True,
+                merge_node_ids=merge_node_ids,
+            )
             self._apply_service_colors(merge_services, merge_service_keys)
 
             visible_proc_ids = set(procedure_services.keys())
@@ -94,15 +114,6 @@ class BuildTeamProcedureGraph:
                             continue
                         procedure_payloads[proc_id] = dict(payload)
                         procedure_order.append(proc_id)
-
-        merge_scope = merge_documents if merge_documents is not None else documents
-        if merge_scope:
-            merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
-            self._apply_service_colors(merge_services, merge_service_keys)
-            merge_node_ids = self._resolve_merge_node_ids(
-                merge_scope,
-                merge_selected_markups=merge_selected_markups,
-            )
 
         removed_proc_ids, procedure_graph = self._drop_intermediate_procedures(
             procedure_payloads,
@@ -134,6 +145,8 @@ class BuildTeamProcedureGraph:
             service_key_list = sorted(service_map.keys())
             if service_key_list:
                 is_intersection = len(service_key_list) > 1
+                if merge_scope and proc_id not in merge_node_ids:
+                    is_intersection = False
                 color = (
                     _INTERSECTION_COLOR
                     if is_intersection
@@ -297,6 +310,7 @@ class BuildTeamProcedureGraph:
         documents: Sequence[MarkupDocument],
         *,
         include_graph_nodes: bool,
+        merge_node_ids: set[str] | None = None,
     ) -> tuple[
         dict[str, dict[str, Any]],
         list[str],
@@ -309,11 +323,26 @@ class BuildTeamProcedureGraph:
         procedure_graph: dict[str, list[str]] = {}
         procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         service_keys: set[str] = set()
+        merge_lookup_ids = merge_node_ids if merge_node_ids is not None else set()
+        source_counts: dict[str, int] = {}
+        if merge_node_ids is not None:
+            for document in documents:
+                for proc_id in self._document_procedure_ids(document):
+                    if proc_id in merge_lookup_ids:
+                        continue
+                    source_counts[proc_id] = source_counts.get(proc_id, 0) + 1
+        doc_scope_index_by_service: dict[str, int] = {}
 
         for document in documents:
             team_label = self._resolve_team_label(document)
             service_label = self._resolve_service_label(document)
             service_key = self._service_key(team_label, service_label)
+            doc_scope_token = ""
+            if merge_node_ids is not None:
+                next_index = doc_scope_index_by_service.get(service_key, 0) + 1
+                doc_scope_index_by_service[service_key] = next_index
+                service_hash = sha1(service_key.encode("utf-8")).hexdigest()[:8]
+                doc_scope_token = f"{service_hash}{next_index}"
             service_payload: dict[str, object] = {
                 "team_name": team_label,
                 "service_name": service_label,
@@ -321,27 +350,44 @@ class BuildTeamProcedureGraph:
                 "finedog_unit_id": document.finedog_unit_id,
             }
             service_keys.add(service_key)
+            scoped_id_map: dict[str, str] = {}
+            if merge_node_ids is not None:
+                for source_proc_id in self._document_procedure_ids(document):
+                    if (
+                        source_proc_id in merge_lookup_ids
+                        or source_counts.get(source_proc_id, 0) <= 1
+                    ):
+                        scoped_id_map[source_proc_id] = source_proc_id
+                        continue
+                    scoped_id_map[source_proc_id] = f"{source_proc_id}::doc{doc_scope_token}"
 
             for proc in document.procedures:
-                proc_id = proc.procedure_id
+                proc_id = scoped_id_map.get(proc.procedure_id, proc.procedure_id)
                 if proc_id not in procedure_payloads:
                     procedure_order.append(proc_id)
-                    procedure_payloads[proc_id] = self._procedure_payload(proc)
+                    payload = self._procedure_payload(proc)
+                    payload["procedure_id"] = proc_id
+                    procedure_payloads[proc_id] = payload
                 else:
                     procedure_payloads[proc_id] = self._merge_procedure_payload(
                         procedure_payloads[proc_id], proc
                     )
+                    procedure_payloads[proc_id]["procedure_id"] = proc_id
                 procedure_services.setdefault(proc_id, {})[service_key] = dict(service_payload)
 
             for parent, children in document.procedure_graph.items():
-                procedure_graph.setdefault(parent, [])
+                parent_id = scoped_id_map.get(parent, parent)
+                procedure_graph.setdefault(parent_id, [])
                 if include_graph_nodes:
-                    procedure_services.setdefault(parent, {})[service_key] = dict(service_payload)
+                    procedure_services.setdefault(parent_id, {})[service_key] = dict(
+                        service_payload
+                    )
                 for child in children:
-                    if child not in procedure_graph[parent]:
-                        procedure_graph[parent].append(child)
+                    child_id = scoped_id_map.get(child, child)
+                    if child_id not in procedure_graph[parent_id]:
+                        procedure_graph[parent_id].append(child_id)
                     if include_graph_nodes:
-                        procedure_services.setdefault(child, {})[service_key] = dict(
+                        procedure_services.setdefault(child_id, {})[service_key] = dict(
                             service_payload
                         )
 
@@ -534,11 +580,13 @@ class BuildTeamProcedureGraph:
         documents: Sequence[MarkupDocument],
         *,
         merge_selected_markups: bool,
+        merge_node_min_chain_size: int,
     ) -> set[str]:
         states = self._build_service_node_states(documents)
         return collect_merge_node_ids(
             states,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
         )
 
     def _build_service_node_states(

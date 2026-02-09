@@ -422,6 +422,122 @@ def test_build_team_procedure_graph_allows_duplicate_procedure_ids() -> None:
     )
 
 
+def test_build_team_procedure_graph_merge_threshold_zero_disables_shared_merges() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["b1"],
+                    "end_block_ids": ["b2::end"],
+                    "branches": {"b1": ["b2"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=True,
+        merge_node_min_chain_size=0,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    shared_proc_ids = [proc_id for proc_id in proc_ids if proc_id.startswith("shared::doc")]
+    assert len(shared_proc_ids) == 2
+    assert "shared" not in proc_ids
+    assert all(merged.procedure_meta[proc_id]["is_intersection"] is False for proc_id in proc_ids)
+
+
+def test_build_team_procedure_graph_merge_threshold_groups_shared_chains() -> None:
+    doc_alpha = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared_a",
+                    "proc_name": "Shared A",
+                    "start_block_ids": ["a1"],
+                    "end_block_ids": ["a2::end"],
+                    "branches": {"a1": ["a2"]},
+                },
+                {
+                    "proc_id": "shared_b",
+                    "proc_name": "Shared B",
+                    "start_block_ids": ["a3"],
+                    "end_block_ids": ["a4::end"],
+                    "branches": {"a3": ["a4"]},
+                },
+            ],
+            "procedure_graph": {"shared_a": ["shared_b"], "shared_b": []},
+        }
+    )
+    doc_beta = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Loans",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared_a",
+                    "proc_name": "Shared A",
+                    "start_block_ids": ["b1"],
+                    "end_block_ids": ["b2::end"],
+                    "branches": {"b1": ["b2"]},
+                },
+                {
+                    "proc_id": "shared_b",
+                    "proc_name": "Shared B",
+                    "start_block_ids": ["b3"],
+                    "end_block_ids": ["b4::end"],
+                    "branches": {"b3": ["b4"]},
+                },
+            ],
+            "procedure_graph": {"shared_a": ["shared_b"], "shared_b": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_alpha, doc_beta],
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
+    )
+
+    proc_ids = [proc.procedure_id for proc in merged.procedures]
+    shared_b_scoped = [proc_id for proc_id in proc_ids if proc_id.startswith("shared_b::doc")]
+    assert "shared_a" in proc_ids
+    assert "shared_b" not in proc_ids
+    assert len(shared_b_scoped) == 2
+    assert merged.procedure_meta["shared_a"]["is_intersection"] is True
+    assert all(
+        merged.procedure_meta[proc_id]["is_intersection"] is False for proc_id in shared_b_scoped
+    )
+
+
 def test_build_team_procedure_graph_marks_singleton_shared_nodes_when_flag_is_off() -> None:
     doc_alpha = MarkupDocument.model_validate(
         {

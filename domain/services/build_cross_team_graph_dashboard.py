@@ -424,6 +424,7 @@ class BuildCrossTeamGraphDashboard:
         all_documents: Sequence[MarkupDocument],
         selected_team_ids: Sequence[str],
         merge_selected_markups: bool = False,
+        merge_node_min_chain_size: int = 1,
         merge_documents: Sequence[MarkupDocument] | None = None,
         top_limit: int = 10,
     ) -> CrossTeamGraphDashboard:
@@ -445,6 +446,7 @@ class BuildCrossTeamGraphDashboard:
         ) = self._extract_graph_view(
             selected_documents,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
             merge_documents=merge_documents,
         )
         markup_type_counts = tuple(self._build_markup_type_counts(selected_documents))
@@ -526,6 +528,7 @@ class BuildCrossTeamGraphDashboard:
         pair_merge_nodes = collect_pair_merge_nodes(
             all_service_states,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
         )
         pair_merge_counts = self._build_pair_merge_counts(pair_merge_nodes)
         selected_service_keys = set(selected_services.keys())
@@ -663,6 +666,7 @@ class BuildCrossTeamGraphDashboard:
                 global_graph_labels_by_proc=global_graph_labels_by_proc,
                 procedure_names=procedure_names,
                 merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
                 top_limit=top_limit,
             )
         )
@@ -763,12 +767,14 @@ class BuildCrossTeamGraphDashboard:
         selected_documents: Sequence[MarkupDocument],
         *,
         merge_selected_markups: bool,
+        merge_node_min_chain_size: int,
         merge_documents: Sequence[MarkupDocument] | None = None,
     ) -> tuple[MarkupDocument, list[str], dict[str, set[str]], tuple[GraphGroupStat, ...]]:
         graph_document = BuildTeamProcedureGraph().build(
             selected_documents,
             merge_documents=merge_documents,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
         )
         components = _collect_graph_components(graph_document)
         graph_keys_by_procedure_id: dict[str, set[str]] = {}
@@ -1101,6 +1107,7 @@ class BuildCrossTeamGraphDashboard:
         global_graph_labels_by_proc: Mapping[str, str | None],
         procedure_names: Mapping[str, str],
         merge_selected_markups: bool,
+        merge_node_min_chain_size: int,
         top_limit: int,
     ) -> list[ServiceLoadStat]:
         merge_node_ids_by_service: dict[str, set[str]] = {}
@@ -1108,6 +1115,7 @@ class BuildCrossTeamGraphDashboard:
         pair_merge_nodes = collect_pair_merge_nodes(
             states,
             merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
         )
         for (left_key, right_key), proc_ids in pair_merge_nodes.items():
             merge_node_ids_by_service.setdefault(left_key, set()).update(proc_ids)

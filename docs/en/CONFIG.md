@@ -129,9 +129,17 @@ catalog:
 - The cross-team builder includes a Feature flags section with per-flag cards and an
   Enable/Disable button; each flag card has a subsection-style outline, and enabled flags switch to
   a light green tint while the toggle button switches to a dark style.
+  Above the flag cards there is a dedicated merge-node configuration subsection with
+  `merge_node_min_chain_size` slider (`0..10`, step `1`, default `1`).
   During graph build, intermediate procedures are removed when all conditions are met: no START/END
   markers (including `postpone`), exactly one inbound + one outbound edge, and the node is not a
   merge node.
+  `merge_node_min_chain_size=0` disables merge-node detection/highlighting entirely.
+  `merge_node_min_chain_size=1` keeps the current behavior (single shared procedure is enough).
+  Values `>1` require non-overlapping shared chains of at least `N` consecutive procedures; each
+  such chain is counted/rendered as one merge node representative.
+  Cycles are not treated as merge chains. Branching/merge procedures (shared out-degree > 1 or
+  in-degree > 1) are treated as boundaries and are not included into `N>1` chains.
   `merge_selected_markups` is disabled by default and controls whether selected markups are merged
   by shared procedure IDs (`true`) or rendered as-is as separate graph components (`false`).
   `merge_nodes_all_markups` makes merge nodes use all available markups while still rendering only
@@ -167,8 +175,9 @@ catalog:
   `team-graph_alpha_beta.excalidraw`).
 - `/api/teams/graph` and `/catalog/teams/graph/open` support `graph_level=service` for a
   top-level service diagram. Service nodes aggregate all selected markups for the same service,
-  while merge flags (`merge_selected_markups`, `merge_nodes_all_markups`) are still applied in the
-  underlying procedure graph before this aggregation layer.
+  while merge controls (`merge_selected_markups`, `merge_nodes_all_markups`,
+  `merge_node_min_chain_size`) are still applied in the underlying procedure graph before this
+  aggregation layer.
 
 ## Dot-path resolution
 
