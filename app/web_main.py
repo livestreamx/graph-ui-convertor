@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 from urllib.parse import urlencode, urlparse
 from zoneinfo import ZoneInfo
 
@@ -55,6 +55,8 @@ TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+SceneFormat = Literal["excalidraw", "unidraw"]
 
 
 @dataclass(frozen=True)
@@ -272,15 +274,12 @@ def create_app(settings: AppSettings) -> FastAPI:
         )
 
         diagram_ready = False
-        diagram_open_url = None
-        diagram_label = None
-        diagram_ext = None
         open_mode = None
         team_query = ""
         procedure_team_query = ""
         service_team_query = ""
-        procedure_diagram_open_url = None
-        service_diagram_open_url = None
+        procedure_excalidraw_open_url = None
+        service_excalidraw_open_url = None
         error_message = None
         team_dashboard: CrossTeamGraphDashboard | None = None
         if team_ids:
@@ -308,10 +307,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         merge_node_min_chain_size=merge_node_min_chain_size,
                         merge_documents=all_documents if merge_nodes_all_markups else None,
                     )
-                    diagram_format = resolve_diagram_format(context.settings)
-                    diagram_label = resolve_diagram_label(diagram_format)
-                    diagram_ext = resolve_diagram_extension(diagram_format)
-                    diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
+                    diagram_base_url = context.settings.catalog.excalidraw_base_url
                     procedure_team_query = build_team_query(
                         team_ids,
                         excluded_team_ids=disabled_team_ids,
@@ -329,34 +325,34 @@ def create_app(settings: AppSettings) -> FastAPI:
                         graph_level="service",
                     )
                     team_query = procedure_team_query
-                    diagram_open_url = diagram_base_url
-                    procedure_diagram_open_url = diagram_base_url
-                    service_diagram_open_url = diagram_base_url
+                    procedure_excalidraw_open_url = diagram_base_url
+                    service_excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
                     if is_same_origin(request, diagram_base_url):
-                        diagram_open_url = f"/catalog/teams/graph/open?{team_query}"
-                        procedure_diagram_open_url = diagram_open_url
-                        service_diagram_open_url = f"/catalog/teams/graph/open?{service_team_query}"
+                        procedure_excalidraw_open_url = f"/catalog/teams/graph/open?{team_query}"
+                        service_excalidraw_open_url = (
+                            f"/catalog/teams/graph/open?{service_team_query}"
+                        )
                         open_mode = "local_storage"
-                    elif diagram_format == "excalidraw":
+                    else:
                         payload = build_team_diagram_payload(
                             context,
                             items,
-                            diagram_format,
+                            "excalidraw",
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
                             merge_node_min_chain_size=merge_node_min_chain_size,
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
                         )
-                        diagram_open_url = build_excalidraw_url(diagram_base_url, payload)
-                        procedure_diagram_open_url = diagram_open_url
+                        procedure_excalidraw_open_url = build_excalidraw_url(
+                            diagram_base_url, payload
+                        )
                         if (
-                            len(diagram_open_url)
+                            len(procedure_excalidraw_open_url)
                             > context.settings.catalog.excalidraw_max_url_length
                         ):
-                            diagram_open_url = diagram_base_url
-                            procedure_diagram_open_url = diagram_base_url
+                            procedure_excalidraw_open_url = diagram_base_url
                             open_mode = "manual"
                         else:
                             open_mode = "direct"
@@ -364,7 +360,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         service_payload = build_team_diagram_payload(
                             context,
                             items,
-                            diagram_format,
+                            "excalidraw",
                             merge_nodes_all_markups=merge_nodes_all_markups,
                             merge_selected_markups=merge_selected_markups,
                             merge_node_min_chain_size=merge_node_min_chain_size,
@@ -372,14 +368,14 @@ def create_app(settings: AppSettings) -> FastAPI:
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
                         )
-                        service_diagram_open_url = build_excalidraw_url(
+                        service_excalidraw_open_url = build_excalidraw_url(
                             diagram_base_url, service_payload
                         )
                         if (
-                            len(service_diagram_open_url)
+                            len(service_excalidraw_open_url)
                             > context.settings.catalog.excalidraw_max_url_length
                         ):
-                            service_diagram_open_url = diagram_base_url
+                            service_excalidraw_open_url = diagram_base_url
                     diagram_ready = True
         return templates.TemplateResponse(
             request,
@@ -388,9 +384,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "request": request,
                 "settings": context.settings,
                 "diagram_ready": diagram_ready,
-                "diagram_label": diagram_label,
-                "diagram_ext": diagram_ext,
-                "diagram_open_url": diagram_open_url,
+                "diagram_excalidraw_enabled": context.settings.catalog.diagram_excalidraw_enabled,
                 "open_mode": open_mode,
                 "team_options": team_options,
                 "all_team_options": all_team_options,
@@ -406,8 +400,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_query": team_query,
                 "procedure_team_query": procedure_team_query,
                 "service_team_query": service_team_query,
-                "procedure_diagram_open_url": procedure_diagram_open_url,
-                "service_diagram_open_url": service_diagram_open_url,
+                "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
+                "service_excalidraw_open_url": service_excalidraw_open_url,
                 "error_message": error_message,
                 "merge_nodes_all_markups": merge_nodes_all_markups,
                 "merge_selected_markups": merge_selected_markups,
@@ -426,40 +420,36 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
-        diagram_format = resolve_diagram_format(context.settings)
-        diagram_label = resolve_diagram_label(diagram_format)
-        diagram_base_url = resolve_diagram_base_url(context.settings, diagram_format)
-        diagram_open_url = diagram_base_url
-        diagram_rel_path = resolve_scene_rel_path(item, diagram_format)
-        diagram_in_dir = resolve_diagram_in_dir(context.settings, diagram_format)
-        scene_available = False
+        diagram_base_url = context.settings.catalog.excalidraw_base_url
+        excalidraw_open_url = diagram_base_url
+        excalidraw_scene_available = False
         open_mode = "direct"
         on_demand = context.settings.catalog.generate_excalidraw_on_demand
-        scene_path = diagram_in_dir / diagram_rel_path
+        scene_path = context.settings.catalog.excalidraw_in_dir / item.excalidraw_rel_path
         try:
             scene_payload = context.scene_repo.load(scene_path)
             if scene_payload.get("elements") is not None:
-                enhance_scene_payload(scene_payload, context)
+                enhance_scene_payload(scene_payload, context, "excalidraw")
                 if is_same_origin(request, diagram_base_url):
-                    diagram_open_url = f"/catalog/{scene_id}/open"
+                    excalidraw_open_url = f"/catalog/{scene_id}/open"
                     open_mode = "local_storage"
-                elif diagram_format == "excalidraw":
-                    diagram_open_url = build_excalidraw_url(diagram_base_url, scene_payload)
-                    if len(diagram_open_url) > context.settings.catalog.excalidraw_max_url_length:
-                        diagram_open_url = diagram_base_url
-                        open_mode = "manual"
                 else:
-                    diagram_open_url = diagram_base_url
-                    open_mode = "manual"
-                scene_available = True
+                    excalidraw_open_url = build_excalidraw_url(diagram_base_url, scene_payload)
+                    if (
+                        len(excalidraw_open_url)
+                        > context.settings.catalog.excalidraw_max_url_length
+                    ):
+                        excalidraw_open_url = diagram_base_url
+                        open_mode = "manual"
+                excalidraw_scene_available = True
         except FileNotFoundError:
             if on_demand:
-                scene_available = True
+                excalidraw_scene_available = True
                 if is_same_origin(request, diagram_base_url):
-                    diagram_open_url = f"/catalog/{scene_id}/open"
+                    excalidraw_open_url = f"/catalog/{scene_id}/open"
                     open_mode = "local_storage"
                 else:
-                    diagram_open_url = diagram_base_url
+                    excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
         return templates.TemplateResponse(
             request,
@@ -469,12 +459,12 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "settings": context.settings,
                 "item": item,
                 "index": index_data,
-                "diagram_label": diagram_label,
-                "diagram_ext": resolve_diagram_extension(diagram_format),
-                "diagram_rel_path": diagram_rel_path,
-                "diagram_open_url": diagram_open_url,
-                "diagram_dir_label": diagram_in_dir.name,
-                "scene_available": scene_available,
+                "diagram_excalidraw_enabled": context.settings.catalog.diagram_excalidraw_enabled,
+                "excalidraw_rel_path": item.excalidraw_rel_path,
+                "unidraw_rel_path": item.unidraw_rel_path,
+                "excalidraw_open_url": excalidraw_open_url,
+                "excalidraw_dir_label": context.settings.catalog.excalidraw_in_dir.name,
+                "excalidraw_scene_available": excalidraw_scene_available,
                 "open_mode": open_mode,
                 "on_demand_enabled": on_demand,
             },
@@ -490,8 +480,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
-        diagram_format = resolve_diagram_format(context.settings)
-        diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
+        diagram_url = context.settings.catalog.excalidraw_base_url
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
         return templates.TemplateResponse(
@@ -501,12 +490,12 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "request": request,
                 "settings": context.settings,
                 "scene_id": scene_id,
-                "scene_api_url": f"/api/scenes/{scene_id}",
+                "scene_api_url": f"/api/scenes/{scene_id}?format=excalidraw",
                 "diagram_url": diagram_url,
-                "diagram_label": resolve_diagram_label(diagram_format),
-                "diagram_storage_key": resolve_diagram_storage_key(diagram_format),
-                "diagram_state_key": resolve_diagram_state_key(diagram_format),
-                "diagram_version_key": resolve_diagram_version_key(diagram_format),
+                "diagram_label": "Excalidraw",
+                "diagram_storage_key": "excalidraw",
+                "diagram_state_key": "excalidraw-state",
+                "diagram_version_key": "version-dataState",
             },
         )
 
@@ -525,8 +514,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         excluded_team_ids = normalize_team_ids(excluded_team_ids)
         if not team_ids:
             raise HTTPException(status_code=400, detail="team_ids is required")
-        diagram_format = resolve_diagram_format(context.settings)
-        diagram_url = resolve_diagram_base_url(context.settings, diagram_format)
+        diagram_url = context.settings.catalog.excalidraw_base_url
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
         team_query = build_team_query(
@@ -554,7 +542,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                     scene_payload = build_team_diagram_payload(
                         context,
                         items,
-                        diagram_format,
+                        "excalidraw",
                         merge_nodes_all_markups=merge_nodes_all_markups,
                         merge_selected_markups=merge_selected_markups,
                         merge_node_min_chain_size=merge_node_min_chain_size,
@@ -570,12 +558,12 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "request": request,
                 "settings": context.settings,
                 "scene_id": "team-graph",
-                "scene_api_url": f"/api/teams/graph?{team_query}",
+                "scene_api_url": f"/api/teams/graph?{team_query}&format=excalidraw",
                 "diagram_url": diagram_url,
-                "diagram_label": resolve_diagram_label(diagram_format),
-                "diagram_storage_key": resolve_diagram_storage_key(diagram_format),
-                "diagram_state_key": resolve_diagram_state_key(diagram_format),
-                "diagram_version_key": resolve_diagram_version_key(diagram_format),
+                "diagram_label": "Excalidraw",
+                "diagram_storage_key": "excalidraw",
+                "diagram_state_key": "excalidraw-state",
+                "diagram_version_key": "version-dataState",
                 "scene_payload": scene_payload,
             },
         )
@@ -590,6 +578,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/scenes/{scene_id}")
     def api_scene(
         scene_id: str,
+        format: SceneFormat = Query(default="excalidraw"),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -597,18 +586,17 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
-        diagram_format = resolve_diagram_format(context.settings)
-        diagram_rel_path = resolve_scene_rel_path(item, diagram_format)
-        path = resolve_diagram_in_dir(context.settings, diagram_format) / diagram_rel_path
+        diagram_rel_path = resolve_scene_rel_path(item, format)
+        path = resolve_diagram_in_dir(context.settings, format) / diagram_rel_path
         try:
             payload = context.scene_repo.load(path)
         except FileNotFoundError as exc:
-            if not context.settings.catalog.generate_excalidraw_on_demand:
+            if format != "excalidraw" or not context.settings.catalog.generate_excalidraw_on_demand:
                 raise HTTPException(status_code=404, detail="Scene file missing") from exc
-            payload = build_diagram_payload(context, item, diagram_format)
+            payload = build_diagram_payload(context, item, format)
             if context.settings.catalog.cache_excalidraw_on_demand:
                 context.scene_repo.save(payload, path)
-        enhance_scene_payload(payload, context)
+        enhance_scene_payload(payload, context, format)
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{diagram_rel_path}"'
@@ -622,6 +610,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_selected_markups: bool = Query(default=False),
         merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         graph_level: GraphLevel = Query(default="procedure"),
+        format: SceneFormat = Query(default="excalidraw"),
         download: bool = Query(default=False),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
@@ -643,11 +632,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         items = filter_items_by_team_ids(index_data.items, team_ids)
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
-        diagram_format = resolve_diagram_format(context.settings)
         payload = build_team_diagram_payload(
             context,
             items,
-            diagram_format,
+            format,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
@@ -656,7 +644,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         )
         headers = {}
         if download:
-            extension = resolve_diagram_extension(diagram_format)
+            extension = resolve_diagram_extension(format)
             suffix = "_".join(team_ids)
             graph_name = "team-service-graph" if graph_level == "service" else "team-graph"
             filename = f"{graph_name}_{suffix}{extension}" if suffix else f"{graph_name}{extension}"
@@ -692,9 +680,6 @@ def create_app(settings: AppSettings) -> FastAPI:
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         """пока не реализованы на этапе mvp."""
-        diagram_format = resolve_diagram_format(context.settings)
-        if diagram_format != "excalidraw":
-            raise HTTPException(status_code=400, detail="Unidraw upload not supported")
         index_data = load_index(context)
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
@@ -721,9 +706,6 @@ def create_app(settings: AppSettings) -> FastAPI:
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         """пока не реализованы на этапе mvp."""
-        diagram_format = resolve_diagram_format(context.settings)
-        if diagram_format != "excalidraw":
-            raise HTTPException(status_code=400, detail="Unidraw conversion not supported")
         index_data = load_index(context)
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
@@ -751,10 +733,9 @@ def create_app(settings: AppSettings) -> FastAPI:
         index_data = context.index_builder.build(context.settings.catalog.to_index_config())
         return ORJSONResponse({"status": "ok", "items": len(index_data.items)})
 
-    diagram_format = resolve_diagram_format(settings)
-    proxy_upstream = resolve_diagram_proxy_upstream(settings, diagram_format)
+    proxy_upstream = settings.catalog.excalidraw_proxy_upstream
     if proxy_upstream:
-        prefix = resolve_diagram_proxy_prefix(settings, diagram_format).rstrip("/")
+        prefix = settings.catalog.excalidraw_proxy_prefix.rstrip("/")
 
         async def forward_upstream(
             request: Request,
@@ -783,9 +764,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             request: Request,
             context: CatalogContext = Depends(get_context),
         ) -> Response:
-            upstream = resolve_diagram_proxy_upstream(
-                context.settings, resolve_diagram_format(context.settings)
-            )
+            upstream = context.settings.catalog.excalidraw_proxy_upstream
             if not upstream:
                 raise HTTPException(status_code=404, detail="Proxy disabled")
             return await forward_upstream(request, upstream, path)
@@ -796,9 +775,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             request: Request,
             context: CatalogContext = Depends(get_context),
         ) -> Response:
-            upstream = resolve_diagram_proxy_upstream(
-                context.settings, resolve_diagram_format(context.settings)
-            )
+            upstream = context.settings.catalog.excalidraw_proxy_upstream
             if not upstream:
                 raise HTTPException(status_code=404, detail="Proxy disabled")
             return await forward_upstream(request, upstream, f"assets/{path}")
@@ -819,9 +796,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 request: Request,
                 context: CatalogContext = Depends(get_context),
             ) -> Response:
-                upstream = resolve_diagram_proxy_upstream(
-                    context.settings, resolve_diagram_format(context.settings)
-                )
+                upstream = context.settings.catalog.excalidraw_proxy_upstream
                 if not upstream:
                     raise HTTPException(status_code=404, detail="Proxy disabled")
                 return await forward_upstream(request, upstream, request.url.path.lstrip("/"))
@@ -839,12 +814,14 @@ def invalidate_scene_cache(context: CatalogContext) -> None:
         return
     if not settings.generate_excalidraw_on_demand:
         return
-    diagram_format = resolve_diagram_format(context.settings)
-    context.scene_repo.clear_cache(resolve_diagram_in_dir(context.settings, diagram_format))
+    context.scene_repo.clear_cache(context.settings.catalog.excalidraw_in_dir)
 
 
-def enhance_scene_payload(payload: dict[str, Any], context: CatalogContext) -> None:
-    diagram_format = resolve_diagram_format(context.settings)
+def enhance_scene_payload(
+    payload: dict[str, Any],
+    context: CatalogContext,
+    diagram_format: SceneFormat,
+) -> None:
     elements = payload.get("elements")
     if not isinstance(elements, list):
         return
@@ -885,64 +862,26 @@ def find_item(index_data: CatalogIndex | None, scene_id: str) -> CatalogItem | N
     return None
 
 
-def resolve_diagram_format(settings: AppSettings) -> str:
-    return settings.catalog.diagram_format
-
-
-def resolve_diagram_label(diagram_format: str) -> str:
-    return "Excalidraw" if diagram_format == "excalidraw" else "Unidraw"
-
-
-def resolve_diagram_extension(diagram_format: str) -> str:
+def resolve_diagram_extension(diagram_format: SceneFormat) -> str:
     return ".excalidraw" if diagram_format == "excalidraw" else ".unidraw"
 
 
-def resolve_scene_rel_path(item: CatalogItem, diagram_format: str) -> str:
+def resolve_scene_rel_path(item: CatalogItem, diagram_format: SceneFormat) -> str:
     if diagram_format == "unidraw" and item.unidraw_rel_path:
         return item.unidraw_rel_path
     return item.excalidraw_rel_path
 
 
-def resolve_diagram_in_dir(settings: AppSettings, diagram_format: str) -> Path:
+def resolve_diagram_in_dir(settings: AppSettings, diagram_format: SceneFormat) -> Path:
     if diagram_format == "unidraw":
         return settings.catalog.unidraw_in_dir
     return settings.catalog.excalidraw_in_dir
 
 
-def resolve_diagram_base_url(settings: AppSettings, diagram_format: str) -> str:
-    if diagram_format == "unidraw":
-        return settings.catalog.unidraw_base_url
-    return settings.catalog.excalidraw_base_url
-
-
-def resolve_diagram_proxy_upstream(settings: AppSettings, diagram_format: str) -> str | None:
-    if diagram_format == "unidraw":
-        return settings.catalog.unidraw_proxy_upstream
-    return settings.catalog.excalidraw_proxy_upstream
-
-
-def resolve_diagram_proxy_prefix(settings: AppSettings, diagram_format: str) -> str:
-    if diagram_format == "unidraw":
-        return settings.catalog.unidraw_proxy_prefix
-    return settings.catalog.excalidraw_proxy_prefix
-
-
-def resolve_diagram_storage_key(diagram_format: str) -> str:
-    return "excalidraw" if diagram_format == "excalidraw" else "unidraw"
-
-
-def resolve_diagram_state_key(diagram_format: str) -> str:
-    return "excalidraw-state" if diagram_format == "excalidraw" else "unidraw-state"
-
-
-def resolve_diagram_version_key(diagram_format: str) -> str:
-    return "version-dataState"
-
-
 def build_diagram_payload(
     context: CatalogContext,
     item: CatalogItem,
-    diagram_format: str,
+    diagram_format: SceneFormat,
 ) -> dict[str, Any]:
     markup_root = Path(context.settings.catalog.s3.prefix or "")
     markup_path = markup_root / item.markup_rel_path
@@ -960,7 +899,7 @@ def build_diagram_payload(
 def build_team_diagram_payload(
     context: CatalogContext,
     items: list[CatalogItem],
-    diagram_format: str,
+    diagram_format: SceneFormat,
     merge_nodes_all_markups: bool = False,
     merge_selected_markups: bool = False,
     merge_node_min_chain_size: int = 1,
@@ -1000,7 +939,7 @@ def build_team_diagram_payload(
     else:
         document = context.to_procedure_graph_unidraw.convert(graph_document)
     payload = cast(dict[str, Any], document.to_dict())
-    enhance_scene_payload(payload, context)
+    enhance_scene_payload(payload, context, diagram_format)
     return payload
 
 

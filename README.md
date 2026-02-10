@@ -20,8 +20,8 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 # Open http://localhost:8080/catalog
 ```
 
-Set `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` and provide `CJM_CATALOG__UNIDRAW_BASE_URL` (external Unidraw UI),
-then run `make convert-to-unidraw` to work with Unidraw scenes.
+Catalog UI now exposes both downloads at once (`.excalidraw` and Unidraw).  
+Use `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false` to hide the `Open Excalidraw` button.
 
 ## Commands (Typer CLI)
 
@@ -107,8 +107,8 @@ then run `make convert-to-unidraw` to work with Unidraw scenes.
 
 1. Seed markup into S3 (local: `make s3-seed`).
 2. Open the catalog: `cjm catalog serve` and visit `/catalog`.
-3. Set `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` and `CJM_CATALOG__UNIDRAW_BASE_URL` to switch the UI into Unidraw mode.
-4. Open the diagram in Excalidraw/Unidraw or download `.excalidraw`/`.unidraw` and `markup.json` for manual import or review.
+3. Optionally set `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false` to hide `Open Excalidraw` in UI.
+4. Open in Excalidraw (if enabled) or download `.excalidraw` / `Unidraw` for manual import or review.
 5. Export `.excalidraw` into `data/excalidraw_out`, then run `make convert-from-ui` to rebuild markup.
 
 ---
@@ -135,8 +135,8 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 # Открыть http://localhost:8080/catalog
 ```
 
-Чтобы использовать Unidraw, задайте `CJM_CATALOG__DIAGRAM_FORMAT=unidraw`, укажите внешний URL через
-`CJM_CATALOG__UNIDRAW_BASE_URL` и выполните `make convert-to-unidraw`.
+UI теперь одновременно поддерживает скачивание `.excalidraw` и `Unidraw`.  
+Если нужно скрыть открытие в Excalidraw, задайте `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false`.
 
 ## Команды (Typer CLI)
 
@@ -289,8 +289,8 @@ cjm catalog serve --config config/catalog/app.s3.yaml
    учитываются на уровне графа процедур до агрегации.
 9. При скачивании общего графа файл получает суффикс с `team_ids` (например,
    `team-graph_alpha_beta.excalidraw`).
-10. Установите `CJM_CATALOG__DIAGRAM_FORMAT=unidraw` и `CJM_CATALOG__UNIDRAW_BASE_URL`, чтобы включить режим Unidraw.
-11. Откройте диаграмму в Excalidraw/Unidraw или скачайте `.excalidraw`/`.unidraw` и `markup.json` для ручного импорта или проверки.
+10. При необходимости скройте кнопку открытия Excalidraw: `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false`.
+11. Откройте диаграмму в Excalidraw (если кнопка включена) или скачайте `.excalidraw`/`Unidraw` для ручного импорта или проверки.
 12. Экспортируйте `.excalidraw` в `data/excalidraw_out`, затем выполните `make convert-from-ui`.
 13. При старте Catalog UI кэш `excalidraw_in` очищается, чтобы сцены пересобирались на текущем коде.
 14. Локальные env-переопределения (включая шаблоны ссылок) лежат в `config/catalog/env.local`.

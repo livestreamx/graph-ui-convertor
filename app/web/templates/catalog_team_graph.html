@@ -424,8 +424,7 @@
             {% endif %}
           </div>
           <div class="team-graph-result-body">
-            Open the team graph in {{ diagram_label }} or download the file for manual import and
-            editing.
+            Open in Excalidraw or download both diagram formats for manual import and editing.
           </div>
           {% if open_mode == "manual" %}
             <div class="team-graph-result-note">
@@ -433,7 +432,7 @@
             </div>
           {% elif open_mode == "local_storage" %}
             <div class="team-graph-result-note">
-              Scene is injected via local storage for same-origin {{ diagram_label }}.
+              Scene is injected via local storage for same-origin Excalidraw.
             </div>
           {% else %}
             <div class="team-graph-result-note">
@@ -1297,11 +1296,16 @@
               Detailed flow between procedures with full dashboard context from Step 3.
             </p>
             <div class="button-row">
-              <a class="primary-button" target="_blank" href="{{ procedure_diagram_open_url }}">
-                Open {{ diagram_label }}
+              {% if diagram_excalidraw_enabled %}
+                <a class="primary-button" target="_blank" href="{{ procedure_excalidraw_open_url }}">
+                  Open Excalidraw
+                </a>
+              {% endif %}
+              <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&format=excalidraw&download=true">
+                Download .excalidraw
               </a>
-              <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&download=true">
-                Download {{ diagram_ext }}
+              <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ procedure_team_query }}&format=unidraw&download=true">
+                Download .unidraw
               </a>
             </div>
           </article>
@@ -1311,11 +1315,16 @@
               High-level service map: service nodes aggregate all selected service graphs.
             </p>
             <div class="button-row">
-              <a class="primary-button" target="_blank" href="{{ service_diagram_open_url }}">
-                Open {{ diagram_label }}
+              {% if diagram_excalidraw_enabled %}
+                <a class="primary-button" target="_blank" href="{{ service_excalidraw_open_url }}">
+                  Open Excalidraw
+                </a>
+              {% endif %}
+              <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&format=excalidraw&download=true">
+                Download .excalidraw
               </a>
-              <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&download=true">
-                Download {{ diagram_ext }}
+              <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ service_team_query }}&format=unidraw&download=true">
+                Download .unidraw
               </a>
             </div>
           </article>

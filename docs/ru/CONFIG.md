@@ -18,7 +18,7 @@ catalog:
     secret_access_key: ""
     session_token: ""
     use_path_style: false
-  diagram_format: "excalidraw"
+  diagram_excalidraw_enabled: true
   excalidraw_in_dir: "data/excalidraw_in"
   excalidraw_out_dir: "data/excalidraw_out"
   unidraw_in_dir: "data/unidraw_in"
@@ -65,7 +65,7 @@ catalog:
   `endpoint_url` + `use_path_style: true`. Префикс также влияет на вычисление относительных путей в индексе.
 - `auto_build_index`: строить индекс каталога при старте, если он отсутствует.
 - `rebuild_index_on_start`: принудительная пересборка индекса при старте (полезно для S3).
-- `diagram_format`: какой формат диаграмм обслуживает Catalog UI (`excalidraw` или `unidraw`).
+- `diagram_excalidraw_enabled`: управляет показом кнопки `Open Excalidraw` в UI.
 - `generate_excalidraw_on_demand`: генерировать сцены из markup, если файл диаграммы отсутствует.
 - `cache_excalidraw_on_demand`: сохранять сгенерированные сцены в активную `*_in_dir`.
 - `invalidate_excalidraw_cache_on_start`: очищать активную `*_in_dir` при старте (только если включен
@@ -96,8 +96,7 @@ catalog:
   ассеты Excalidraw (например `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: префикс пути для прокси Excalidraw.
 - `excalidraw_max_url_length`: максимальная длина URL для `#json`, после чего требуется ручной импорт.
-- `unidraw_base_url`: абсолютный URL внешнего Unidraw UI. Обязателен при `diagram_format=unidraw`
-  и задаётся через `CJM_CATALOG__UNIDRAW_BASE_URL`.
+- `unidraw_base_url`: опциональный URL внешнего Unidraw UI (зарезервирован для будущего parity open-flow).
 - `unidraw_proxy_upstream`: опциональный upstream для проксирования Unidraw через Catalog.
 - `unidraw_proxy_prefix`: префикс пути для прокси Unidraw.
 - `unidraw_max_url_length`: параметр для паритета с Excalidraw URL (пока не используется).
@@ -111,7 +110,8 @@ catalog:
 
 ## Catalog UI
 
-- В деталях диаграммы доступны скачивания `.excalidraw`/`.unidraw` и оригинального `markup.json`.
+- В деталях диаграммы доступны скачивания `.excalidraw` и `Unidraw`; кнопка `Open Excalidraw`
+  управляется `diagram_excalidraw_enabled`.
 - На странице каталога есть отдельный раздел для кросс-командных диаграмм: можно выбрать несколько
   команд и открыть общий граф процедур на основе `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` поддерживает значения через запятую). В билдере доступен параметр
@@ -194,7 +194,7 @@ Dot-path проходят по вложенным объектам raw markup JS
 
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM_CATALOG__DIAGRAM_FORMAT="unidraw"
+export CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED="true"
 export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"

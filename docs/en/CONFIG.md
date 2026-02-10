@@ -18,7 +18,7 @@ catalog:
     secret_access_key: ""
     session_token: ""
     use_path_style: false
-  diagram_format: "excalidraw"
+  diagram_excalidraw_enabled: true
   excalidraw_in_dir: "data/excalidraw_in"
   excalidraw_out_dir: "data/excalidraw_out"
   unidraw_in_dir: "data/unidraw_in"
@@ -66,7 +66,7 @@ catalog:
   The prefix is also used to compute relative paths in the index.
 - `auto_build_index`: Build the catalog index on startup if it is missing.
 - `rebuild_index_on_start`: Force rebuilding the catalog index on startup (useful for S3).
-- `diagram_format`: Choose which diagram flavor the Catalog UI serves (`excalidraw` or `unidraw`).
+- `diagram_excalidraw_enabled`: Controls whether the `Open Excalidraw` button is shown in UI.
 - `generate_excalidraw_on_demand`: Generate scenes from markup when a diagram file is missing.
 - `cache_excalidraw_on_demand`: Persist generated scenes into the active `*_in_dir` for reuse.
 - `invalidate_excalidraw_cache_on_start`: Remove cached scenes from the active `*_in_dir` on startup
@@ -98,8 +98,7 @@ catalog:
   also proxies Excalidraw static assets (for example `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
 - `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
-- `unidraw_base_url`: Absolute URL of the external Unidraw UI. Required when `diagram_format=unidraw`
-  and must be provided via `CJM_CATALOG__UNIDRAW_BASE_URL`.
+- `unidraw_base_url`: Optional URL for external Unidraw UI integration (reserved for future open-flow parity).
 - `unidraw_proxy_upstream`: Optional upstream for proxying Unidraw through the Catalog service.
 - `unidraw_proxy_prefix`: Path prefix used for proxying Unidraw.
 - `unidraw_max_url_length`: Reserved for parity with Excalidraw URLs (currently unused).
@@ -113,7 +112,8 @@ catalog:
 
 ## Catalog UI
 
-- Detail view includes downloads for `.excalidraw`/`.unidraw` and the original `markup.json`.
+- Detail view includes downloads for `.excalidraw` and `Unidraw`; `Open Excalidraw` is controlled by
+  `diagram_excalidraw_enabled`.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` supports comma-separated values). The builder also accepts
@@ -195,7 +195,7 @@ nesting delimiter. Example:
 
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
-export CJM_CATALOG__DIAGRAM_FORMAT="unidraw"
+export CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED="true"
 export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"

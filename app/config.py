@@ -67,7 +67,7 @@ class S3Settings(BaseModel):
 class CatalogSettings(BaseModel):
     title: str = "CJM Catalog"
     s3: S3Settings = S3Settings()
-    diagram_format: str = "excalidraw"
+    diagram_excalidraw_enabled: bool = True
     excalidraw_in_dir: Path = Path("data/excalidraw_in")
     excalidraw_out_dir: Path = Path("data/excalidraw_out")
     unidraw_in_dir: Path = Path("data/unidraw_in")
@@ -122,12 +122,6 @@ class CatalogSettings(BaseModel):
     @classmethod
     def normalize_sort_order(cls, value: object) -> str:
         return str(value).lower() if value else "asc"
-
-    @field_validator("diagram_format", mode="before")
-    @classmethod
-    def normalize_diagram_format(cls, value: object) -> str:
-        raw = str(value or "excalidraw").strip().lower()
-        return raw if raw in {"excalidraw", "unidraw"} else "excalidraw"
 
     @field_validator("group_by", "tag_fields", "builder_excluded_team_ids", mode="before")
     @classmethod
@@ -231,16 +225,7 @@ def load_settings(config_path: Path | None = None) -> AppSettings:
 
 
 def validate_unidraw_settings(settings: AppSettings) -> None:
-    if settings.catalog.diagram_format != "unidraw":
-        return
-    env_key = "CJM_CATALOG__UNIDRAW_BASE_URL"
-    env_value = os.getenv(env_key, "").strip()
-    if not env_value:
-        msg = f"{env_key} is required when CJM_CATALOG__DIAGRAM_FORMAT=unidraw"
-        raise ValueError(msg)
-    if not is_absolute_url(settings.catalog.unidraw_base_url):
-        msg = "catalog.unidraw_base_url must be an absolute http(s) URL"
-        raise ValueError(msg)
+    _ = settings
 
 
 def is_absolute_url(value: str) -> bool:

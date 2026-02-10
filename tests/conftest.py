@@ -52,7 +52,7 @@ def catalog_settings(tmp_path: Path, s3_settings: S3Settings) -> CatalogSettings
     return CatalogSettings(
         title="Test Catalog",
         s3=s3_settings,
-        diagram_format="excalidraw",
+        diagram_excalidraw_enabled=True,
         excalidraw_in_dir=tmp_path / "excalidraw_in",
         excalidraw_out_dir=tmp_path / "excalidraw_out",
         unidraw_in_dir=tmp_path / "unidraw_in",

@@ -31,6 +31,13 @@ def test_catalog_api_smoke(
         scene_response = context.client.get(f"/api/scenes/{scene_id}")
         assert scene_response.status_code == 200
 
+        unidraw_response = context.client.get(
+            f"/api/scenes/{scene_id}?format=unidraw&download=true"
+        )
+        assert unidraw_response.status_code == 200
+        assert unidraw_response.json().get("type") == "unidraw"
+        assert "billing.unidraw" in unidraw_response.headers.get("content-disposition", "")
+
         markup_response = context.client.get(f"/api/markup/{scene_id}?download=true")
         assert markup_response.status_code == 200
         assert "attachment" in markup_response.headers.get("content-disposition", "").lower()

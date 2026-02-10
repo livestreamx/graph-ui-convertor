@@ -9,7 +9,7 @@ catalog:
     secret_access_key: "minioadmin"
     session_token: ""
     use_path_style: true
-  diagram_format: "excalidraw"
+  diagram_excalidraw_enabled: true
   excalidraw_in_dir: "data/excalidraw_in"
   excalidraw_out_dir: "data/excalidraw_out"
   unidraw_in_dir: "data/unidraw_in"

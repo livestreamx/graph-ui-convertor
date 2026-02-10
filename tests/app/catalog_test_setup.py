@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,8 +22,6 @@ from domain.services.build_catalog_index import BuildCatalogIndex
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
 from tests.adapters.s3.s3_utils import add_get_object, stub_s3_catalog
-
-DiagramFormat = Literal["excalidraw", "unidraw"]
 
 
 @dataclass(frozen=True)
@@ -56,7 +54,6 @@ def build_catalog_test_context(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
-    diagram_format: DiagramFormat = "excalidraw",
     include_upload_stub: bool = False,
     settings_overrides: Mapping[str, Any] | None = None,
 ) -> Iterator[CatalogTestContext]:
@@ -89,16 +86,12 @@ def build_catalog_test_context(
         add_get_object(stubber, bucket="cjm-bucket", key="markup/billing.json", payload=payload)
 
     markup_doc = MarkupDocument.model_validate(payload)
-    expected_element_count: int | None = None
-    if diagram_format == "excalidraw":
-        scene_doc = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup_doc)
-        expected_element_count = len(scene_doc.elements)
-        scene_path = excalidraw_in_dir / "billing.excalidraw"
-        FileSystemExcalidrawRepository().save(scene_doc, scene_path)
-    else:
-        scene_doc = MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup_doc)
-        scene_path = unidraw_in_dir / "billing.unidraw"
-        FileSystemUnidrawRepository().save(scene_doc, scene_path)
+    excalidraw_doc = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup_doc)
+    expected_element_count = len(excalidraw_doc.elements)
+    scene_path = excalidraw_in_dir / "billing.excalidraw"
+    FileSystemExcalidrawRepository().save(excalidraw_doc, scene_path)
+    unidraw_doc = MarkupToUnidrawConverter(GridLayoutEngine()).convert(markup_doc)
+    FileSystemUnidrawRepository().save(unidraw_doc, unidraw_in_dir / "billing.unidraw")
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -119,7 +112,7 @@ def build_catalog_test_context(
     ).build(config)
 
     settings_kwargs: dict[str, Any] = {
-        "diagram_format": diagram_format,
+        "diagram_excalidraw_enabled": True,
         "excalidraw_in_dir": excalidraw_in_dir,
         "excalidraw_out_dir": excalidraw_out_dir,
         "unidraw_in_dir": unidraw_in_dir,
