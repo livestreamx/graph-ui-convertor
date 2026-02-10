@@ -182,14 +182,18 @@ def test_catalog_team_graph_api(
         )
         assert "Render merge nodes from all available markups" in html_response.text
         assert "Step 3. Merge graphs" in html_response.text
-        assert "Step 4. Use diagram" in html_response.text
+        assert "Step 4. Analyze graphs" in html_response.text
+        assert "Step 5. Get diagram" in html_response.text
         assert "Procedure-level diagram" in html_response.text
         assert "Service-level diagram" in html_response.text
         assert "graph_level=service" in html_response.text
         assert "graph_level=procedure" not in html_response.text
         assert "Graphs info" in html_response.text
-        assert "Entity Integrity" in html_response.text
-        assert "Risk Hotspots" in html_response.text
+        assert "Entity integrity" in html_response.text
+        assert "Risk hotspots" in html_response.text
+        assert "team-graph-dashboard-section-collapsible" in html_response.text
+        assert "Click to expand" in html_response.text
+        assert "data-team-graph-analysis-host" in html_response.text
         assert "Graphs" in html_response.text
         assert "Unique procedures" in html_response.text
         assert "Multichannel procedures" in html_response.text
@@ -228,6 +232,14 @@ def test_catalog_team_graph_api(
         assert 'hx-indicator="#team-graph-merge-loader"' in html_response.text
         assert "team-graph-cta-warning is-hidden" in html_response.text
         assert 'id="team-graph-merge-loader"' in html_response.text
+        assert (
+            "Scene is injected via local storage for same-origin Excalidraw."
+            not in html_response.text
+        )
+        assert (
+            "Open the team graph in Excalidraw or download the file for manual import and editing."
+            not in html_response.text
+        )
 
         no_selection_response = client_api.get("/catalog/teams/graph")
         assert no_selection_response.status_code == 200

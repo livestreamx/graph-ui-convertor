@@ -381,7 +381,7 @@
           <div class="team-graph-cta-copy">
             <div class="team-graph-cta-title">Merge selected teams</div>
             <div class="team-graph-cta-text">
-              Once merged, the summary appears here and actions become available in Step 4.
+              Once merged, status appears here; analytics opens in Step 4 and actions in Step 5.
             </div>
           </div>
         <div class="team-graph-cta-action">
@@ -414,6 +414,7 @@
         </div>
       </div>
       <div class="team-graph-result">
+        {% set team_dashboard_section = "" %}
         {% if diagram_ready %}
           <div class="team-graph-result-header">
             <span class="team-graph-result-status team-graph-result-ready">Merge ready</span>
@@ -424,27 +425,19 @@
             {% endif %}
           </div>
           <div class="team-graph-result-body">
-            Open in Excalidraw or download both diagram formats for manual import and editing.
+            Merge completed. Continue to Step 4 for analytics and Step 5 for diagram actions.
           </div>
-          {% if open_mode == "manual" %}
-            <div class="team-graph-result-note">
-              Scene is too large for URL sharing. Use Download + Import.
-            </div>
-          {% elif open_mode == "local_storage" %}
-            <div class="team-graph-result-note">
-              Scene is injected via local storage for same-origin Excalidraw.
-            </div>
-          {% else %}
-            <div class="team-graph-result-note">
-              If the scene does not load, import the downloaded file manually.
-            </div>
-          {% endif %}
           {% if team_dashboard %}
             {% set total_procedures = team_dashboard.total_procedure_count %}
             {% set total_services = team_dashboard.total_service_count %}
+            {% set team_dashboard_section %}
             <section class="team-graph-dashboard">
-              <div class="team-graph-dashboard-section">
-                <div class="team-graph-dashboard-title">Graphs info</div>
+              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+                <summary class="team-graph-dashboard-summary">
+                  <span class="team-graph-dashboard-title">Graphs info</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                </summary>
+                <div class="team-graph-dashboard-content">
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card">
                     <div class="team-graph-kpi-head">
@@ -736,10 +729,15 @@
                     </div>
                   </article>
                 </div>
-              </div>
+                </div>
+              </details>
 
-              <div class="team-graph-dashboard-section">
-                <div class="team-graph-dashboard-title">Entity Integrity</div>
+              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+                <summary class="team-graph-dashboard-summary">
+                  <span class="team-graph-dashboard-title">Entity integrity</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                </summary>
+                <div class="team-graph-dashboard-content">
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
@@ -965,10 +963,15 @@
                     <div class="team-graph-empty">No intersections with teams outside the selection.</div>
                   {% endif %}
                 </article>
-              </div>
+                </div>
+              </details>
 
-              <div class="team-graph-dashboard-section">
-                <div class="team-graph-dashboard-title">Risk Hotspots</div>
+              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+                <summary class="team-graph-dashboard-summary">
+                  <span class="team-graph-dashboard-title">Risk hotspots</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                </summary>
+                <div class="team-graph-dashboard-content">
                 <article class="team-graph-data-card">
                   <div class="team-graph-data-head">
                     <div class="team-graph-data-title">Top linking procedures</div>
@@ -1267,8 +1270,10 @@
                     <div class="team-graph-empty">No service-level data.</div>
                   {% endif %}
                 </article>
-              </div>
+                </div>
+              </details>
             </section>
+            {% endset %}
           {% endif %}
         {% elif error_message %}
           <div class="team-graph-result-header">
@@ -1280,20 +1285,35 @@
             <span class="team-graph-result-status team-graph-result-idle">Waiting for input</span>
           </div>
           <div class="team-graph-result-body">
-            Select teams and click Merge. The merged graph details and actions will appear here.
+            Select teams and click Merge. Status, analytics, and diagram actions appear in Steps 3–5.
           </div>
         {% endif %}
       </div>
     </div>
 
+    <div class="detail-card team-graph-analysis-card">
+      <h3>Step 4. Analyze graphs</h3>
+      {% if diagram_ready and team_dashboard %}
+        <div class="team-graph-analysis-host" data-team-graph-analysis-host>
+          {{ team_dashboard_section | safe }}
+        </div>
+      {% elif diagram_ready %}
+        <p class="team-graph-subtitle">Analytics is unavailable for the selected graph set.</p>
+      {% elif error_message %}
+        <p class="team-graph-subtitle">Resolve merge issues in Step 3 to unlock analytics.</p>
+      {% else %}
+        <p class="team-graph-subtitle">Merge graphs in Step 3 to open analytics.</p>
+      {% endif %}
+    </div>
+
     <div class="detail-card team-graph-actions-card">
-      <h3>Step 4. Use diagram</h3>
+      <h3>Step 5. Get diagram</h3>
       {% if diagram_ready %}
         <div class="team-graph-actions-split">
           <article class="team-graph-actions-group" data-graph-level="procedure">
             <div class="team-graph-actions-group-title">Procedure-level diagram</div>
             <p class="team-graph-actions-group-subtitle">
-              Detailed flow between procedures with full dashboard context from Step 3.
+              Detailed flow between procedures with analytics context from Step 4.
             </p>
             <div class="button-row">
               {% if diagram_excalidraw_enabled %}
@@ -1330,7 +1350,7 @@
           </article>
         </div>
       {% else %}
-        <p class="team-graph-subtitle">Merge graphs in Step 3 to enable open/download actions.</p>
+        <p class="team-graph-subtitle">Merge graphs in Step 3 to enable diagram actions.</p>
       {% endif %}
     </div>
   </section>
@@ -1704,8 +1724,91 @@
           updateTeamsVisibility();
         };
 
+        const setupDashboardSections = () => {
+          const sections = Array.from(
+            page.querySelectorAll(".team-graph-dashboard-section-collapsible"),
+          ).filter((node) => node instanceof HTMLDetailsElement);
+          if (!sections.length) {
+            return;
+          }
+
+          const prefersReducedMotion =
+            typeof window.matchMedia === "function" &&
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+          const updateHint = (section) => {
+            const hint = section.querySelector("[data-dashboard-summary-hint]");
+            if (hint instanceof HTMLElement) {
+              hint.textContent = section.open ? "Click to collapse" : "Click to expand";
+            }
+          };
+
+          sections.forEach((section) => {
+            const summary = section.querySelector(".team-graph-dashboard-summary");
+            const content = section.querySelector(".team-graph-dashboard-content");
+            if (!(summary instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+              return;
+            }
+
+            updateHint(section);
+
+            let isAnimating = false;
+            summary.addEventListener("click", (event) => {
+              event.preventDefault();
+              if (isAnimating) {
+                return;
+              }
+
+              const expand = !section.open;
+              if (prefersReducedMotion || typeof section.animate !== "function") {
+                section.open = expand;
+                updateHint(section);
+                return;
+              }
+
+              const startHeight = section.offsetHeight;
+              if (expand) {
+                section.open = true;
+              }
+              const endHeight = expand ? summary.offsetHeight + content.offsetHeight : summary.offsetHeight;
+
+              isAnimating = true;
+              const animation = section.animate(
+                [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+                {
+                  duration: 210,
+                  easing: "cubic-bezier(0.2, 0.7, 0.2, 1)",
+                },
+              );
+
+              section.style.height = `${startHeight}px`;
+              section.style.overflow = "hidden";
+              section.classList.add("is-animating");
+
+              animation.onfinish = () => {
+                if (!expand) {
+                  section.open = false;
+                }
+                section.style.height = "";
+                section.style.overflow = "";
+                section.classList.remove("is-animating");
+                updateHint(section);
+                isAnimating = false;
+              };
+
+              animation.oncancel = () => {
+                section.style.height = "";
+                section.style.overflow = "";
+                section.classList.remove("is-animating");
+                isAnimating = false;
+              };
+            });
+          });
+        };
+
         setupSortableTables();
         setupOverlapVisibility();
+        setupDashboardSections();
 
         const graphEntities = Array.from(
           page.querySelectorAll(".team-graph-graph-entity[data-team]"),

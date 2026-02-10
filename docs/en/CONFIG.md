@@ -146,10 +146,12 @@ catalog:
   the selected teams.
   Dashboard graph counters (`Graphs`, grouped graph stats) are computed from the same merged
   procedure graph payload that is opened/downloaded as the team diagram.
-- Step 3 renders a dashboard after Merge with three compact sections:
+- Step 3 now keeps merge status and aggregate counters (`N teams · M markups merged`) only.
+- Step 4 (`Analyze graphs`) renders a dashboard with three compact sections:
   `Graphs info` (markup type distribution, unique graphs, unique procedures, bot/multi coverage),
-  `Service Integrity` (internal/external service intersections, split services, target-state share),
-  and `Risk Hotspots` (top linking procedures and overloaded services by merge nodes/cycles/procedures/blocks).
+  `Entity integrity` (internal/external service intersections, split services, target-state share),
+  and `Risk hotspots` (top linking procedures and overloaded services by merge nodes/cycles/procedures/blocks).
+  Each section is collapsed by default and expands when clicking its header.
   The layout is card-based to keep screenshots readable in demos.
   Graph/intersection drilldowns share one `team / service` output format with team color chips,
   including `Multi graphs` and tabular `Top linking procedures` details per graph
@@ -163,7 +165,7 @@ catalog:
   depth-first graph-flow order from start procedures to terminal procedures, separates disconnected
   graph components (`Graph 1`, `Graph 2`, ...), and shows both procedure rank (`P#`) and level
   (`L#`, relative to graph roots) exactly as in the diagram.
-  `Risk Hotspots` subsections include ranking-priority and data-source notes to make the metrics
+  `Risk hotspots` subsections include ranking-priority and data-source notes to make the metrics
   easier to interpret and trust.
 - In `External team overlaps`, each team row shows four counters: `external → selected`,
   `selected → external`, `total`, and `overlap %`. `overlap %` is the share of unique procedure
@@ -178,6 +180,8 @@ catalog:
   while merge controls (`merge_selected_markups`, `merge_nodes_all_markups`,
   `merge_node_min_chain_size`) are still applied in the underlying procedure graph before this
   aggregation layer.
+
+- Step 5 (`Get diagram`) contains the procedure-level and service-level open/download actions.
 
 ## Dot-path resolution
 

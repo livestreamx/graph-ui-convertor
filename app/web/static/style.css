@@ -365,6 +365,20 @@ main {
   gap: 12px;
 }
 
+.team-graph-analysis-card {
+  display: grid;
+  gap: 12px;
+}
+
+.team-graph-analysis-host {
+  display: grid;
+  gap: 14px;
+}
+
+.team-graph-analysis-host .team-graph-dashboard {
+  margin-top: 0;
+}
+
 .team-graph-actions-split {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -923,6 +937,115 @@ main {
   background: linear-gradient(140deg, rgba(8, 14, 30, 0.92), rgba(13, 20, 39, 0.9));
   display: grid;
   gap: 12px;
+}
+
+.team-graph-dashboard-section-collapsible {
+  padding: 0;
+  overflow: hidden;
+  background:
+    linear-gradient(140deg, rgba(8, 14, 30, 0.94), rgba(13, 20, 39, 0.92)),
+    radial-gradient(circle at top right, rgba(127, 169, 255, 0.14), transparent 58%);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.team-graph-dashboard-section-collapsible:hover,
+.team-graph-dashboard-section-collapsible:focus-within {
+  border-color: rgba(140, 170, 255, 0.38);
+  box-shadow: 0 10px 24px rgba(4, 8, 20, 0.34);
+  transform: translateY(-1px);
+}
+
+.team-graph-dashboard-section-collapsible[open] {
+  border-color: rgba(140, 170, 255, 0.46);
+}
+
+.team-graph-dashboard-section-collapsible.is-animating {
+  will-change: height;
+}
+
+.team-graph-dashboard-summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  user-select: none;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.02);
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.12s ease;
+}
+
+.team-graph-dashboard-summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-graph-dashboard-summary:hover {
+  background: rgba(140, 170, 255, 0.09);
+}
+
+.team-graph-dashboard-summary:active {
+  transform: translateY(1px);
+}
+
+.team-graph-dashboard-summary:focus-visible {
+  outline: 2px solid rgba(140, 170, 255, 0.62);
+  outline-offset: 2px;
+}
+
+.team-graph-dashboard-summary::after {
+  content: "▾";
+  font-size: 14px;
+  color: rgba(216, 238, 255, 0.88);
+  transition: transform 0.2s ease;
+}
+
+.team-graph-dashboard-section-collapsible:not([open]) .team-graph-dashboard-summary::after {
+  transform: rotate(-90deg);
+}
+
+.team-graph-dashboard-summary-hint {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(203, 217, 240, 0.68);
+  transition: color 0.2s ease, opacity 0.2s ease;
+}
+
+.team-graph-dashboard-section-collapsible[open] .team-graph-dashboard-summary-hint {
+  color: rgba(185, 218, 255, 0.9);
+}
+
+.team-graph-dashboard-content {
+  padding: 0 14px 14px;
+  display: grid;
+  gap: 12px;
+  animation: teamGraphDashboardContentIn 0.22s ease;
+}
+
+@keyframes teamGraphDashboardContentIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-graph-dashboard-section-collapsible,
+  .team-graph-dashboard-summary,
+  .team-graph-dashboard-summary::after,
+  .team-graph-dashboard-summary-hint {
+    transition: none;
+  }
+
+  .team-graph-dashboard-content {
+    animation: none;
+  }
 }
 
 .team-graph-dashboard-title {
