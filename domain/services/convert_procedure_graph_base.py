@@ -635,8 +635,9 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         base_metadata: Metadata,
     ) -> None:
         for zone in zones:
-            group_id = self._stable_id("service-zone-group", zone.service_key)
-            zone_id = self._stable_id("service-zone", zone.service_key)
+            zone_scope = self._service_zone_scope(zone)
+            group_id = self._stable_id("service-zone-group", *zone_scope)
+            zone_id = self._stable_id("service-zone", *zone_scope)
             zone_meta: dict[str, object] = {
                 "role": "service_zone",
                 "service_name": zone.service_name,
@@ -671,8 +672,9 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         base_metadata: Metadata,
     ) -> None:
         for zone in zones:
-            group_id = self._stable_id("service-zone-group", zone.service_key)
-            label_id = self._stable_id("service-zone-label", zone.service_key)
+            zone_scope = self._service_zone_scope(zone)
+            group_id = self._stable_id("service-zone-group", *zone_scope)
+            label_id = self._stable_id("service-zone-label", *zone_scope)
             label_meta: dict[str, object] = {
                 "role": "service_zone_label",
                 "service_name": zone.service_name,
@@ -697,3 +699,14 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 self._apply_text_bold(label_element)
                 self._apply_service_zone_label_style(label_element)
             registry.add(label_element)
+
+    def _service_zone_scope(self, zone: ServiceZonePlacement) -> tuple[str, ...]:
+        if zone.procedure_ids:
+            return (zone.service_key, *zone.procedure_ids)
+        return (
+            zone.service_key,
+            f"{zone.origin.x:.3f}",
+            f"{zone.origin.y:.3f}",
+            f"{zone.size.width:.3f}",
+            f"{zone.size.height:.3f}",
+        )

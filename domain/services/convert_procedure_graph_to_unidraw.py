@@ -82,8 +82,9 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
             reverse=True,
         )
         for zone in zone_layers:
-            group_id = self._stable_id("service-zone-group", zone.service_key)
-            zone_id = self._stable_id("service-zone", zone.service_key)
+            zone_scope = self._service_zone_scope(zone)
+            group_id = self._stable_id("service-zone-group", *zone_scope)
+            zone_id = self._stable_id("service-zone", *zone_scope)
             zone_meta: dict[str, object] = {
                 "role": "service_zone",
                 "service_name": zone.service_name,
@@ -118,7 +119,8 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
         base_metadata: Metadata,
     ) -> None:
         for zone in zones:
-            group_id = self._stable_id("service-zone-group", zone.service_key)
+            zone_scope = self._service_zone_scope(zone)
+            group_id = self._stable_id("service-zone-group", *zone_scope)
             label_meta: dict[str, object] = {
                 "service_name": zone.service_name,
                 "service_color": zone.color,
@@ -134,7 +136,7 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
                 },
                 base_metadata,
             )
-            panel_id = self._stable_id("service-zone-label-panel", zone.service_key)
+            panel_id = self._stable_id("service-zone-label-panel", *zone_scope)
             registry.add(
                 self._rectangle_element(
                     element_id=panel_id,
@@ -152,7 +154,7 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
 
             text_padding_x = max(8.0, zone.label_font_size * 0.3)
             text_padding_y = max(4.0, zone.label_font_size * 0.22)
-            label_id = self._stable_id("service-zone-label", zone.service_key)
+            label_id = self._stable_id("service-zone-label", *zone_scope)
             label_element = self._text_block_element(
                 element_id=label_id,
                 text=zone.service_name,

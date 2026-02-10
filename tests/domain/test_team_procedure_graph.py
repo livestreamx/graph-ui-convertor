@@ -1764,6 +1764,111 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
     assert all(layer < frame_front for layer in label_layers)
 
 
+def test_procedure_graph_unidraw_service_zone_ids_are_unique_across_components() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Component 1 A",
+                "start_block_ids": ["a1"],
+                "end_block_ids": ["a2::end"],
+                "branches": {"a1": ["a2"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Component 1 B",
+                "start_block_ids": ["b1"],
+                "end_block_ids": ["b2::end"],
+                "branches": {"b1": ["b2"]},
+            },
+            {
+                "proc_id": "p3",
+                "proc_name": "Component 2 A",
+                "start_block_ids": ["c1"],
+                "end_block_ids": ["c2::end"],
+                "branches": {"c1": ["c2"]},
+            },
+            {
+                "proc_id": "p4",
+                "proc_name": "Component 2 C",
+                "start_block_ids": ["d1"],
+                "end_block_ids": ["d2::end"],
+                "branches": {"d1": ["d2"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": [], "p3": ["p4"], "p4": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        }
+                    ],
+                },
+                "p2": {
+                    "team_name": "Beta",
+                    "service_name": "Refunds",
+                    "procedure_color": "#e3f7d9",
+                    "services": [
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Refunds",
+                            "service_color": "#e3f7d9",
+                        }
+                    ],
+                },
+                "p3": {
+                    "team_name": "Alpha",
+                    "service_name": "Payments",
+                    "procedure_color": "#d9f5ff",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Payments",
+                            "service_color": "#d9f5ff",
+                        }
+                    ],
+                },
+                "p4": {
+                    "team_name": "Gamma",
+                    "service_name": "Disputes",
+                    "procedure_color": "#f7e9d9",
+                    "services": [
+                        {
+                            "team_name": "Gamma",
+                            "service_name": "Disputes",
+                            "service_color": "#f7e9d9",
+                        }
+                    ],
+                },
+            }
+        }
+    )
+    layout = ProcedureGraphLayoutEngine()
+    scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+
+    element_ids = [str(element.get("id")) for element in scene.elements if element.get("id")]
+    assert len(element_ids) == len(set(element_ids))
+
+    payments_zone_ids = {
+        str(element.get("id"))
+        for element in scene.elements
+        if element.get("cjm", {}).get("service_name") == "Payments"
+        and element.get("cjm", {}).get("role")
+        in {"service_zone", "service_zone_label_panel", "service_zone_label"}
+    }
+    assert len(payments_zone_ids) == 6
+
+
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
     payload = {
         "markup_type": "procedure_graph",
