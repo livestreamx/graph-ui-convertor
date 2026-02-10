@@ -840,7 +840,7 @@ main {
 }
 
 .team-graph-merge-loader {
-  margin-top: 10px;
+  margin-top: 0;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
@@ -861,6 +861,7 @@ main {
 }
 
 .team-graph-merge-loader.htmx-request {
+  margin-top: 10px;
   opacity: 1;
   max-height: 140px;
   pointer-events: auto;
@@ -968,13 +969,13 @@ main {
   cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 14px 42px 14px 16px;
   user-select: none;
   border-radius: 13px;
   background: rgba(255, 255, 255, 0.02);
   transition: background-color 0.2s ease, color 0.2s ease, transform 0.12s ease;
+  position: relative;
 }
 
 .team-graph-dashboard-summary::-webkit-details-marker {
@@ -996,25 +997,36 @@ main {
 
 .team-graph-dashboard-summary::after {
   content: "▾";
+  position: absolute;
+  top: 50%;
+  right: 14px;
   font-size: 14px;
   color: rgba(216, 238, 255, 0.88);
+  transform: translateY(-50%) rotate(0deg);
   transition: transform 0.2s ease;
 }
 
 .team-graph-dashboard-section-collapsible:not([open]) .team-graph-dashboard-summary::after {
-  transform: rotate(-90deg);
+  transform: translateY(-50%) rotate(-90deg);
 }
 
 .team-graph-dashboard-summary-hint {
-  font-size: 11px;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 132px;
+  text-align: center;
+  pointer-events: none;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: rgba(203, 217, 240, 0.68);
+  font-size: 10px;
+  color: rgba(154, 170, 192, 0.6);
   transition: color 0.2s ease, opacity 0.2s ease;
 }
 
 .team-graph-dashboard-section-collapsible[open] .team-graph-dashboard-summary-hint {
-  color: rgba(185, 218, 255, 0.9);
+  color: rgba(165, 183, 206, 0.72);
 }
 
 .team-graph-dashboard-content {

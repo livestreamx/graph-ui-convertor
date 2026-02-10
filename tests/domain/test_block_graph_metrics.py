@@ -11,17 +11,17 @@ def test_basic_block_graph_metrics() -> None:
     assert metrics.directed is True
     assert metrics.is_acyclic is False
     assert metrics.weakly_connected is True
-    assert metrics.vertices == 14
-    assert metrics.edges == 15
+    assert metrics.vertices == 19
+    assert metrics.edges == 21
     assert metrics.sources == {"intake_start"}
     assert metrics.sinks == {"final_end"}
-    expected_branch_nodes = {"route_recheck", "route_branch"}
+    expected_branch_nodes = {"handoff_check", "route_recheck", "route_branch"}
     assert metrics.branch_nodes == expected_branch_nodes, "out_degree=" f"{metrics.out_degree}"
     branching_count = len(metrics.branch_nodes)
-    assert branching_count == 2, (
+    assert branching_count == 3, (
         "branch_nodes=" f"{sorted(metrics.branch_nodes)} out_degree={metrics.out_degree}"
     )
-    assert len(metrics.merge_nodes) == 2
+    assert len(metrics.merge_nodes) == 3
     assert metrics.cycle_path is not None
     assert {"route_review", "route_recheck"}.issubset(set(metrics.cycle_path))
     assert metrics.cycle_count == 1

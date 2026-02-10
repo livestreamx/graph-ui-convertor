@@ -165,7 +165,7 @@ def test_examples_share_blocks_for_cross_team_merge() -> None:
         ("basic.json", 0.0, 0.0),
         ("complex_graph.json", 0.0, 0.0),
         ("forest.json", 0.0, 0.0),
-        ("graphs_set.json", 1 / 9, 1 / 9),
+        ("graphs_set.json", 1 / 10, 1 / 10),
     ],
 )
 def test_examples_bot_multi_procedure_shares(

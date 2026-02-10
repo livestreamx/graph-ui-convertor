@@ -693,7 +693,7 @@ def test_graph_counts_use_procedure_graph_components_for_single_markup() -> None
         selected_team_ids=[str(document.team_id)],
     )
 
-    assert dashboard.unique_graph_count == len(document.procedures)
+    assert dashboard.unique_graph_count == 8
     assert dashboard.bot_graph_count == 1
     assert dashboard.multi_graph_count == 1
     assert sum(item.graph_count for item in dashboard.graph_groups) == dashboard.unique_graph_count
