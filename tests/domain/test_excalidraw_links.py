@@ -137,3 +137,89 @@ def test_links_applied_to_procedure_graph_service_and_team_panels() -> None:
     )
     assert service_panel.get("link") == "https://example.com/units?unit_id=99"
     assert team_text.get("link") == "https://example.com/teams?team_id=team-alpha"
+
+
+def test_procedure_graph_frame_link_uses_source_procedure_id() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Alpha",
+        "procedures": [
+            {
+                "proc_id": "shared::doca1b2",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"shared::doca1b2": []},
+        "procedure_meta": {
+            "shared::doca1b2": {
+                "team_name": "Team Alpha",
+                "service_name": "Checkout",
+                "source_procedure_id": "shared",
+                "procedure_color": "#d9f5ff",
+                "services": [],
+            }
+        },
+    }
+    markup = MarkupDocument.model_validate(payload)
+    templates = ExcalidrawLinkTemplates(procedure="https://example.com/procedures/{procedure_id}")
+    excal = ProcedureGraphToExcalidrawConverter(
+        ProcedureGraphLayoutEngine(), link_templates=templates
+    ).convert(markup)
+
+    frame = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+    )
+    meta = frame.get("customData", {}).get("cjm", {})
+    assert meta.get("procedure_id") == "shared::doca1b2"
+    assert meta.get("source_procedure_id") == "shared"
+    assert frame.get("link") == "https://example.com/procedures/shared"
+
+
+def test_block_link_uses_source_procedure_id() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "shared::doca1b2",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_meta": {
+            "shared::doca1b2": {
+                "source_procedure_id": "shared",
+            }
+        },
+    }
+    markup = MarkupDocument.model_validate(payload)
+    templates = ExcalidrawLinkTemplates(
+        block="https://example.com/procedures/{procedure_id}/blocks/{block_id}"
+    )
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine(), link_templates=templates).convert(
+        markup
+    )
+
+    block = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "block"
+        and element.get("customData", {}).get("cjm", {}).get("block_id") == "a"
+    )
+    block_label = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "block_label"
+        and element.get("customData", {}).get("cjm", {}).get("block_id") == "a"
+    )
+    block_meta = block.get("customData", {}).get("cjm", {})
+    label_meta = block_label.get("customData", {}).get("cjm", {})
+    assert block_meta.get("procedure_id") == "shared::doca1b2"
+    assert block_meta.get("source_procedure_id") == "shared"
+    assert label_meta.get("source_procedure_id") == "shared"
+    assert block.get("link") == "https://example.com/procedures/shared/blocks/a"
+    assert block_label.get("link") == "https://example.com/procedures/shared/blocks/a"

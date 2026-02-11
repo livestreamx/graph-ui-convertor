@@ -65,14 +65,18 @@ def ensure_excalidraw_links(
         meta = _metadata_from_excalidraw(element)
         role = meta.get("role")
         if role == "frame":
-            procedure_id = meta.get("procedure_id")
+            procedure_id = meta.get("source_procedure_id")
+            if not isinstance(procedure_id, str) or not procedure_id:
+                procedure_id = meta.get("procedure_id")
             if isinstance(procedure_id, str):
                 link = templates.procedure_link(procedure_id)
                 if link:
                     element["link"] = link
         elif role in {"block", "block_label"}:
             block_id = meta.get("block_id")
-            procedure_id = meta.get("procedure_id")
+            procedure_id = meta.get("source_procedure_id")
+            if not isinstance(procedure_id, str) or not procedure_id:
+                procedure_id = meta.get("procedure_id")
             if isinstance(block_id, str):
                 link = templates.block_link(
                     block_id,
@@ -125,7 +129,9 @@ def ensure_unidraw_links(
                     element["link"] = link
         elif role == "block":
             block_id = meta.get("block_id")
-            procedure_id = meta.get("procedure_id")
+            procedure_id = meta.get("source_procedure_id")
+            if not isinstance(procedure_id, str) or not procedure_id:
+                procedure_id = meta.get("procedure_id")
             if isinstance(block_id, str):
                 link = templates.block_link(
                     block_id,

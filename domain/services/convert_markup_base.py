@@ -75,6 +75,12 @@ class MarkupToDiagramConverter(ABC):
             for block_id, name in proc.block_id_to_block_name.items()
             if name and (proc.procedure_id, block_id) in block_ids_in_plan
         }
+        source_procedure_ids: dict[str, str] = {}
+        for proc_id, proc_meta in (document.procedure_meta or {}).items():
+            source_proc_id = proc_meta.get("source_procedure_id")
+            if isinstance(source_proc_id, str) and source_proc_id:
+                source_procedure_ids[proc_id] = source_proc_id
+
         blocks = self._build_blocks(
             plan.blocks,
             frame_ids,
@@ -83,6 +89,7 @@ class MarkupToDiagramConverter(ABC):
             end_block_type_lookup,
             block_name_lookup,
             document.block_graph_initials,
+            source_procedure_ids=source_procedure_ids,
         )
 
         start_label_index: dict[tuple[str, str], int] = {}
@@ -718,8 +725,10 @@ class MarkupToDiagramConverter(ABC):
         end_block_type_lookup: dict[tuple[str, str], str],
         block_name_lookup: dict[tuple[str, str], str],
         block_graph_initials: set[str],
+        source_procedure_ids: dict[str, str] | None = None,
     ) -> dict[tuple[str, str], BlockPlacement]:
         placement_index: dict[tuple[str, str], BlockPlacement] = {}
+        source_lookup = source_procedure_ids or {}
         for block in blocks:
             placement_index[(block.procedure_id, block.block_id)] = block
             group_id = self._stable_id("group", block.procedure_id, block.block_id)
@@ -732,6 +741,9 @@ class MarkupToDiagramConverter(ABC):
                 "block_id": block.block_id,
                 "role": "block",
             }
+            source_procedure_id = source_lookup.get(block.procedure_id)
+            if isinstance(source_procedure_id, str) and source_procedure_id:
+                block_meta["source_procedure_id"] = source_procedure_id
             if is_initial:
                 block_meta["block_graph_initial"] = True
             if end_block_type:
@@ -762,6 +774,8 @@ class MarkupToDiagramConverter(ABC):
                 "role": "block_label",
                 "end_block_type": end_block_type,
             }
+            if isinstance(source_procedure_id, str) and source_procedure_id:
+                label_meta["source_procedure_id"] = source_procedure_id
             if is_initial:
                 label_meta["block_graph_initial"] = True
             if label_text != block.block_id:

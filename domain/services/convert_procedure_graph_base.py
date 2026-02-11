@@ -213,6 +213,9 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             if procedure_name:
                 frame_meta["procedure_name"] = procedure_name
             meta = procedure_meta.get(frame.procedure_id, {})
+            source_procedure_id = meta.get("source_procedure_id")
+            if isinstance(source_procedure_id, str) and source_procedure_id:
+                frame_meta["source_procedure_id"] = source_procedure_id
             color = meta.get("procedure_color")
             if isinstance(color, str) and color:
                 frame_meta["procedure_color"] = color

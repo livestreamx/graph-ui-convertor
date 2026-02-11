@@ -45,7 +45,7 @@ class BuildTeamProcedureGraph:
         procedure_graph: dict[str, list[str]]
         procedure_services: dict[str, dict[str, dict[str, object]]]
         service_keys: set[str]
-        source_proc_by_scoped: dict[str, str] | None = None
+        source_proc_by_scoped: dict[str, str] = {}
         merge_services: dict[str, dict[str, dict[str, object]]] = {}
         merge_node_ids: set[str] = set()
         merge_chain_groups_by_proc: dict[str, tuple[tuple[str, ...], ...]] = {}
@@ -71,6 +71,7 @@ class BuildTeamProcedureGraph:
                 selected_graph,
                 procedure_services,
                 service_keys,
+                source_proc_by_scoped,
             ) = self._collect_documents(
                 documents,
                 include_graph_nodes=False,
@@ -104,6 +105,7 @@ class BuildTeamProcedureGraph:
                 merge_graph,
                 merge_services,
                 merge_service_keys,
+                _,
             ) = self._collect_documents(
                 merge_documents,
                 include_graph_nodes=True,
@@ -165,6 +167,7 @@ class BuildTeamProcedureGraph:
                     "service_name": primary.get("service_name", "Unknown service"),
                     "team_id": primary.get("team_id"),
                     "finedog_unit_id": primary.get("finedog_unit_id"),
+                    "source_procedure_id": source_proc_by_scoped.get(proc_id, proc_id),
                     "procedure_color": color,
                     "is_intersection": is_intersection,
                     "services": services,
@@ -175,6 +178,7 @@ class BuildTeamProcedureGraph:
                     "service_name": "Unknown service",
                     "team_id": None,
                     "finedog_unit_id": None,
+                    "source_procedure_id": source_proc_by_scoped.get(proc_id, proc_id),
                     "procedure_color": _SERVICE_COLORS[0],
                     "is_intersection": False,
                     "services": [],
@@ -191,7 +195,7 @@ class BuildTeamProcedureGraph:
                     procedure_meta,
                     merge_chain_groups_by_proc,
                 )
-            elif source_proc_by_scoped is not None:
+            else:
                 self._apply_merge_metadata_for_scoped(
                     procedure_meta,
                     merge_services,
@@ -345,12 +349,14 @@ class BuildTeamProcedureGraph:
         dict[str, list[str]],
         dict[str, dict[str, dict[str, object]]],
         set[str],
+        dict[str, str],
     ]:
         procedure_payloads: dict[str, dict[str, Any]] = {}
         procedure_order: list[str] = []
         procedure_graph: dict[str, list[str]] = {}
         procedure_services: dict[str, dict[str, dict[str, object]]] = {}
         service_keys: set[str] = set()
+        source_proc_by_scoped: dict[str, str] = {}
         merge_lookup_ids = merge_node_ids if merge_node_ids is not None else set()
         source_counts: dict[str, int] = {}
         if merge_node_ids is not None:
@@ -388,6 +394,9 @@ class BuildTeamProcedureGraph:
                         scoped_id_map[source_proc_id] = source_proc_id
                         continue
                     scoped_id_map[source_proc_id] = f"{source_proc_id}::doc{doc_scope_token}"
+            for source_proc_id in self._document_procedure_ids(document):
+                scoped_id = scoped_id_map.get(source_proc_id, source_proc_id)
+                source_proc_by_scoped[scoped_id] = source_proc_id
 
             for proc in document.procedures:
                 proc_id = scoped_id_map.get(proc.procedure_id, proc.procedure_id)
@@ -425,6 +434,7 @@ class BuildTeamProcedureGraph:
             procedure_graph,
             procedure_services,
             service_keys,
+            source_proc_by_scoped,
         )
 
     def _collect_documents_as_is(
@@ -528,7 +538,7 @@ class BuildTeamProcedureGraph:
         self,
         documents: Sequence[MarkupDocument],
     ) -> tuple[dict[str, dict[str, dict[str, object]]], set[str]]:
-        _, _, _, procedure_services, service_keys = self._collect_documents(
+        _, _, _, procedure_services, service_keys, _ = self._collect_documents(
             documents,
             include_graph_nodes=True,
         )
