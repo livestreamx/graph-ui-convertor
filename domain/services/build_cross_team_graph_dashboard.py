@@ -770,6 +770,23 @@ class BuildCrossTeamGraphDashboard:
         merge_node_min_chain_size: int,
         merge_documents: Sequence[MarkupDocument] | None = None,
     ) -> tuple[MarkupDocument, list[str], dict[str, set[str]], tuple[GraphGroupStat, ...]]:
+        merge_representative_ids: set[str] | None = None
+        if merge_node_min_chain_size > 1:
+            merge_scope = merge_documents if merge_documents is not None else selected_documents
+            merge_scope_services = [doc for doc in merge_scope if _is_service_markup(doc)]
+            if merge_scope_services:
+                merge_scope_states = self._build_service_node_states(
+                    self._collect_graphs(merge_scope_services)
+                )
+                pair_merge_nodes = collect_pair_merge_nodes(
+                    merge_scope_states,
+                    merge_selected_markups=merge_selected_markups,
+                    merge_node_min_chain_size=merge_node_min_chain_size,
+                )
+                merge_representative_ids = set()
+                for representative_ids in pair_merge_nodes.values():
+                    merge_representative_ids.update(representative_ids)
+
         graph_document = BuildTeamProcedureGraph().build(
             selected_documents,
             merge_documents=merge_documents,
@@ -802,6 +819,12 @@ class BuildCrossTeamGraphDashboard:
                     }
                 service_labels.update(keys)
                 if bool(payload.get("is_intersection")):
+                    normalized_proc_id = _normalize_scoped_procedure_id(proc_id)
+                    if (
+                        merge_representative_ids is not None
+                        and normalized_proc_id not in merge_representative_ids
+                    ):
+                        continue
                     merge_services = payload.get("merge_services")
                     merge_keys = _extract_service_keys(merge_services)
                     if not merge_keys:

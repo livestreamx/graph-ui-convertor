@@ -19,6 +19,7 @@ from domain.services.convert_procedure_graph_to_excalidraw import (
     ProcedureGraphToExcalidrawConverter,
 )
 from domain.services.convert_procedure_graph_to_unidraw import ProcedureGraphToUnidrawConverter
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_build_team_procedure_graph_merges_documents() -> None:
@@ -528,14 +529,55 @@ def test_build_team_procedure_graph_merge_threshold_groups_shared_chains() -> No
     )
 
     proc_ids = [proc.procedure_id for proc in merged.procedures]
-    shared_b_scoped = [proc_id for proc_id in proc_ids if proc_id.startswith("shared_b::doc")]
     assert "shared_a" in proc_ids
-    assert "shared_b" not in proc_ids
-    assert len(shared_b_scoped) == 2
+    assert "shared_b" in proc_ids
     assert merged.procedure_meta["shared_a"]["is_intersection"] is True
-    assert all(
-        merged.procedure_meta[proc_id]["is_intersection"] is False for proc_id in shared_b_scoped
+    assert merged.procedure_meta["shared_b"]["is_intersection"] is True
+
+
+def test_build_team_procedure_graph_chain_threshold_keeps_adjacent_non_merge_nodes() -> None:
+    basic = load_markup_fixture("basic.json")
+    graphs_set = load_markup_fixture("graphs_set.json")
+
+    merged = BuildTeamProcedureGraph().build(
+        [basic],
+        merge_documents=[basic, graphs_set],
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
     )
+
+    proc_ids = {proc.procedure_id for proc in merged.procedures}
+    assert "proc_shared_intake" in proc_ids
+    assert "proc_shared_handoff" in proc_ids
+    assert "proc_shared_routing" in proc_ids
+
+    assert merged.procedure_meta["proc_shared_intake"]["is_intersection"] is True
+    assert merged.procedure_meta["proc_shared_handoff"]["is_intersection"] is True
+    assert merged.procedure_meta["proc_shared_routing"]["is_intersection"] is False
+
+
+def test_build_team_procedure_graph_scoped_chain_groups_do_not_cross_documents() -> None:
+    basic = load_markup_fixture("basic.json")
+    graphs_set = load_markup_fixture("graphs_set.json")
+
+    merged = BuildTeamProcedureGraph().build(
+        [basic, graphs_set],
+        merge_selected_markups=False,
+        merge_node_min_chain_size=2,
+    )
+
+    intake_doc1 = merged.procedure_meta["proc_shared_intake::doc1"]
+    intake_doc2 = merged.procedure_meta["proc_shared_intake::doc2"]
+    group_id_doc1 = intake_doc1.get("merge_chain_group_id")
+    group_id_doc2 = intake_doc2.get("merge_chain_group_id")
+
+    assert isinstance(group_id_doc1, str)
+    assert isinstance(group_id_doc2, str)
+    assert group_id_doc1 != group_id_doc2
+    assert "proc_shared_intake::doc1" in group_id_doc1
+    assert "proc_shared_handoff::doc1" in group_id_doc1
+    assert "proc_shared_intake::doc2" in group_id_doc2
+    assert "proc_shared_handoff::doc2" in group_id_doc2
 
 
 def test_build_team_procedure_graph_marks_singleton_shared_nodes_when_flag_is_off() -> None:
@@ -1317,6 +1359,63 @@ def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
     assert "(2) Shared Two" in merge_text
 
 
+def test_procedure_graph_layout_groups_chain_merge_nodes_into_single_item() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "proc_shared_intake",
+                "proc_name": "Intake",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "proc_shared_handoff",
+                "proc_name": "Intake to routing handoff",
+                "start_block_ids": [],
+                "end_block_ids": ["c::end"],
+                "branches": {"b": ["c"]},
+            },
+        ],
+        "procedure_graph": {
+            "proc_shared_intake": ["proc_shared_handoff"],
+            "proc_shared_handoff": [],
+        },
+    }
+    chain_group_id = "merge_chain::proc_shared_intake|proc_shared_handoff"
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "proc_shared_intake": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["proc_shared_intake", "proc_shared_handoff"],
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Routing"},
+                    ],
+                },
+                "proc_shared_handoff": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["proc_shared_intake", "proc_shared_handoff"],
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Routing"},
+                    ],
+                },
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    assert plan.scenarios
+    merge_text = plan.scenarios[0].merge_text or ""
+    assert "(1) Intake + Intake to routing handoff" in merge_text
+    assert "(2)" not in merge_text
+
+
 def test_procedure_graph_merge_panel_no_group_divider_for_single_group() -> None:
     payload = {
         "markup_type": "procedure_graph",
@@ -1867,6 +1966,71 @@ def test_procedure_graph_unidraw_service_zone_ids_are_unique_across_components()
         in {"service_zone", "service_zone_label_panel", "service_zone_label"}
     }
     assert len(payments_zone_ids) == 6
+
+
+def test_procedure_graph_converter_uses_single_highlight_for_chain_group() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "proc_shared_intake",
+                "proc_name": "Intake",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "proc_shared_handoff",
+                "proc_name": "Intake to routing handoff",
+                "start_block_ids": [],
+                "end_block_ids": ["c::end"],
+                "branches": {"b": ["c"]},
+            },
+        ],
+        "procedure_graph": {
+            "proc_shared_intake": ["proc_shared_handoff"],
+            "proc_shared_handoff": [],
+        },
+    }
+    chain_group_id = "merge_chain::proc_shared_intake|proc_shared_handoff"
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "proc_shared_intake": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["proc_shared_intake", "proc_shared_handoff"],
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Routing"},
+                    ],
+                },
+                "proc_shared_handoff": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["proc_shared_intake", "proc_shared_handoff"],
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Routing"},
+                    ],
+                },
+            }
+        }
+    )
+
+    scene = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    highlights = [
+        element
+        for element in scene.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_highlight"
+    ]
+    assert len(highlights) == 1
+    marker_labels = [
+        element.get("text")
+        for element in scene.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_index_label"
+    ]
+    assert marker_labels == ["1"]
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:

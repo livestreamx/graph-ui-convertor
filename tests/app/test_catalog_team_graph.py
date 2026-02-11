@@ -1104,6 +1104,106 @@ def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_marku
         stubber.deactivate()
 
 
+def test_catalog_team_graph_selected_team_scene_chain_threshold_keeps_routing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_basic = _load_fixture("basic.json")
+    payload_graphs = _load_fixture("graphs_set.json")
+
+    basic_meta = payload_basic.get("finedog_unit_meta")
+    assert isinstance(basic_meta, dict)
+    basic_team_id = basic_meta.get("team_id")
+    assert isinstance(basic_team_id, str)
+
+    objects = {
+        "markup/basic.json": payload_basic,
+        "markup/graphs_set.json": payload_graphs,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/basic.json", payload=payload_basic)
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/graphs_set.json", payload=payload_graphs
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/api/teams/graph",
+            params={
+                "team_ids": basic_team_id,
+                "merge_nodes_all_markups": "true",
+                "merge_node_min_chain_size": "2",
+            },
+        )
+        assert response.status_code == 200
+        elements = response.json()["elements"]
+
+        frame_proc_ids: set[str] = set()
+        intersection_proc_ids: set[str] = set()
+        for element in elements:
+            cjm = element.get("customData", {}).get("cjm", {})
+            if not isinstance(cjm, dict):
+                continue
+            role = cjm.get("role")
+            proc_id = cjm.get("procedure_id")
+            if not isinstance(proc_id, str):
+                continue
+            if role == "frame":
+                frame_proc_ids.add(proc_id)
+            if role == "intersection_highlight":
+                intersection_proc_ids.add(proc_id)
+
+        assert "proc_shared_intake" in frame_proc_ids
+        assert "proc_shared_handoff" in frame_proc_ids
+        assert "proc_shared_routing" in frame_proc_ids
+        assert "proc_shared_intake" in intersection_proc_ids
+        assert "proc_shared_handoff" not in intersection_proc_ids
+        assert "proc_shared_routing" not in intersection_proc_ids
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_hides_unselected_merge_nodes_from_other_teams(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

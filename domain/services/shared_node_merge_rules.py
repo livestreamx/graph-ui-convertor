@@ -72,9 +72,74 @@ def collect_pair_merge_nodes(
     merge_selected_markups: bool,
     merge_node_min_chain_size: int = 1,
 ) -> dict[tuple[str, str], set[str]]:
+    pair_chunks = collect_pair_merge_node_chunks(
+        states,
+        merge_selected_markups=merge_selected_markups,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+    )
+    pair_nodes: dict[tuple[str, str], set[str]] = {}
+    for pair, chunks in pair_chunks.items():
+        representatives = {chunk[0] for chunk in chunks if chunk}
+        if representatives:
+            pair_nodes[pair] = representatives
+    return pair_nodes
+
+
+def collect_pair_merge_node_chunks(
+    states: Mapping[str, ServiceNodeState],
+    *,
+    merge_selected_markups: bool,
+    merge_node_min_chain_size: int = 1,
+) -> dict[tuple[str, str], list[tuple[str, ...]]]:
     if merge_node_min_chain_size <= 0:
         return {}
 
+    pair_candidates = _collect_pair_candidates(
+        states,
+        merge_selected_markups=merge_selected_markups,
+    )
+    pair_chunks: dict[tuple[str, str], list[tuple[str, ...]]] = {}
+    for pair, proc_ids in pair_candidates.items():
+        left_state = states.get(pair[0])
+        right_state = states.get(pair[1])
+        if left_state is None or right_state is None:
+            continue
+        chunks = _collect_chain_merge_chunks(
+            proc_ids,
+            left_state,
+            right_state,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+        )
+        if chunks:
+            pair_chunks[pair] = chunks
+    return pair_chunks
+
+
+def collect_merge_node_ids(
+    states: Mapping[str, ServiceNodeState],
+    *,
+    merge_selected_markups: bool,
+    merge_node_min_chain_size: int = 1,
+) -> set[str]:
+    if merge_node_min_chain_size <= 0:
+        return set()
+
+    merge_nodes: set[str] = set()
+    for chunks in collect_pair_merge_node_chunks(
+        states,
+        merge_selected_markups=merge_selected_markups,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+    ).values():
+        for chunk in chunks:
+            merge_nodes.update(chunk)
+    return merge_nodes
+
+
+def _collect_pair_candidates(
+    states: Mapping[str, ServiceNodeState],
+    *,
+    merge_selected_markups: bool,
+) -> dict[tuple[str, str], set[str]]:
     proc_to_services: dict[str, set[str]] = {}
     for service_key, state in states.items():
         for proc_id in state.procedure_ids:
@@ -98,41 +163,7 @@ def collect_pair_merge_nodes(
                 continue
             pair = _pair_key(left_key, right_key)
             pair_candidates.setdefault(pair, set()).add(proc_id)
-
-    if merge_node_min_chain_size <= 1:
-        return pair_candidates
-
-    pair_nodes: dict[tuple[str, str], set[str]] = {}
-    for pair, proc_ids in pair_candidates.items():
-        left_state = states.get(pair[0])
-        right_state = states.get(pair[1])
-        if left_state is None or right_state is None:
-            continue
-        filtered_proc_ids = _collect_chain_merge_nodes(
-            proc_ids,
-            left_state,
-            right_state,
-            merge_node_min_chain_size=merge_node_min_chain_size,
-        )
-        if filtered_proc_ids:
-            pair_nodes[pair] = filtered_proc_ids
-    return pair_nodes
-
-
-def collect_merge_node_ids(
-    states: Mapping[str, ServiceNodeState],
-    *,
-    merge_selected_markups: bool,
-    merge_node_min_chain_size: int = 1,
-) -> set[str]:
-    merge_nodes: set[str] = set()
-    for nodes in collect_pair_merge_nodes(
-        states,
-        merge_selected_markups=merge_selected_markups,
-        merge_node_min_chain_size=merge_node_min_chain_size,
-    ).values():
-        merge_nodes.update(nodes)
-    return merge_nodes
+    return pair_candidates
 
 
 def should_merge_shared_node(
@@ -157,12 +188,28 @@ def _collect_chain_merge_nodes(
     *,
     merge_node_min_chain_size: int,
 ) -> set[str]:
+    chunks = _collect_chain_merge_chunks(
+        proc_ids,
+        left_state,
+        right_state,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+    )
+    return {chunk[0] for chunk in chunks if chunk}
+
+
+def _collect_chain_merge_chunks(
+    proc_ids: set[str],
+    left_state: ServiceNodeState,
+    right_state: ServiceNodeState,
+    *,
+    merge_node_min_chain_size: int,
+) -> list[tuple[str, ...]]:
     if merge_node_min_chain_size <= 1:
-        return set(proc_ids)
+        return [(proc_id,) for proc_id in sorted(proc_ids, key=str.lower)]
 
     shared_proc_ids = set(proc_ids)
     if len(shared_proc_ids) < merge_node_min_chain_size:
-        return set()
+        return []
 
     common_forward, common_backward = _shared_edges(
         shared_proc_ids,
@@ -172,7 +219,7 @@ def _collect_chain_merge_nodes(
     cyclic_nodes = _cycle_nodes(shared_proc_ids, common_forward)
     acyclic_nodes = shared_proc_ids - cyclic_nodes
     if len(acyclic_nodes) < merge_node_min_chain_size:
-        return set()
+        return []
 
     acyclic_forward: dict[str, set[str]] = {proc_id: set() for proc_id in acyclic_nodes}
     acyclic_backward: dict[str, set[str]] = {proc_id: set() for proc_id in acyclic_nodes}
@@ -191,7 +238,7 @@ def _collect_chain_merge_nodes(
         and len(acyclic_forward.get(proc_id, set())) <= 1
     }
     if len(linear_nodes) < merge_node_min_chain_size:
-        return set()
+        return []
 
     linear_forward: dict[str, set[str]] = {proc_id: set() for proc_id in linear_nodes}
     linear_backward: dict[str, set[str]] = {proc_id: set() for proc_id in linear_nodes}
@@ -203,7 +250,7 @@ def _collect_chain_merge_nodes(
             linear_backward[target].add(source)
 
     chain_runs = _linear_runs(linear_nodes, linear_forward, linear_backward)
-    selected: set[str] = set()
+    selected_chunks: list[tuple[str, ...]] = []
     for run in chain_runs:
         if len(run) < merge_node_min_chain_size:
             continue
@@ -211,8 +258,8 @@ def _collect_chain_merge_nodes(
             chunk = run[offset : offset + merge_node_min_chain_size]
             if len(chunk) < merge_node_min_chain_size:
                 break
-            selected.add(chunk[0])
-    return selected
+            selected_chunks.append(tuple(chunk))
+    return selected_chunks
 
 
 def _shared_edges(

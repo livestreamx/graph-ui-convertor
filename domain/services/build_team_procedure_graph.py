@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from hashlib import sha1
 from typing import Any, Literal
 
@@ -9,6 +9,7 @@ from domain.services.shared_node_merge_rules import (
     ServiceNodeState,
     build_service_node_state,
     collect_merge_node_ids,
+    collect_pair_merge_node_chunks,
 )
 
 _SERVICE_COLORS = [
@@ -47,11 +48,17 @@ class BuildTeamProcedureGraph:
         source_proc_by_scoped: dict[str, str] | None = None
         merge_services: dict[str, dict[str, dict[str, object]]] = {}
         merge_node_ids: set[str] = set()
+        merge_chain_groups_by_proc: dict[str, tuple[tuple[str, ...], ...]] = {}
         merge_scope = merge_documents if merge_documents is not None else documents
         if merge_scope:
             merge_services, merge_service_keys = self._collect_merge_services(merge_scope)
             self._apply_service_colors(merge_services, merge_service_keys)
             merge_node_ids = self._resolve_merge_node_ids(
+                merge_scope,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+            )
+            merge_chain_groups_by_proc = self._resolve_merge_chain_groups_by_proc(
                 merge_scope,
                 merge_selected_markups=merge_selected_markups,
                 merge_node_min_chain_size=merge_node_min_chain_size,
@@ -180,12 +187,21 @@ class BuildTeamProcedureGraph:
                     merge_services,
                     merge_node_ids=merge_node_ids,
                 )
+                self._apply_merge_chain_metadata(
+                    procedure_meta,
+                    merge_chain_groups_by_proc,
+                )
             elif source_proc_by_scoped is not None:
                 self._apply_merge_metadata_for_scoped(
                     procedure_meta,
                     merge_services,
                     source_proc_by_scoped,
                     merge_node_ids=merge_node_ids,
+                )
+                self._apply_merge_chain_metadata_for_scoped(
+                    procedure_meta,
+                    merge_chain_groups_by_proc,
+                    source_proc_by_scoped,
                 )
 
         for proc in procedures:
@@ -259,6 +275,18 @@ class BuildTeamProcedureGraph:
                 incoming = incoming_by_proc.get(proc_id, set())
                 outgoing = adjacency.get(proc_id, [])
                 if len(incoming) != 1 or len(outgoing) != 1:
+                    continue
+                adjacent_to_merge = False
+                for neighbor_proc_id in (*incoming, *outgoing):
+                    merge_neighbor_id = (
+                        source_proc_by_scoped.get(neighbor_proc_id, neighbor_proc_id)
+                        if source_proc_by_scoped is not None
+                        else neighbor_proc_id
+                    )
+                    if merge_neighbor_id in merge_node_ids:
+                        adjacent_to_merge = True
+                        break
+                if adjacent_to_merge:
                     continue
                 parent_id = next(iter(incoming))
                 child_id = outgoing[0]
@@ -588,6 +616,96 @@ class BuildTeamProcedureGraph:
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
         )
+
+    def _resolve_merge_chain_groups_by_proc(
+        self,
+        documents: Sequence[MarkupDocument],
+        *,
+        merge_selected_markups: bool,
+        merge_node_min_chain_size: int,
+    ) -> dict[str, tuple[tuple[str, ...], ...]]:
+        if merge_node_min_chain_size <= 1:
+            return {}
+        states = self._build_service_node_states(documents)
+        pair_chunks = collect_pair_merge_node_chunks(
+            states,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+        )
+        groups_by_proc: dict[str, set[tuple[str, ...]]] = {}
+        for chunks in pair_chunks.values():
+            for chunk in chunks:
+                if len(chunk) <= 1:
+                    continue
+                for proc_id in chunk:
+                    groups_by_proc.setdefault(proc_id, set()).add(tuple(chunk))
+        return {
+            proc_id: tuple(sorted(groups, key=lambda group: "|".join(group).lower()))
+            for proc_id, groups in groups_by_proc.items()
+        }
+
+    def _apply_merge_chain_metadata(
+        self,
+        procedure_meta: dict[str, dict[str, object]],
+        merge_chain_groups_by_proc: Mapping[str, tuple[tuple[str, ...], ...]],
+    ) -> None:
+        for proc_id, groups in merge_chain_groups_by_proc.items():
+            meta = procedure_meta.get(proc_id)
+            if meta is None:
+                continue
+            if not groups:
+                continue
+            first_group = groups[0]
+            group_id = "merge_chain::" + "|".join(first_group)
+            meta["merge_chain_group_id"] = group_id
+            meta["merge_chain_members"] = list(first_group)
+
+    def _apply_merge_chain_metadata_for_scoped(
+        self,
+        procedure_meta: dict[str, dict[str, object]],
+        merge_chain_groups_by_proc: Mapping[str, tuple[tuple[str, ...], ...]],
+        source_proc_by_scoped: Mapping[str, str],
+    ) -> None:
+        scoped_by_source: dict[str, set[str]] = {}
+        for scoped_proc_id, source_proc_id in source_proc_by_scoped.items():
+            scoped_by_source.setdefault(source_proc_id, set()).add(scoped_proc_id)
+
+        for scoped_proc_id, source_proc_id in source_proc_by_scoped.items():
+            meta = procedure_meta.get(scoped_proc_id)
+            if meta is None:
+                continue
+            groups = merge_chain_groups_by_proc.get(source_proc_id)
+            if not groups:
+                continue
+            first_group = groups[0]
+            scoped_members: list[str] = []
+            source_prefix = f"{source_proc_id}::"
+            scope_suffix = ""
+            if scoped_proc_id.startswith(source_prefix):
+                scope_suffix = scoped_proc_id[len(source_proc_id) :]
+            for source_member in first_group:
+                member_id = source_member
+                if scope_suffix:
+                    candidate_scoped = f"{source_member}{scope_suffix}"
+                    if candidate_scoped in procedure_meta:
+                        member_id = candidate_scoped
+                if member_id == source_member:
+                    source_scoped = scoped_by_source.get(source_member, set())
+                    if member_id not in procedure_meta and source_scoped:
+                        if len(source_scoped) == 1:
+                            member_id = next(iter(source_scoped))
+                scoped_members.append(member_id)
+
+            unique_scoped_members: list[str] = []
+            for member_id in scoped_members:
+                if member_id in unique_scoped_members:
+                    continue
+                unique_scoped_members.append(member_id)
+            if not unique_scoped_members:
+                continue
+            group_id = "merge_chain::" + "|".join(unique_scoped_members)
+            meta["merge_chain_group_id"] = group_id
+            meta["merge_chain_members"] = unique_scoped_members
 
     def _build_service_node_states(
         self,

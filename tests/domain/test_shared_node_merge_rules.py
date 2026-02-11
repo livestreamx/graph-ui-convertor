@@ -85,7 +85,40 @@ def test_collect_pair_merge_nodes_returns_non_overlapping_chain_representatives(
         states,
         merge_selected_markups=True,
         merge_node_min_chain_size=2,
-    ) == {"shared_a", "shared_c"}
+    ) == {"shared_a", "shared_b", "shared_c", "shared_d"}
+
+
+def test_collect_merge_node_ids_expands_representative_to_full_threshold_chunk() -> None:
+    states = {
+        "left": _state(
+            "left",
+            {
+                "shared_a": ["shared_b"],
+                "shared_b": ["shared_c"],
+                "shared_c": [],
+            },
+        ),
+        "right": _state(
+            "right",
+            {
+                "shared_a": ["shared_b"],
+                "shared_b": ["shared_c"],
+                "shared_c": [],
+            },
+        ),
+    }
+
+    pair_nodes = collect_pair_merge_nodes(
+        states,
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
+    )
+    assert pair_nodes[("left", "right")] == {"shared_a"}
+    assert collect_merge_node_ids(
+        states,
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
+    ) == {"shared_a", "shared_b"}
 
 
 def test_collect_pair_merge_nodes_disables_merge_nodes_when_threshold_is_zero() -> None:

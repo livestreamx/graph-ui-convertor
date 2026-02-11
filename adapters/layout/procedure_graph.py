@@ -695,21 +695,51 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             label = " x ".join(label_parts)
             key = tuple(unique_tokens)
             group = groups.setdefault(key, _MergeGroup(label=label, proc_ids=[]))
-            group.proc_ids.append(proc_id)
+            chain_group_id = meta.get("merge_chain_group_id")
+            chain_members = meta.get("merge_chain_members")
+            group_node_ids: list[str]
+            if isinstance(chain_group_id, str) and isinstance(chain_members, list):
+                group_node_ids = [
+                    member_id
+                    for member_id in chain_members
+                    if isinstance(member_id, str) and member_id in merge_ids
+                ]
+                if not group_node_ids:
+                    group_node_ids = [proc_id]
+            else:
+                group_node_ids = [proc_id]
+            group.proc_ids.append("|".join(group_node_ids))
 
-        ordered_groups: list[tuple[int, str, list[str]]] = []
+        ordered_groups: list[tuple[int, str, list[list[str]]]] = []
         for group in groups.values():
-            proc_ids = [str(proc_id) for proc_id in group.proc_ids]
-            proc_ids.sort(key=lambda proc_id: (order_index.get(proc_id, 0), proc_id))
-            order = min(order_index.get(proc_id, 0) for proc_id in proc_ids)
+            node_proc_ids: list[list[str]] = []
+            seen: set[str] = set()
+            for token in group.proc_ids:
+                members = [proc_id for proc_id in token.split("|") if proc_id]
+                if not members:
+                    continue
+                canonical = "|".join(sorted(members))
+                if canonical in seen:
+                    continue
+                seen.add(canonical)
+                members.sort(key=lambda proc_id: (order_index.get(proc_id, 0), proc_id))
+                node_proc_ids.append(members)
+            node_proc_ids.sort(
+                key=lambda members: min(order_index.get(proc_id, 0) for proc_id in members)
+            )
+            if not node_proc_ids:
+                continue
+            order = min(
+                min(order_index.get(proc_id, 0) for proc_id in members) for members in node_proc_ids
+            )
             label = group.label
-            ordered_groups.append((order, label, proc_ids))
+            ordered_groups.append((order, label, node_proc_ids))
         ordered_groups.sort(key=lambda item: (item[0], item[1].lower()))
 
         merge_numbers: dict[str, list[int]] = {}
         merge_index = 1
         multiple_groups = len(ordered_groups) > 1
-        for idx, (_, label, proc_ids) in enumerate(ordered_groups):
+        for idx, (_, label, group_nodes) in enumerate(ordered_groups):
             if idx > 0:
                 blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=group_gap))
                 lines.append("")
@@ -727,11 +757,18 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
             lines.append(header_line)
             item_lines: list[str] = []
-            for proc_id in proc_ids:
-                proc = procedure_map.get(proc_id)
-                proc_name = proc.procedure_name if proc and proc.procedure_name else proc_id
-                item_lines.append(f"({merge_index}) {proc_name}")
-                merge_numbers.setdefault(proc_id, []).append(merge_index)
+            for node_members in group_nodes:
+                proc_names: list[str] = []
+                for proc_id in node_members:
+                    proc = procedure_map.get(proc_id)
+                    proc_name = proc.procedure_name if proc and proc.procedure_name else proc_id
+                    proc_names.append(proc_name)
+                    merge_numbers.setdefault(proc_id, []).append(merge_index)
+                if len(proc_names) <= 1:
+                    node_text = proc_names[0] if proc_names else "Unknown procedure"
+                else:
+                    node_text = " + ".join(proc_names)
+                item_lines.append(f"({merge_index}) {node_text}")
                 merge_index += 1
             wrapped = self._wrap_lines(item_lines, content_width - item_padding * 2, font_size)
             blocks.append(
