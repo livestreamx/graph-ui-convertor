@@ -40,6 +40,7 @@ class TeamIntersectionStat:
 @dataclass(frozen=True)
 class ServiceIntersectionStat:
     service_name: str
+    markup_type: str
     count: int
     external_depends_on_selected_count: int = 0
     selected_depends_on_external_count: int = 0
@@ -90,6 +91,7 @@ class GraphMergeNodeStat:
 class ServiceLoadStat:
     team_name: str
     service_name: str
+    markup_type: str
     cycle_count: int
     block_count: int
     in_team_merge_nodes: int
@@ -163,6 +165,7 @@ class _GraphAggregate:
     team_id: str
     team_name: str
     service_name: str
+    markup_type: str
     procedure_ids: set[str] = field(default_factory=set)
     procedure_order: list[str] = field(default_factory=list)
     _procedure_order_index: dict[str, int] = field(default_factory=dict)
@@ -414,6 +417,7 @@ class _ServiceDocumentSnapshot:
     service_key: str
     team_id: str
     team_name: str
+    markup_type: str
     procedure_ids: frozenset[str]
 
 
@@ -538,11 +542,11 @@ class BuildCrossTeamGraphDashboard:
         external_team_counter: Counter[str] = Counter()
         external_team_external_depends_counter: Counter[str] = Counter()
         external_team_selected_depends_counter: Counter[str] = Counter()
-        external_team_services: dict[str, Counter[str]] = {}
-        external_team_services_external_depends: dict[str, Counter[str]] = {}
-        external_team_services_selected_depends: dict[str, Counter[str]] = {}
+        external_team_services: dict[str, Counter[tuple[str, str]]] = {}
+        external_team_services_external_depends: dict[str, Counter[tuple[str, str]]] = {}
+        external_team_services_selected_depends: dict[str, Counter[tuple[str, str]]] = {}
         external_team_overlap_proc_ids: dict[str, set[str]] = {}
-        external_team_service_overlap_proc_ids: dict[str, dict[str, set[str]]] = {}
+        external_team_service_overlap_proc_ids: dict[str, dict[tuple[str, str], set[str]]] = {}
         selected_unique_procedure_ids = {
             proc_id for snapshot in selected_snapshots for proc_id in snapshot.procedure_ids
         }
@@ -583,32 +587,37 @@ class BuildCrossTeamGraphDashboard:
                 merge_count = external_depends_count + selected_depends_count
                 if merge_count <= 0:
                     continue
+                service_counter_key = (
+                    service.service_name,
+                    service.markup_type,
+                )
                 has_external = True
                 external_team_counter[service.team_name] += merge_count
                 external_team_external_depends_counter[service.team_name] += external_depends_count
                 external_team_selected_depends_counter[service.team_name] += selected_depends_count
                 external_team_services.setdefault(service.team_name, Counter())[
-                    service.service_name
+                    service_counter_key
                 ] += merge_count
                 external_team_services_external_depends.setdefault(
                     service.team_name,
                     Counter(),
-                )[service.service_name] += external_depends_count
+                )[service_counter_key] += external_depends_count
                 external_team_services_selected_depends.setdefault(
                     service.team_name,
                     Counter(),
-                )[service.service_name] += selected_depends_count
+                )[service_counter_key] += selected_depends_count
                 external_team_overlap_proc_ids.setdefault(service.team_name, set()).update(
                     shared_proc_ids
                 )
                 external_team_service_overlap_proc_ids.setdefault(
                     service.team_name,
                     {},
-                ).setdefault(service.service_name, set()).update(shared_proc_ids)
+                ).setdefault(service_counter_key, set()).update(shared_proc_ids)
             service = all_services.get(snapshot.service_key)
             entity_label = _entity_label(
                 snapshot.team_name,
                 service.service_name if service is not None else "Unknown entity",
+                (service.markup_type if service is not None else snapshot.markup_type),
             )
             if has_internal:
                 internal_intersection_entities.add(entity_label)
@@ -620,7 +629,11 @@ class BuildCrossTeamGraphDashboard:
         split_entities: list[str] = []
         target_entities: list[str] = []
         for service in selected_services.values():
-            entity_label = _entity_label(service.team_name, service.service_name)
+            entity_label = _entity_label(
+                service.team_name,
+                service.service_name,
+                service.markup_type,
+            )
             component_count = _count_weak_components(service.procedure_ids, service.adjacency)
             has_split_graph = component_count > 1
             if has_split_graph:
@@ -645,6 +658,7 @@ class BuildCrossTeamGraphDashboard:
             team_id="__flow__",
             team_name="Flow",
             service_name="Flow",
+            markup_type="procedure_graph",
         )
         flow_graph.add_document(flow_document)
         global_display_proc_ids = flow_graph.visible_procedure_ids()
@@ -693,18 +707,19 @@ class BuildCrossTeamGraphDashboard:
                 services=tuple(
                     ServiceIntersectionStat(
                         service_name=service_name,
+                        markup_type=service_markup_type,
                         count=service_count,
                         external_depends_on_selected_count=external_team_services_external_depends.get(
                             name, Counter()
-                        ).get(service_name, 0),
+                        ).get((service_name, service_markup_type), 0),
                         selected_depends_on_external_count=external_team_services_selected_depends.get(
                             name, Counter()
-                        ).get(service_name, 0),
+                        ).get((service_name, service_markup_type), 0),
                         overlap_procedure_percent=(
                             (
                                 len(
                                     external_team_service_overlap_proc_ids.get(name, {}).get(
-                                        service_name,
+                                        (service_name, service_markup_type),
                                         set(),
                                     )
                                 )
@@ -715,9 +730,9 @@ class BuildCrossTeamGraphDashboard:
                             else 0.0
                         ),
                     )
-                    for service_name, service_count in sorted(
+                    for (service_name, service_markup_type), service_count in sorted(
                         external_team_services.get(name, Counter()).items(),
-                        key=lambda item: (-item[1], item[0].lower()),
+                        key=lambda item: (-item[1], item[0][0].lower(), item[0][1].lower()),
                     )
                 ),
             )
@@ -798,6 +813,7 @@ class BuildCrossTeamGraphDashboard:
                         _entity_label(
                             str(payload.get("team_name") or "Unknown team"),
                             str(payload.get("service_name") or "Unknown entity"),
+                            str(payload.get("markup_type") or "unknown"),
                         )
                     }
                 service_labels.update(keys)
@@ -814,7 +830,7 @@ class BuildCrossTeamGraphDashboard:
                         )
                     )
             if len(service_labels) > 1:
-                service_labels.discard(_entity_label("Unknown team", "Unknown entity"))
+                service_labels.discard(_entity_label("Unknown team", "Unknown entity", "unknown"))
             sorted_services = sorted(service_labels, key=str.lower)
             if len(sorted_services) <= 1:
                 base_label = sorted_services[0] if sorted_services else "Unknown graph"
@@ -880,7 +896,7 @@ class BuildCrossTeamGraphDashboard:
     def _collect_graphs(self, documents: Sequence[MarkupDocument]) -> dict[str, _GraphAggregate]:
         graphs: dict[str, _GraphAggregate] = {}
         for document in documents:
-            graph_key, team_id, team_name, service_name = _graph_key(document)
+            graph_key, team_id, team_name, service_name, markup_type = _graph_key(document)
             graph = graphs.get(graph_key)
             if graph is None:
                 graph = _GraphAggregate(
@@ -888,6 +904,7 @@ class BuildCrossTeamGraphDashboard:
                     team_id=team_id,
                     team_name=team_name,
                     service_name=service_name,
+                    markup_type=markup_type,
                 )
                 graphs[graph_key] = graph
             graph.add_document(document)
@@ -899,12 +916,13 @@ class BuildCrossTeamGraphDashboard:
     ) -> tuple[_ServiceDocumentSnapshot, ...]:
         snapshots: list[_ServiceDocumentSnapshot] = []
         for document in documents:
-            graph_key, team_id, team_name, _service_name = _graph_key(document)
+            graph_key, team_id, team_name, _service_name, markup_type = _graph_key(document)
             snapshots.append(
                 _ServiceDocumentSnapshot(
                     service_key=graph_key,
                     team_id=team_id,
                     team_name=team_name,
+                    markup_type=markup_type,
                     procedure_ids=frozenset(_document_procedure_ids(document)),
                 )
             )
@@ -923,6 +941,7 @@ class BuildCrossTeamGraphDashboard:
                 _entity_label(
                     str(document.team_name or document.team_id or "").strip() or "Unknown team",
                     str(document.service_name or "").strip() or "Unknown entity",
+                    markup_type,
                 )
             )
         return [
@@ -986,7 +1005,7 @@ class BuildCrossTeamGraphDashboard:
         }
         merged_adjacency: dict[str, set[str]] = {}
         for graph in graphs.values():
-            graph_label = _entity_label(graph.team_name, graph.service_name)
+            graph_label = _entity_label(graph.team_name, graph.service_name, graph.markup_type)
             graph_labels_by_key[graph.key] = graph_label
             for proc_id in graph.procedure_ids:
                 proc_to_graph_keys.setdefault(proc_id, set()).add(graph.key)
@@ -1163,6 +1182,7 @@ class BuildCrossTeamGraphDashboard:
                 ServiceLoadStat(
                     team_name=service.team_name,
                     service_name=service.service_name,
+                    markup_type=service.markup_type,
                     cycle_count=graph_metrics.cycle_count,
                     block_count=sum(
                         len(
@@ -1230,6 +1250,7 @@ class BuildCrossTeamGraphDashboard:
                 -item.procedure_count,
                 -item.block_count,
                 item.team_name.lower(),
+                item.markup_type.lower(),
                 item.service_name.lower(),
             )
         )
@@ -1303,19 +1324,21 @@ def _is_service_markup(document: MarkupDocument) -> bool:
     return str(document.markup_type or "").strip().lower() == "service"
 
 
-def _graph_key(document: MarkupDocument) -> tuple[str, str, str, str]:
+def _graph_key(document: MarkupDocument) -> tuple[str, str, str, str, str]:
     team_id = str(document.team_id or "").strip() or "unknown-team"
     team_name = str(document.team_name or "").strip() or team_id
     service_name = str(document.service_name or "").strip() or "Unknown service"
     service_id = str(document.finedog_unit_id or "").strip() or service_name.lower()
-    return f"{team_id}::{service_id}", team_id, team_name, service_name
+    markup_type = str(document.markup_type or "").strip() or "unknown"
+    return f"{team_id}::{markup_type}::{service_id}", team_id, team_name, service_name, markup_type
 
 
 def _service_key_from_payload(payload: Mapping[str, object]) -> str | None:
     team_id = str(payload.get("team_id") or "").strip() or "unknown-team"
     service_name = str(payload.get("service_name") or "").strip() or "Unknown service"
     service_id = str(payload.get("finedog_unit_id") or "").strip() or service_name.lower()
-    return f"{team_id}::{service_id}"
+    markup_type = str(payload.get("markup_type") or "").strip() or "unknown"
+    return f"{team_id}::{markup_type}::{service_id}"
 
 
 def _document_procedure_ids(document: MarkupDocument) -> set[str]:
@@ -1437,9 +1460,12 @@ def _has_substring(value: str, fragment: str) -> bool:
     return fragment.lower() in str(value).lower()
 
 
-def _entity_label(team_name: str, service_name: str) -> str:
+def _entity_label(team_name: str, service_name: str, markup_type: str | None = None) -> str:
     normalized_team = str(team_name or "").strip() or "Unknown team"
     normalized_service = str(service_name or "").strip() or "Unknown entity"
+    normalized_markup_type = str(markup_type or "").strip()
+    if normalized_markup_type:
+        return f"{normalized_team} / {normalized_markup_type} / {normalized_service}"
     return f"{normalized_team} / {normalized_service}"
 
 
@@ -1454,6 +1480,7 @@ def _extract_service_keys(services: object) -> set[str]:
             _entity_label(
                 str(item.get("team_name") or "Unknown team"),
                 str(item.get("service_name") or "Unknown entity"),
+                str(item.get("markup_type") or "unknown"),
             )
         )
     return result

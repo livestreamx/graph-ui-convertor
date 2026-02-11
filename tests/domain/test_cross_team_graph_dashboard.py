@@ -152,9 +152,9 @@ def test_build_cross_team_graph_dashboard() -> None:
     assert top_proc.incoming_edges == 3
     assert top_proc.outgoing_edges == 1
     assert top_proc.graph_labels == (
-        "Alpha / Loans",
-        "Alpha / Payments",
-        "Beta / Cards",
+        "Alpha / service / Loans",
+        "Alpha / service / Payments",
+        "Beta / service / Cards",
     )
     assert [
         (
@@ -165,9 +165,9 @@ def test_build_cross_team_graph_dashboard() -> None:
         )
         for item in top_proc.graph_usage_stats
     ] == [
-        ("Alpha / Loans", True, 1, 0),
-        ("Alpha / Payments", True, 1, 0),
-        ("Beta / Cards", True, 1, 1),
+        ("Alpha / service / Loans", True, 1, 0),
+        ("Alpha / service / Payments", True, 1, 0),
+        ("Beta / service / Cards", True, 1, 1),
     ]
 
     overloaded_by_entity = {
@@ -223,9 +223,13 @@ def test_unique_graph_count_reuses_team_graph_builder_logic() -> None:
     )
 
     assert dashboard.unique_graph_count == 2
-    assert dashboard.unique_graphs == ("Alpha / Payments #1", "Alpha / Payments #2")
+    assert dashboard.unique_graphs == (
+        "Alpha / operations / Payments",
+        "Alpha / service / Payments",
+    )
     assert [(item.label, item.graph_count) for item in dashboard.graph_groups] == [
-        ("Alpha / Payments", 2)
+        ("Alpha / operations / Payments", 1),
+        ("Alpha / service / Payments", 1),
     ]
 
 
@@ -743,7 +747,9 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
     )
 
     merged_group = next(
-        item for item in dashboard.graph_groups if "Alpha / Payments + Beta / Routing" in item.label
+        item
+        for item in dashboard.graph_groups
+        if "Alpha / service / Payments + Beta / service / Routing" in item.label
     )
     assert merged_group.components
     component = merged_group.components[0]
@@ -751,7 +757,7 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
     merge_node = component.merge_nodes[0]
     assert merge_node.procedure_id == "shared"
     assert merge_node.procedure_name == "Shared Flow"
-    assert merge_node.entities == ("Alpha / Payments", "Beta / Routing")
+    assert merge_node.entities == ("Alpha / service / Payments", "Beta / service / Routing")
 
 
 def test_graph_groups_merge_threshold_keeps_single_chain_representative() -> None:
@@ -807,7 +813,9 @@ def test_graph_groups_merge_threshold_keeps_single_chain_representative() -> Non
     )
 
     merged_group = next(
-        item for item in dashboard.graph_groups if "Alpha / Payments + Beta / Routing" in item.label
+        item
+        for item in dashboard.graph_groups
+        if "Alpha / service / Payments + Beta / service / Routing" in item.label
     )
     component = merged_group.components[0]
     assert [node.procedure_id for node in component.merge_nodes] == ["shared_a"]

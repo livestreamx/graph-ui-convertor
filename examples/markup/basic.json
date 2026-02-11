@@ -1,5 +1,5 @@
 {
-  "markup_type": "service",
+  "markup_type": "system_default",
   "finedog_unit_id": "svc-basic-merge",
   "finedog_unit_meta": {
     "service_name": "Basic graph",

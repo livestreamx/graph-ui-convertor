@@ -139,7 +139,7 @@ def test_service_name_title_rendered_above_frames() -> None:
     ]
     assert len(title_panels) == 1
     assert title_texts
-    assert "Billing Flow" in title_texts[0].get("text", "")
+    assert "[service] Billing Flow" in title_texts[0].get("text", "")
 
     frame_min_y = min(
         element.get("y", 0.0) for element in excal.elements if element.get("type") == "frame"

@@ -1,15 +1,23 @@
 {% extends "base.html" %}
 
 {% macro render_team_service_entity(label, extra_class="", colorize=false) %}
-  {% set parts = label.split(' / ', 1) %}
-  <span class="team-graph-graph-entity {{ extra_class }}" data-team="{{ parts[0] }}" {% if colorize %}data-colorize-team="true"{% endif %}>
-    <span class="team-graph-graph-entity-team">{{ parts[0] }}</span>
+  {% set parts = label.split(' / ') %}
+  {% set team_name = parts[0] if parts|length > 0 else label %}
+  {% set markup_type = parts[1] if parts|length > 2 else '' %}
+  {% if parts|length > 2 %}
+    {% set service_name = parts[2:] | join(' / ') %}
+  {% elif parts|length > 1 %}
+    {% set service_name = parts[1:] | join(' / ') %}
+  {% else %}
+    {% set service_name = label %}
+  {% endif %}
+  <span class="team-graph-graph-entity {{ extra_class }}" data-team="{{ team_name }}" {% if colorize %}data-colorize-team="true"{% endif %}>
+    <span class="team-graph-graph-entity-team">{{ team_name }}</span>
+    {% if markup_type %}
+      <span class="team-graph-graph-entity-type">{{ markup_type }}</span>
+    {% endif %}
     <span class="team-graph-graph-entity-service">
-      {% if parts|length > 1 %}
-        {{ parts[1] }}
-      {% else %}
-        {{ label }}
-      {% endif %}
+      {{ service_name }}
     </span>
   </span>
 {% endmacro %}
@@ -940,7 +948,7 @@
                               {% for service in item.services %}
                                 <div class="team-graph-overlap-row team-graph-overlap-row-service">
                                   <span class="team-graph-overlap-service">
-                                    {{ render_team_service_entity(item.team_name ~ ' / ' ~ service.service_name, "team-graph-graph-entity-sm", true) }}
+                                    {{ render_team_service_entity(item.team_name ~ ' / ' ~ service.markup_type ~ ' / ' ~ service.service_name, "team-graph-graph-entity-sm", true) }}
                                   </span>
                                   <span class="team-graph-overlap-count">{{ service.external_depends_on_selected_count }}</span>
                                   <span class="team-graph-overlap-count">{{ service.selected_depends_on_external_count }}</span>
@@ -1165,7 +1173,7 @@
                           <summary class="team-graph-ranked-table-row">
                             <span>
                               <span class="team-graph-procedure-order" data-sort-rank>{{ loop.index }}</span>
-                              {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}
+                              {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.markup_type ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}
                             </span>
                             <span>{{ item.procedure_count }}</span>
                             <span>{{ item.in_team_merge_nodes }}</span>

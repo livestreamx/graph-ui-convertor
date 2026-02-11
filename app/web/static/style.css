@@ -1753,6 +1753,17 @@ main {
   font-weight: 600;
 }
 
+.team-graph-graph-entity-type {
+  background: color-mix(in srgb, var(--team-chip-team-bg, rgba(183, 197, 214, 0.3)) 58%, rgba(76, 133, 201, 0.36));
+  color: #edf5ff;
+  border: 1px solid rgba(164, 196, 232, 0.58);
+  box-shadow: inset 0 0 0 1px rgba(24, 54, 94, 0.2);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .team-graph-graph-entity-service {
   color: var(--text);
 }
@@ -1763,6 +1774,10 @@ main {
 }
 
 .team-graph-graph-entity-sm .team-graph-graph-entity-team {
+  font-size: 10px;
+}
+
+.team-graph-graph-entity-sm .team-graph-graph-entity-type {
   font-size: 10px;
 }
 

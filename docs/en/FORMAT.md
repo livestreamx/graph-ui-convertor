@@ -57,10 +57,12 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - branch arrows block -> block (label `branch`, `edge_type=branch`, used when no `block_graph`)
   - block graph arrows block -> block (label `graph`, `edge_type=block_graph`)
   - block graph cycles use `edge_type=block_graph_cycle` (dashed red, reverse arrow)
-- Service name is rendered as a composite title header above the graph.
+- Service name is rendered as a composite title header above the graph in the format
+  `[markup_type] Service name`.
 - Deterministic layout: grid per procedure, left-to-right, top-to-bottom.
 - Cross-team graphs (`procedure_graph` with `is_intersection`) add a red "Merge nodes" panel.
-  Group headers use the format `> [Team] Service x [Team] Service:`, followed by numbered lines
+  Group headers use the format `> [Team] [Markup type] Service x [Team] [Markup type] Service:`,
+  followed by numbered lines
   `(N) Procedure name`. Merge nodes are highlighted with a red dashed oval and a numbered badge;
   in Unidraw the merge number circle also uses a dashed outline.
 

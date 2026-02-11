@@ -23,6 +23,7 @@ from domain.models import (
 class _ServiceInfo:
     service_key: str
     service_name: str
+    markup_type: str
     team_name: str
     team_id: str | int | None
     color: str
@@ -83,6 +84,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         )
 
         procedure_meta = document.procedure_meta or {}
+        default_markup_type = str(document.markup_type or "").strip() or "unknown"
         node_size = self._procedure_node_size()
         base_service_node_size = Size(node_size.width * 3, node_size.height * 1.2)
         service_node_sizes: dict[str, Size] = {}
@@ -132,7 +134,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 nodes.sort(key=lambda proc_id: order_index.get(proc_id, 0))
 
             service_info_by_key, proc_service_keys = self._component_service_info(
-                component, procedure_meta
+                component,
+                procedure_meta,
+                default_markup_type,
             )
             zone_enabled = not is_service_graph and len(service_info_by_key) > 1
             component_frames: list[FramePlacement] = []
@@ -349,6 +353,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                             ServiceZonePlacement(
                                 service_key=zone.service_key,
                                 service_name=zone.service_name,
+                                markup_type=zone.markup_type,
                                 team_name=zone.team_name,
                                 team_id=zone.team_id,
                                 color=zone.color,
@@ -376,6 +381,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     layout_edges_by_proc=layout_edges_by_proc,
                     order_index=order_index,
                     procedure_meta=procedure_meta,
+                    default_markup_type=default_markup_type,
                     component_top_y=component_top,
                 )
                 if scenario:
@@ -446,6 +452,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
         order_index: dict[str, int],
         procedure_meta: Mapping[str, Mapping[str, object]] | None,
+        default_markup_type: str,
         component_top_y: float,
     ) -> ScenarioPlacement | None:
         procedure_meta = procedure_meta or {}
@@ -501,10 +508,18 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         x_left = min_x - self.config.scenario_gap - scenario_width
         origin = Point(x=x_left, y=min_y)
         procedures_blocks, procedures_text, block_padding = self._component_service_blocks(
-            component, procedure_meta
+            component,
+            procedure_meta,
+            default_markup_type,
         )
         merge_blocks, merge_text, merge_block_padding, merge_node_numbers = (
-            self._component_merge_blocks(component, procedure_map, procedure_meta, order_index)
+            self._component_merge_blocks(
+                component,
+                procedure_map,
+                procedure_meta,
+                order_index,
+                default_markup_type,
+            )
         )
         procedures_content_height = sum(block.height for block in procedures_blocks)
         procedures_height = max(
@@ -561,8 +576,13 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         self,
         component: set[str],
         procedure_meta: Mapping[str, Mapping[str, object]],
+        default_markup_type: str,
     ) -> tuple[list[ScenarioProceduresBlock], str, float]:
-        groups, summary = self._component_service_groups(component, procedure_meta)
+        groups, summary = self._component_service_groups(
+            component,
+            procedure_meta,
+            default_markup_type,
+        )
         header = "Разметки:"
         font_size = self.config.scenario_procedures_font_size
         line_height = font_size * 1.35
@@ -616,9 +636,15 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
             blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=service_gap))
             lines.append(team_name)
-            for service_idx, (service_name, service_color, finedog_unit_id) in enumerate(services):
+            for service_idx, (
+                service_name,
+                markup_type,
+                service_color,
+                finedog_unit_id,
+            ) in enumerate(services):
+                service_label = f"[{markup_type}] {service_name}"
                 wrapped = self._wrap_lines(
-                    [service_name],
+                    [service_label],
                     content_width - service_padding * 2,
                     font_size,
                 )
@@ -632,7 +658,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         finedog_unit_id=finedog_unit_id,
                     )
                 )
-                lines.append(f"- {service_name}")
+                lines.append(f"- {service_label}")
                 if service_idx < len(services) - 1:
                     blocks.append(
                         ScenarioProceduresBlock(kind="spacer", text="", height=service_gap)
@@ -665,6 +691,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedure_map: Mapping[str, Procedure],
         procedure_meta: Mapping[str, Mapping[str, object]],
         order_index: Mapping[str, int],
+        default_markup_type: str,
     ) -> tuple[
         list[ScenarioProceduresBlock], str | None, float | None, dict[str, list[int]] | None
     ]:
@@ -700,22 +727,26 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=header_gap))
 
         lines = [header]
-        groups: dict[tuple[tuple[str, str], ...], _MergeGroup] = {}
+        groups: dict[tuple[tuple[str, str, str], ...], _MergeGroup] = {}
         for proc_id in merge_ids:
             meta = procedure_meta.get(proc_id, {})
-            entries = self._procedure_merge_entries(meta)
-            service_tokens: list[tuple[str, str]] = []
+            entries = self._procedure_merge_entries(meta, default_markup_type)
+            service_tokens: list[tuple[str, str, str]] = []
             for entry in entries:
                 team_name = str(entry.get("team_name") or "Unknown team")
+                markup_type = str(entry.get("markup_type") or default_markup_type)
                 service_name = str(entry.get("service_name") or "Unknown service")
-                service_tokens.append((team_name, service_name))
+                service_tokens.append((team_name, markup_type, service_name))
             if not service_tokens:
-                service_tokens.append(("Unknown team", "Unknown service"))
+                service_tokens.append(("Unknown team", "unknown", "Unknown service"))
             unique_tokens = sorted(
                 set(service_tokens),
-                key=lambda item: (item[0].lower(), item[1].lower()),
+                key=lambda item: (item[0].lower(), item[1].lower(), item[2].lower()),
             )
-            label_parts = [f"[{team}] {service}" for team, service in unique_tokens]
+            label_parts = [
+                f"[{team}] [{markup_type}] {service}"
+                for team, markup_type, service in unique_tokens
+            ]
             label = " x ".join(label_parts)
             key = tuple(unique_tokens)
             group = groups.setdefault(key, _MergeGroup(label=label, proc_ids=[]))
@@ -777,8 +808,15 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         self,
         component: set[str],
         procedure_meta: Mapping[str, Mapping[str, object]],
-    ) -> tuple[list[tuple[str, str | int | None, list[tuple[str, str, str | None]]]], str | None]:
-        team_services: dict[tuple[str, str | int | None], dict[str, dict[str, object]]] = {}
+        default_markup_type: str,
+    ) -> tuple[
+        list[tuple[str, str | int | None, list[tuple[str, str, str, str | None]]]],
+        str | None,
+    ]:
+        team_services: dict[
+            tuple[str, str | int | None],
+            dict[tuple[str, str], dict[str, object]],
+        ] = {}
         for proc_id in sorted(component):
             meta = procedure_meta.get(proc_id, {})
             services = meta.get("services")
@@ -789,6 +827,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     team_name = str(service.get("team_name") or "Unknown team")
                     team_id = service.get("team_id")
                     service_name = str(service.get("service_name") or "Unknown service")
+                    markup_type = str(service.get("markup_type") or default_markup_type)
                     color = service.get("service_color")
                     finedog_unit_id = service.get("finedog_unit_id")
                     normalized_unit_id = normalize_finedog_unit_id(finedog_unit_id)
@@ -796,13 +835,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         color = meta.get("procedure_color")
                     team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
                     service_entry = team_services.setdefault(team_key, {})
-                    if service_name not in service_entry:
-                        service_entry[service_name] = {
+                    service_key = (service_name, markup_type)
+                    if service_key not in service_entry:
+                        service_entry[service_key] = {
                             "color": color if isinstance(color, str) else "#e9f0fb",
                             "finedog_unit_id": normalized_unit_id,
                         }
                     else:
-                        existing = service_entry[service_name]
+                        existing = service_entry[service_key]
                         if (
                             existing.get("finedog_unit_id") is None
                             and normalized_unit_id is not None
@@ -812,12 +852,14 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 team_id = meta.get("team_id")
                 team_name = str(meta.get("team_name") or team_id or "Unknown team")
                 service_name = str(meta.get("service_name") or "Unknown service")
+                markup_type = str(meta.get("markup_type") or default_markup_type)
                 color = meta.get("procedure_color")
                 team_key = (team_name, team_id if isinstance(team_id, str | int) else None)
                 service_entry = team_services.setdefault(team_key, {})
-                if service_name not in service_entry:
+                service_key = (service_name, markup_type)
+                if service_key not in service_entry:
                     normalized_unit_id = normalize_finedog_unit_id(meta.get("finedog_unit_id"))
-                    service_entry[service_name] = {
+                    service_entry[service_key] = {
                         "color": color if isinstance(color, str) else "#e9f0fb",
                         "finedog_unit_id": normalized_unit_id,
                     }
@@ -826,16 +868,20 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             return [], None
 
         teams_sorted = sorted(team_services.keys(), key=lambda item: item[0].lower())
-        groups: list[tuple[str, str | int | None, list[tuple[str, str, str | None]]]] = []
+        groups: list[tuple[str, str | int | None, list[tuple[str, str, str, str | None]]]] = []
         for team_name, team_id in teams_sorted:
             services = team_services[(team_name, team_id)]
-            sorted_services: list[tuple[str, str, str | None]] = []
-            for service_name, payload in sorted(services.items(), key=lambda item: item[0].lower()):
+            sorted_services: list[tuple[str, str, str, str | None]] = []
+            for (service_name, markup_type), payload in sorted(
+                services.items(),
+                key=lambda item: (item[0][0].lower(), item[0][1].lower()),
+            ):
                 color = payload.get("color")
                 unit_id = payload.get("finedog_unit_id")
                 sorted_services.append(
                     (
                         service_name,
+                        markup_type,
                         color if isinstance(color, str) else "#e9f0fb",
                         normalize_finedog_unit_id(unit_id),
                     )
@@ -847,14 +893,16 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         self,
         team_name: str,
         team_id: str | int | None,
+        markup_type: str,
         service_name: str,
     ) -> str:
         team_token = str(team_id) if team_id is not None else team_name
-        return f"{team_token}::{service_name}"
+        return f"{team_token}::{markup_type}::{service_name}"
 
     def _procedure_service_entries(
         self,
         meta: Mapping[str, object],
+        default_markup_type: str,
     ) -> list[Mapping[str, object]]:
         services = meta.get("services")
         if isinstance(services, list) and services:
@@ -866,6 +914,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 "team_name": meta.get("team_name") or meta.get("team_id") or "Unknown team",
                 "team_id": meta.get("team_id"),
                 "service_name": meta.get("service_name") or "Unknown service",
+                "markup_type": meta.get("markup_type") or default_markup_type,
                 "service_color": meta.get("procedure_color"),
             }
         ]
@@ -873,33 +922,39 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
     def _procedure_merge_entries(
         self,
         meta: Mapping[str, object],
+        default_markup_type: str,
     ) -> list[Mapping[str, object]]:
         merge_services = meta.get("merge_services")
         if isinstance(merge_services, list) and merge_services:
             entries = [service for service in merge_services if isinstance(service, Mapping)]
             if entries:
                 return entries
-        return self._procedure_service_entries(meta)
+        return self._procedure_service_entries(meta, default_markup_type)
 
     def _normalize_service_entry(
         self,
         meta: Mapping[str, object],
         entry: Mapping[str, object],
+        default_markup_type: str,
     ) -> _ServiceInfo:
         team_name = str(entry.get("team_name") or "Unknown team")
         team_id = entry.get("team_id")
         if not isinstance(team_id, str | int):
             team_id = None
         service_name = str(entry.get("service_name") or "Unknown service")
+        markup_type = str(
+            entry.get("markup_type") or meta.get("markup_type") or default_markup_type
+        )
         color = entry.get("service_color")
         if not isinstance(color, str) or not color:
             color = meta.get("procedure_color")
         if not isinstance(color, str) or not color:
             color = "#e9f0fb"
-        service_key = self._service_zone_key(team_name, team_id, service_name)
+        service_key = self._service_zone_key(team_name, team_id, markup_type, service_name)
         return _ServiceInfo(
             service_key=service_key,
             service_name=service_name,
+            markup_type=markup_type,
             team_name=team_name,
             team_id=team_id,
             color=color,
@@ -909,15 +964,16 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         self,
         component: set[str],
         procedure_meta: Mapping[str, Mapping[str, object]],
+        default_markup_type: str,
     ) -> tuple[dict[str, _ServiceInfo], dict[str, list[str]]]:
         service_info_by_key: dict[str, _ServiceInfo] = {}
         proc_service_keys: dict[str, list[str]] = {}
         for proc_id in component:
             meta = procedure_meta.get(proc_id, {})
-            entries = self._procedure_service_entries(meta)
+            entries = self._procedure_service_entries(meta, default_markup_type)
             keys: list[str] = []
             for entry in entries:
-                info = self._normalize_service_entry(meta, entry)
+                info = self._normalize_service_entry(meta, entry, default_markup_type)
                 if info.service_key not in keys:
                     keys.append(info.service_key)
                 if info.service_key not in service_info_by_key:
@@ -1112,6 +1168,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 ServiceZonePlacement(
                     service_key=info.service_key,
                     service_name=info.service_name,
+                    markup_type=info.markup_type,
                     team_name=info.team_name,
                     team_id=info.team_id,
                     color=info.color,

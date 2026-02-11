@@ -203,6 +203,7 @@ def test_catalog_team_graph_api(
         assert 'data-team="Alpha"' in html_response.text
         assert 'data-team="Beta"' in html_response.text
         assert "team-graph-ranked-details-list-entity" in html_response.text
+        assert "team-graph-graph-entity-type" in html_response.text
         assert "Graph-level breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "data-sortable-table" in html_response.text

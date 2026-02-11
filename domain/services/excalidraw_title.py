@@ -47,8 +47,12 @@ class ExcalidrawTitleInjector:
         bounds = self._elements_bounds(elements)
         if not bounds:
             return
+        markup_type = self._extract_markup_type(elements)
+        title = self._format_service_name_with_markup_type(service_name, markup_type)
+        if not title:
+            return
         base_metadata = self._extract_base_metadata(elements, service_name)
-        elements.extend(self._build_title_elements(service_name, bounds, base_metadata))
+        elements.extend(self._build_title_elements(title, bounds, base_metadata))
 
     def _extract_service_name(self, elements: list[Element]) -> str | None:
         for element in elements:
@@ -69,6 +73,35 @@ class ExcalidrawTitleInjector:
                 filtered["service_name"] = service_name
                 return filtered
         return {"service_name": service_name}
+
+    def _extract_markup_type(self, elements: list[Element]) -> str | None:
+        for element in elements:
+            meta = self._metadata(element)
+            raw_display = meta.get("display_markup_type")
+            if raw_display is not None:
+                display_text = str(raw_display).strip()
+                if display_text:
+                    return display_text
+            raw = meta.get("markup_type")
+            if raw is None:
+                continue
+            text = str(raw).strip()
+            if text:
+                return text
+        return None
+
+    def _format_service_name_with_markup_type(
+        self,
+        service_name: str,
+        markup_type: str | None,
+    ) -> str:
+        title = service_name.strip()
+        if not title:
+            return title
+        markup_label = str(markup_type or "").strip()
+        if not markup_label:
+            return title
+        return f"[{markup_label}] {title}"
 
     def _has_title(self, elements: list[Element]) -> bool:
         for element in elements:
