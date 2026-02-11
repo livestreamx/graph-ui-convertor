@@ -46,7 +46,13 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         self._build_scenarios(plan.scenarios, registry, base_metadata)
         self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
         self._build_service_zone_labels(plan.service_zones, registry, base_metadata)
-        self._build_service_title(plan, registry, base_metadata, document.service_name)
+        self._build_service_title(
+            plan,
+            registry,
+            base_metadata,
+            document.service_name,
+            None,
+        )
         self._center_on_first_frame(plan, registry.elements)
         self._post_process_elements(registry.elements)
         app_state = self._build_app_state(registry.elements)
@@ -783,7 +789,10 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 label_meta["team_id"] = zone.team_id
             label_element = self._text_block_element(
                 element_id=label_id,
-                text=zone.service_name,
+                text=self._format_service_name_with_markup_type(
+                    zone.service_name,
+                    zone.markup_type,
+                ),
                 origin=zone.label_origin,
                 width=zone.label_size.width,
                 height=zone.label_size.height,

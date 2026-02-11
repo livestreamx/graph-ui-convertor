@@ -2,13 +2,13 @@
 
 {% block content %}
   <section class="empty-state">
-    <h2>No catalog index yet</h2>
+    <h2>{{ t("No catalog index yet") }}</h2>
     <p>
-      Build the catalog index to list available scenes. Run
+      {{ t("Build the catalog index to list available scenes. Run") }}
       <code>cjm catalog build-index</code> or <code>cjm pipeline build-all</code>.
     </p>
     <div class="button-row">
-      <a class="ghost-button" href="/api/index">Try index API</a>
+      <a class="ghost-button" href="/api/index">{{ t("Try index API") }}</a>
     </div>
   </section>
 {% endblock %}

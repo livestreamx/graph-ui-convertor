@@ -1,7 +1,7 @@
-{% from "macros.html" import render_group %}
+{% from "macros.html" import render_group with context %}
 
 <div class="list-meta">
-  <span>{{ items | length }} scenes</span>
+  <span>{{ items | length }} {{ t("scenes") }}</span>
 </div>
 
 {% for group in groups %}

@@ -2,12 +2,12 @@
 
 {% block content %}
   <section class="detail-card">
-    <h3>Opening {{ diagram_label }}…</h3>
-    <p class="note">Preparing the scene in local storage and redirecting.</p>
+    <h3>{{ t("Opening {diagram_label}...", diagram_label=diagram_label) }}</h3>
+    <p class="note">{{ t("Preparing the scene in local storage and redirecting.") }}</p>
     <p class="note" id="open-error" style="display: none; color: #b42318;">
-      Failed to load the latest scene. Please retry.
+      {{ t("Failed to load the latest scene. Please retry.") }}
     </p>
-    <button id="retry-open" type="button" style="display: none;">Retry</button>
+    <button id="retry-open" type="button" style="display: none;">{{ t("Retry") }}</button>
   </section>
   <script>
     (async () => {
@@ -19,7 +19,7 @@
       const diagramVersionKey = {{ diagram_version_key | tojson }};
       const openError = document.getElementById("open-error");
       const retryButton = document.getElementById("retry-open");
-      const defaultErrorText = "Failed to load the latest scene. Please retry.";
+      const defaultErrorText = {{ t("Failed to load the latest scene. Please retry.") | tojson }};
 
       const redirectToDiagram = () => {
         const targetUrl = new URL(diagramUrl, window.location.origin);
@@ -30,7 +30,7 @@
       const showRetry = (reason = null) => {
         if (openError) {
           const details = typeof reason === "string" ? reason.trim() : "";
-          openError.textContent = details ? `${defaultErrorText} Reason: ${details}` : defaultErrorText;
+          openError.textContent = details ? `${defaultErrorText} {{ t("Reason") }}: ${details}` : defaultErrorText;
           openError.style.display = "block";
         }
         if (retryButton) {

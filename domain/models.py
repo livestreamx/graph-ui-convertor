@@ -387,6 +387,7 @@ class SeparatorPlacement:
 class ServiceZonePlacement:
     service_key: str
     service_name: str
+    markup_type: str | None
     team_name: str | None
     team_id: str | int | None
     color: str

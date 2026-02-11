@@ -44,6 +44,12 @@ def test_injects_title_when_missing() -> None:
     roles = [element.get("customData", {}).get("cjm", {}).get("role") for element in elements]
     assert "diagram_title" in roles
     assert "diagram_title_panel" in roles
+    title = next(
+        element
+        for element in elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title"
+    )
+    assert "[service] Billing Flow" in str(title.get("text", ""))
     app_state: dict[str, Any] = {}
     apply_title_focus(app_state, elements)
     assert "scrollX" in app_state

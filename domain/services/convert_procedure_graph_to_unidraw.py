@@ -157,7 +157,10 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
             label_id = self._stable_id("service-zone-label", *zone_scope)
             label_element = self._text_block_element(
                 element_id=label_id,
-                text=zone.service_name,
+                text=self._format_service_name_with_markup_type(
+                    zone.service_name,
+                    zone.markup_type,
+                ),
                 origin=Point(
                     zone.label_origin.x + text_padding_x,
                     zone.label_origin.y + text_padding_y,

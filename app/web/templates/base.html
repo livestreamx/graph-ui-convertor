@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ lang }}">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -19,11 +19,22 @@
     <header class="site-header">
       <div class="container header-inner">
         <div>
-          <a class="brand" href="/catalog">{{ settings.catalog.title }}</a>
-          <div class="subtitle">Converter of business entity markups into Excalidraw diagrams</div>
+          <a class="brand" href="/catalog?lang={{ lang }}">{{ settings.catalog.title }}</a>
+          <div class="subtitle">{{ t("Converter of business entity markups into Excalidraw diagrams") }}</div>
         </div>
         <div class="header-actions">
-          <a class="ghost-button" href="/api/index">Index JSON</a>
+          <a class="ghost-button" href="/api/index">{{ t("Index JSON") }}</a>
+          <a class="lang-toggle" href="{{ lang_switch_url }}" aria-label="{{ t('Switch language') }}">
+            <span class="lang-toggle-pill lang-toggle-pill-current">
+              <span class="lang-toggle-icon" aria-hidden="true">{{ lang_current_icon }}</span>
+              <span>{{ lang_current_label }}</span>
+            </span>
+            <span class="lang-toggle-sep" aria-hidden="true">↔</span>
+            <span class="lang-toggle-pill">
+              <span class="lang-toggle-icon" aria-hidden="true">{{ lang_switch_icon }}</span>
+              <span>{{ lang_switch_label }}</span>
+            </span>
+          </a>
         </div>
       </div>
     </header>
@@ -33,7 +44,7 @@
     <footer class="site-footer">
       <div class="container footer-inner">
         <span class="footer-badge">
-          Created by
+          {{ t("Created by") }}
           <a href="https://github.com/livestreamx" target="_blank" rel="noreferrer">
             livestreamx
           </a>

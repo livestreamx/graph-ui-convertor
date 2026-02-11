@@ -22,6 +22,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 Catalog UI now exposes both downloads at once (`.excalidraw` and Unidraw).  
 Use `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false` to hide the `Open Excalidraw` button.
+UI language can be toggled between English and Russian from the header (next to `Index JSON`).
 
 ## Commands (Typer CLI)
 
@@ -137,6 +138,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 UI теперь одновременно поддерживает скачивание `.excalidraw` и `Unidraw`.  
 Если нужно скрыть открытие в Excalidraw, задайте `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false`.
+Язык интерфейса переключается в хедере между English и Русским (рядом с `Index JSON`).
 
 ## Команды (Typer CLI)
 
@@ -202,7 +204,7 @@ UI теперь одновременно поддерживает скачива
 - Text fit: подписи блоков/маркеров авто-уменьшаются, чтобы уместиться; один start → `START`, несколько → глобальный `START #N`.
 - Best effort: пользовательские блоки/текст внутри фрейма становятся новыми блоками; стрелки с меткой/metadata `branch` добавляются в `branches`.
 - Кросс-командные графы: для `is_intersection` добавляется красный блок "Узлы слияния" с группировкой
-  `> [Команда] Услуга x [Команда] Услуга:` и строками `(N) Название процедуры`; узлы на графе имеют
+  `> [Команда] [Тип] Услуга x [Команда] [Тип] Услуга:` и строками `(N) Название процедуры`; узлы на графе имеют
   красный овал и номер в кружке (в Unidraw кружок номера пунктирный, а frame узла слияния без заливки).
 
 ## Большие диаграммы
@@ -265,9 +267,11 @@ UI теперь одновременно поддерживает скачива
    и `Risk hotspots` (топ связывающих процедур и перегруженных услуг по узлам слияния/циклам/процедурам/блокам).
    Каждая секция по умолчанию свернута и раскрывается по клику на заголовок.
    Блоки сверстаны карточками для удобного скриншота и объяснения метрик на встречах.
-   В плашках и drilldown для графов/пересечений используется единый формат `team / service` с цветовой
-   маркировкой команд, включая списки `Multi graphs` и табличную детализацию `Top linking procedures`
-   по конкретным графам (`cross-entity`, `inbound deps`, `outbound deps`).
+   В плашках и drilldown для графов/пересечений используется формат
+   `team / markup_type / service`: команда остается основным бейджем, тип разметки выводится отдельным
+   более темным не-жирным бейджем, затем название услуги. Это применяется в списках `Multi graphs` и
+   табличной детализации `Top linking procedures` по конкретным графам
+   (`cross-entity`, `inbound deps`, `outbound deps`).
    В `Top overloaded entities` детализация показывает эту же колонночную статистику на уровне процедур
    в порядке их размещения в графе, включая breakdown по типам блоков (start/end-типы) с теми же
    цветами, что и на диаграмме. Порядок и связи процедур считаются по тому же merged procedure graph

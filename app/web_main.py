@@ -25,6 +25,16 @@ from adapters.layout.grid import GridLayoutEngine, LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from app.catalog_wiring import build_markup_repository, build_markup_source
 from app.config import AppSettings, load_settings, validate_unidraw_settings
+from app.web_i18n import (
+    UILocalizer,
+    apply_ui_language_cookie,
+    build_language_switch_url,
+    build_localizer,
+    get_active_ui_language,
+    reset_active_ui_language,
+    set_active_ui_language,
+    translate_humanized_text,
+)
 from domain.catalog import CatalogIndex, CatalogItem
 from domain.models import ExcalidrawDocument, MarkupDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
@@ -149,9 +159,48 @@ def create_app(settings: AppSettings) -> FastAPI:
     if STATIC_DIR.exists():
         app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+    def localizer_for_request(request: Request) -> UILocalizer:
+        cached = getattr(request.state, "ui_localizer", None)
+        if isinstance(cached, UILocalizer):
+            return cached
+        localizer = build_localizer(request)
+        request.state.ui_localizer = localizer
+        return localizer
+
+    def render_catalog_template(
+        request: Request,
+        template_name: str,
+        template_context: dict[str, Any],
+    ) -> HTMLResponse:
+        localizer = localizer_for_request(request)
+        context_data = dict(template_context)
+        context_data.update(
+            {
+                "request": request,
+                "lang": localizer.language,
+                "t": localizer.t,
+                "lang_switch_url": build_language_switch_url(request, localizer.alternate_language),
+                "lang_current_icon": localizer.language_icon,
+                "lang_current_label": localizer.language_label,
+                "lang_switch_icon": localizer.alternate_language_icon,
+                "lang_switch_label": localizer.alternate_language_label,
+            }
+        )
+        token = set_active_ui_language(localizer.language)
+        try:
+            response = templates.TemplateResponse(request, template_name, context_data)
+        finally:
+            reset_active_ui_language(token)
+        apply_ui_language_cookie(response, localizer.language)
+        return response
+
     @app.get("/")
-    def index() -> RedirectResponse:
-        return RedirectResponse(url="/catalog")
+    def index(request: Request) -> RedirectResponse:
+        localizer = localizer_for_request(request)
+        url = f"/catalog?lang={localizer.language}"
+        response = RedirectResponse(url=url)
+        apply_ui_language_cookie(response, localizer.language)
+        return response
 
     @app.get("/catalog", response_class=HTMLResponse)
     def catalog_view(
@@ -164,11 +213,10 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> HTMLResponse:
         index_data = load_index(context)
         if index_data is None:
-            return templates.TemplateResponse(
+            return render_catalog_template(
                 request,
                 "catalog_empty.html",
                 {
-                    "request": request,
                     "settings": context.settings,
                 },
             )
@@ -186,11 +234,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         active_filters = build_active_filters(filters, team_lookup)
         group_query_base = build_group_query_base(q, criticality_level, team_id)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
-        return templates.TemplateResponse(
+        return render_catalog_template(
             request,
             template_name,
             {
-                "request": request,
                 "settings": context.settings,
                 "index": index_data,
                 "groups": groups,
@@ -218,11 +265,10 @@ def create_app(settings: AppSettings) -> FastAPI:
     ) -> HTMLResponse:
         index_data = load_index(context)
         if index_data is None:
-            return templates.TemplateResponse(
+            return render_catalog_template(
                 request,
                 "catalog_empty.html",
                 {
-                    "request": request,
                     "settings": context.settings,
                 },
             )
@@ -377,11 +423,10 @@ def create_app(settings: AppSettings) -> FastAPI:
                         ):
                             service_excalidraw_open_url = diagram_base_url
                     diagram_ready = True
-        return templates.TemplateResponse(
+        return render_catalog_template(
             request,
             "catalog_team_graph.html",
             {
-                "request": request,
                 "settings": context.settings,
                 "diagram_ready": diagram_ready,
                 "diagram_excalidraw_enabled": context.settings.catalog.diagram_excalidraw_enabled,
@@ -451,11 +496,10 @@ def create_app(settings: AppSettings) -> FastAPI:
                 else:
                     excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
-        return templates.TemplateResponse(
+        return render_catalog_template(
             request,
             "catalog_detail.html",
             {
-                "request": request,
                 "settings": context.settings,
                 "item": item,
                 "index": index_data,
@@ -483,11 +527,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         diagram_url = context.settings.catalog.excalidraw_base_url
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
-        return templates.TemplateResponse(
+        return render_catalog_template(
             request,
             "catalog_open.html",
             {
-                "request": request,
                 "settings": context.settings,
                 "scene_id": scene_id,
                 "scene_api_url": f"/api/scenes/{scene_id}?format=excalidraw",
@@ -551,11 +594,10 @@ def create_app(settings: AppSettings) -> FastAPI:
                     )
         except Exception:
             scene_payload = None
-        return templates.TemplateResponse(
+        return render_catalog_template(
             request,
             "catalog_open.html",
             {
-                "request": request,
                 "settings": context.settings,
                 "scene_id": "team-graph",
                 "scene_api_url": f"/api/teams/graph?{team_query}&format=excalidraw",
@@ -1176,7 +1218,10 @@ def build_humanize_text(overrides: Mapping[str, str]) -> Callable[[str], str]:
 
     def humanize_text(value: str) -> str:
         text = str(value)
-        return mapped.get(text, text)
+        overridden = mapped.get(text)
+        if overridden is not None:
+            return overridden
+        return translate_humanized_text(text, get_active_ui_language())
 
     return humanize_text
 

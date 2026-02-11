@@ -52,6 +52,9 @@ class MarkupToDiagramConverter(ABC):
         plan = self.layout_engine.build_plan(document)
         registry = ElementRegistry()
         base_metadata = self._base_metadata(document)
+        display_markup_type = str(
+            base_metadata.get("display_markup_type", document.markup_type) or ""
+        )
 
         proc_name_lookup = {
             proc.procedure_id: proc.procedure_name
@@ -123,16 +126,24 @@ class MarkupToDiagramConverter(ABC):
         self._build_procedure_flow_edges(
             document, plan.frames, frame_ids, registry, base_metadata, blocks
         )
-        self._build_service_title(plan, registry, base_metadata, document.service_name)
+        self._build_service_title(
+            plan,
+            registry,
+            base_metadata,
+            document.service_name,
+            display_markup_type,
+        )
         self._center_on_first_frame(plan, registry.elements)
         self._post_process_elements(registry.elements)
         app_state = self._build_app_state(registry.elements)
         return self._build_document(registry.elements, app_state)
 
     def _base_metadata(self, document: MarkupDocument) -> Metadata:
+        display_markup_type = self._resolve_display_markup_type(document)
         base_metadata: Metadata = {
             "schema_version": METADATA_SCHEMA_VERSION,
             "markup_type": document.markup_type,
+            "display_markup_type": display_markup_type,
         }
         if document.finedog_unit_id:
             base_metadata["finedog_unit_id"] = document.finedog_unit_id
@@ -145,6 +156,33 @@ class MarkupToDiagramConverter(ABC):
         if document.team_name:
             base_metadata["team_name"] = document.team_name
         return base_metadata
+
+    def _resolve_display_markup_type(self, document: MarkupDocument) -> str:
+        technical_markup_type = str(document.markup_type or "").strip() or "unknown"
+        if technical_markup_type not in {"procedure_graph", "service_graph"}:
+            return technical_markup_type
+
+        procedure_meta = document.procedure_meta or {}
+        source_types: set[str] = set()
+        for meta in procedure_meta.values():
+            direct_markup_type = str(meta.get("markup_type") or "").strip()
+            if direct_markup_type:
+                source_types.add(direct_markup_type)
+            services = meta.get("services")
+            if not isinstance(services, list):
+                continue
+            for item in services:
+                if not isinstance(item, dict):
+                    continue
+                service_markup_type = str(item.get("markup_type") or "").strip()
+                if service_markup_type:
+                    source_types.add(service_markup_type)
+
+        if len(source_types) == 1:
+            return next(iter(source_types))
+        if len(source_types) > 1:
+            return "mixed"
+        return technical_markup_type
 
     @abstractmethod
     def _build_document(self, elements: list[Element], app_state: dict[str, Any]) -> Any:
@@ -165,6 +203,19 @@ class MarkupToDiagramConverter(ABC):
 
     def _apply_service_zone_label_style(self, element: Element) -> None:
         return
+
+    def _format_service_name_with_markup_type(
+        self,
+        service_name: str,
+        markup_type: str | None,
+    ) -> str:
+        title = service_name.strip()
+        if not title:
+            return title
+        markup_label = str(markup_type or "").strip()
+        if not markup_label:
+            return title
+        return f"[{markup_label}] {title}"
 
     @abstractmethod
     def _offset_element(self, element: Element, dx: float, dy: float) -> None:
@@ -244,10 +295,11 @@ class MarkupToDiagramConverter(ABC):
         registry: ElementRegistry,
         base_metadata: Metadata,
         service_name: str | None,
+        markup_type: str | None = None,
     ) -> None:
         if not service_name:
             return
-        title = service_name.strip()
+        title = self._format_service_name_with_markup_type(service_name, markup_type)
         if not title:
             return
         bounds = self._plan_bounds(plan)

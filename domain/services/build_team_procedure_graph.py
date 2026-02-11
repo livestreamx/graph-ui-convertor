@@ -374,7 +374,8 @@ class BuildTeamProcedureGraph:
         for document in documents:
             team_label = self._resolve_team_label(document)
             service_label = self._resolve_service_label(document)
-            service_key = self._service_key(team_label, service_label)
+            markup_type_label = self._resolve_markup_type_label(document)
+            service_key = self._service_key(team_label, service_label, markup_type_label)
             doc_scope_token = ""
             if merge_node_ids is not None:
                 next_index = doc_scope_index_by_service.get(service_key, 0) + 1
@@ -384,6 +385,7 @@ class BuildTeamProcedureGraph:
             service_payload: dict[str, object] = {
                 "team_name": team_label,
                 "service_name": service_label,
+                "markup_type": str(document.markup_type or "").strip(),
                 "team_id": document.team_id,
                 "finedog_unit_id": document.finedog_unit_id,
             }
@@ -478,10 +480,12 @@ class BuildTeamProcedureGraph:
 
             team_label = self._resolve_team_label(document)
             service_label = self._resolve_service_label(document)
-            service_key = self._service_key(team_label, service_label)
+            markup_type_label = self._resolve_markup_type_label(document)
+            service_key = self._service_key(team_label, service_label, markup_type_label)
             service_payload: dict[str, object] = {
                 "team_name": team_label,
                 "service_name": service_label,
+                "markup_type": str(document.markup_type or "").strip(),
                 "team_id": document.team_id,
                 "finedog_unit_id": document.finedog_unit_id,
             }
@@ -764,7 +768,8 @@ class BuildTeamProcedureGraph:
         for document in documents:
             team_label = self._resolve_team_label(document)
             service_label = self._resolve_service_label(document)
-            service_key = self._service_key(team_label, service_label)
+            markup_type_label = self._resolve_markup_type_label(document)
+            service_key = self._service_key(team_label, service_label, markup_type_label)
             procedure_ids = procedure_ids_by_service.setdefault(service_key, set())
             procedure_ids.update(self._document_procedure_ids(document))
             adjacency = adjacency_by_service.setdefault(service_key, {})
@@ -795,8 +800,17 @@ class BuildTeamProcedureGraph:
             return str(document.service_name)
         return "Unknown service"
 
-    def _service_key(self, team_label: str, service_label: str) -> str:
-        return f"{team_label}::{service_label}"
+    def _resolve_markup_type_label(self, document: MarkupDocument) -> str:
+        return str(document.markup_type or "").strip() or "unknown"
+
+    def _service_key(
+        self,
+        team_label: str,
+        service_label: str,
+        markup_type_label: str | None = None,
+    ) -> str:
+        normalized_markup_type = str(markup_type_label or "").strip() or "unknown"
+        return f"{team_label}::{normalized_markup_type}::{service_label}"
 
     def _document_procedure_ids(self, document: MarkupDocument) -> list[str]:
         ordered: list[str] = []
@@ -960,10 +974,11 @@ class BuildTeamProcedureGraph:
             team_name = str(payload.get("team_name") or "Unknown team")
             service_name = str(payload.get("service_name") or "Unknown service")
             service_key = str(payload.get("service_key") or "")
+            markup_type = str(payload.get("markup_type") or "").strip() or "unknown"
             current_index = service_graph_index.get(service_key, 0) + 1
             service_graph_index[service_key] = current_index
             total_graphs = service_graph_total.get(service_key, 1)
-            label = f"[{team_name}] {service_name}"
+            label = f"[{team_name}] [{markup_type}] {service_name}"
             if total_graphs > 1:
                 label = f"{label} (Graph #{current_index})"
             color = service_colors.get(service_key, _SERVICE_COLORS[0])
@@ -972,6 +987,7 @@ class BuildTeamProcedureGraph:
             service_payload: dict[str, object] = {
                 "team_name": team_name,
                 "service_name": service_name,
+                "markup_type": markup_type,
                 "team_id": team_id,
                 "finedog_unit_id": finedog_unit_id,
                 "service_color": color,
@@ -988,6 +1004,7 @@ class BuildTeamProcedureGraph:
             service_meta[service_node_id] = {
                 "team_name": team_name,
                 "service_name": service_name,
+                "markup_type": markup_type,
                 "team_id": team_id,
                 "finedog_unit_id": finedog_unit_id,
                 "procedure_color": color,
@@ -1034,15 +1051,17 @@ class BuildTeamProcedureGraph:
         service_name = (
             str(entry.get("service_name") or "Unknown service").strip() or "Unknown service"
         )
+        markup_type = str(entry.get("markup_type") or "").strip() or "unknown"
         unit_raw = entry.get("finedog_unit_id")
         finedog_unit_id = (
             str(unit_raw).strip() if isinstance(unit_raw, str) and unit_raw.strip() else None
         )
-        service_key = self._service_key(team_name, service_name)
+        service_key = self._service_key(team_name, service_name, markup_type)
         return {
             "team_name": team_name,
             "team_id": team_id,
             "service_name": service_name,
+            "markup_type": markup_type,
             "finedog_unit_id": finedog_unit_id,
             "service_key": service_key,
         }
