@@ -2264,6 +2264,109 @@ def test_procedure_graph_layout_uses_bands_when_linear_crosses() -> None:
     assert payments[1] < loans[0] or loans[1] < payments[0]
 
 
+def test_procedure_graph_zones_avoid_partial_overlap_in_layout_and_renderers() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "A1",
+                "start_block_ids": ["a1"],
+                "end_block_ids": ["a2::end"],
+                "branches": {"a1": ["a2"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "B1",
+                "start_block_ids": ["b1"],
+                "end_block_ids": ["b2::end"],
+                "branches": {"b1": ["b2"]},
+            },
+            {
+                "proc_id": "p3",
+                "proc_name": "A2",
+                "start_block_ids": ["c1"],
+                "end_block_ids": ["c2::end"],
+                "branches": {"c1": ["c2"]},
+            },
+            {
+                "proc_id": "p4",
+                "proc_name": "B2",
+                "start_block_ids": ["d1"],
+                "end_block_ids": ["d2::end"],
+                "branches": {"d1": ["d2"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": ["p3"], "p3": ["p4"], "p4": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {"team_name": "Alpha", "service_name": "Payments"},
+                "p2": {"team_name": "Beta", "service_name": "Loans"},
+                "p3": {"team_name": "Alpha", "service_name": "Payments"},
+                "p4": {"team_name": "Beta", "service_name": "Loans"},
+            }
+        }
+    )
+    layout = ProcedureGraphLayoutEngine()
+
+    def assert_no_partial_overlap(rects: list[tuple[float, float, float, float]]) -> None:
+        eps = 1e-6
+        for idx, (ax, ay, aw, ah) in enumerate(rects):
+            ar = ax + aw
+            ab = ay + ah
+            for bx, by, bw, bh in rects[idx + 1 :]:
+                br = bx + bw
+                bb = by + bh
+                overlap_x = min(ar, br) - max(ax, bx)
+                overlap_y = min(ab, bb) - max(ay, by)
+                if overlap_x <= eps or overlap_y <= eps:
+                    continue
+                a_contains_b = (
+                    ax <= bx + eps and ay <= by + eps and ar >= br - eps and ab >= bb - eps
+                )
+                b_contains_a = (
+                    bx <= ax + eps and by <= ay + eps and br >= ar - eps and bb >= ab - eps
+                )
+                assert a_contains_b or b_contains_a
+
+    plan = layout.build_plan(document)
+    layout_rects = [
+        (zone.origin.x, zone.origin.y, zone.size.width, zone.size.height)
+        for zone in plan.service_zones
+    ]
+    assert_no_partial_overlap(layout_rects)
+
+    excal_scene = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    excal_rects = [
+        (
+            float(zone.get("x", 0.0)),
+            float(zone.get("y", 0.0)),
+            float(zone.get("width", 0.0)),
+            float(zone.get("height", 0.0)),
+        )
+        for zone in excal_scene.elements
+        if zone.get("customData", {}).get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert excal_rects
+    assert_no_partial_overlap(excal_rects)
+
+    unidraw_scene = ProcedureGraphToUnidrawConverter(layout).convert(document)
+    unidraw_rects = [
+        (
+            float(zone.get("position", {}).get("x", 0.0)),
+            float(zone.get("position", {}).get("y", 0.0)),
+            float(zone.get("size", {}).get("width", 0.0)),
+            float(zone.get("size", {}).get("height", 0.0)),
+        )
+        for zone in unidraw_scene.elements
+        if zone.get("cjm", {}).get("role") == "service_zone"
+    ]
+    assert unidraw_rects
+    assert_no_partial_overlap(unidraw_rects)
+
+
 def test_procedure_graph_converter_skips_service_zones_for_single_service() -> None:
     payload = {
         "markup_type": "procedure_graph",

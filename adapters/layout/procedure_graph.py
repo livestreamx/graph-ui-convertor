@@ -168,67 +168,21 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     use_linear_layout = True
                     linear_frames = []
                 if service_order and not use_linear_layout:
-                    label_height = self.config.service_zone_label_font_size * 1.35
-                    top_padding = (
-                        self.config.service_zone_padding_y
-                        + label_height
-                        + self.config.service_zone_label_gap
+                    (
+                        component_frames,
+                        component_frame_lookup,
+                        component_height,
+                    ) = self._service_band_component_frames(
+                        level_nodes=level_nodes,
+                        assigned=assigned,
+                        service_order=service_order,
+                        order_index=order_index,
+                        origin_x=origin_x,
+                        origin_y=origin_y,
+                        lane_span=lane_span,
+                        node_size=node_size,
+                        proc_gap_y=proc_gap_y,
                     )
-                    bottom_padding = self.config.service_zone_padding_y
-
-                    max_counts: dict[str, int] = {info.service_key: 0 for info in service_order}
-                    for nodes in level_nodes.values():
-                        counts: dict[str, int] = {}
-                        for proc_id in nodes:
-                            key = assigned.get(proc_id)
-                            if not key:
-                                continue
-                            counts[key] = counts.get(key, 0) + 1
-                        for key, count in counts.items():
-                            if count > max_counts.get(key, 0):
-                                max_counts[key] = count
-
-                    bands: list[_ServiceBand] = []
-                    current_y = origin_y
-                    for info in service_order:
-                        key = info.service_key
-                        count = max_counts.get(key, 0)
-                        if count <= 0:
-                            continue
-                        nodes_height = count * node_size.height + proc_gap_y * (count - 1)
-                        band_height = nodes_height + top_padding + bottom_padding
-                        bands.append(
-                            _ServiceBand(service=info, start_y=current_y, height=band_height)
-                        )
-                        current_y += band_height + proc_gap_y
-                    if bands:
-                        component_height = current_y - origin_y - proc_gap_y
-
-                    band_lookup = {band.service.service_key: band for band in bands}
-                    for lvl, nodes in level_nodes.items():
-                        by_service: dict[str, list[str]] = {}
-                        for proc_id in nodes:
-                            key = assigned.get(proc_id)
-                            if not key:
-                                continue
-                            by_service.setdefault(key, []).append(proc_id)
-                        for key, proc_ids in by_service.items():
-                            proc_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
-                            band = band_lookup.get(key)
-                            if not band:
-                                continue
-                            start_y = band.start_y + top_padding
-                            for offset, proc_id in enumerate(proc_ids):
-                                frame = FramePlacement(
-                                    procedure_id=proc_id,
-                                    origin=Point(
-                                        origin_x + lvl * lane_span,
-                                        start_y + offset * (node_size.height + proc_gap_y),
-                                    ),
-                                    size=node_size,
-                                )
-                                component_frames.append(frame)
-                                component_frame_lookup[proc_id] = frame
                 else:
                     if not service_order:
                         linear_frames = self._linear_component_frames(
@@ -242,6 +196,28 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     for frame in linear_frames:
                         component_frames.append(frame)
                         component_frame_lookup[frame.procedure_id] = frame
+                    if service_order and component_frames:
+                        linear_zones = self._build_component_service_zones(
+                            service_info_by_key=service_info_by_key,
+                            proc_service_keys=proc_service_keys,
+                            frame_lookup=component_frame_lookup,
+                        )
+                        if self._zones_have_non_nested_overlap(linear_zones):
+                            (
+                                component_frames,
+                                component_frame_lookup,
+                                component_height,
+                            ) = self._service_band_component_frames(
+                                level_nodes=level_nodes,
+                                assigned=assigned,
+                                service_order=service_order,
+                                order_index=order_index,
+                                origin_x=origin_x,
+                                origin_y=origin_y,
+                                lane_span=lane_span,
+                                node_size=node_size,
+                                proc_gap_y=proc_gap_y,
+                            )
                     if component_frames:
                         max_bottom = max(
                             frame.origin.y + frame.size.height for frame in component_frames
@@ -1125,6 +1101,96 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
         return zones
 
+    def _service_band_component_frames(
+        self,
+        level_nodes: Mapping[int, list[str]],
+        assigned: Mapping[str, str],
+        service_order: list[_ServiceInfo],
+        order_index: Mapping[str, int],
+        origin_x: float,
+        origin_y: float,
+        lane_span: float,
+        node_size: Size,
+        proc_gap_y: float,
+    ) -> tuple[list[FramePlacement], dict[str, FramePlacement], float]:
+        label_height = self.config.service_zone_label_font_size * 1.35
+        top_padding = (
+            self.config.service_zone_padding_y + label_height + self.config.service_zone_label_gap
+        )
+        bottom_padding = self.config.service_zone_padding_y
+
+        max_counts: dict[str, int] = {info.service_key: 0 for info in service_order}
+        for nodes in level_nodes.values():
+            counts: dict[str, int] = {}
+            for proc_id in nodes:
+                key = assigned.get(proc_id)
+                if not key:
+                    continue
+                counts[key] = counts.get(key, 0) + 1
+            for key, count in counts.items():
+                if count > max_counts.get(key, 0):
+                    max_counts[key] = count
+
+        bands: list[_ServiceBand] = []
+        current_y = origin_y
+        for info in service_order:
+            key = info.service_key
+            count = max_counts.get(key, 0)
+            if count <= 0:
+                continue
+            nodes_height = count * node_size.height + proc_gap_y * (count - 1)
+            band_height = nodes_height + top_padding + bottom_padding
+            bands.append(_ServiceBand(service=info, start_y=current_y, height=band_height))
+            current_y += band_height + proc_gap_y
+
+        component_height = 0.0
+        if bands:
+            component_height = current_y - origin_y - proc_gap_y
+        band_lookup = {band.service.service_key: band for band in bands}
+
+        frames: list[FramePlacement] = []
+        frame_lookup: dict[str, FramePlacement] = {}
+        for lvl, nodes in level_nodes.items():
+            by_service: dict[str, list[str]] = {}
+            for proc_id in nodes:
+                key = assigned.get(proc_id)
+                if not key:
+                    continue
+                by_service.setdefault(key, []).append(proc_id)
+            for key, proc_ids in by_service.items():
+                proc_ids.sort(key=lambda proc_id: order_index.get(proc_id, 0))
+                band = band_lookup.get(key)
+                if not band:
+                    continue
+                start_y = band.start_y + top_padding
+                for offset, proc_id in enumerate(proc_ids):
+                    frame = FramePlacement(
+                        procedure_id=proc_id,
+                        origin=Point(
+                            origin_x + lvl * lane_span,
+                            start_y + offset * (node_size.height + proc_gap_y),
+                        ),
+                        size=node_size,
+                    )
+                    frames.append(frame)
+                    frame_lookup[proc_id] = frame
+        return frames, frame_lookup, component_height
+
+    def _zones_have_non_nested_overlap(self, zones: list[ServiceZonePlacement]) -> bool:
+        for idx, first in enumerate(zones):
+            for second in zones[idx + 1 :]:
+                if not self._rects_overlap(first.origin, first.size, second.origin, second.size):
+                    continue
+                first_contains_second = self._rect_contains(
+                    first.origin, first.size, second.origin, second.size
+                )
+                second_contains_first = self._rect_contains(
+                    second.origin, second.size, first.origin, first.size
+                )
+                if not first_contains_second and not second_contains_first:
+                    return True
+        return False
+
     def _edges_cross(
         self,
         frame_lookup: Mapping[str, FramePlacement],
@@ -1209,3 +1275,19 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 and abs(outer_bottom - inner_bottom) <= eps
             )
         return False
+
+    def _rects_overlap(
+        self,
+        first_origin: Point,
+        first_size: Size,
+        second_origin: Point,
+        second_size: Size,
+        eps: float = 1e-6,
+    ) -> bool:
+        first_right = first_origin.x + first_size.width
+        first_bottom = first_origin.y + first_size.height
+        second_right = second_origin.x + second_size.width
+        second_bottom = second_origin.y + second_size.height
+        overlap_x = min(first_right, second_right) - max(first_origin.x, second_origin.x)
+        overlap_y = min(first_bottom, second_bottom) - max(first_origin.y, second_origin.y)
+        return overlap_x > eps and overlap_y > eps
