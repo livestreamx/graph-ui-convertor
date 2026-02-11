@@ -4,10 +4,10 @@
   <section class="group cross-team-group">
     <div class="group-header">
       <div>
-        <div class="group-title">Cross-team graph analytics</div>
-        <div class="group-count">Get high-level graph analytics across multiple domain teams</div>
+        <div class="group-title">{{ t("Cross-team graph analytics") }}</div>
+        <div class="group-count">{{ t("Get high-level graph analytics across multiple domain teams") }}</div>
       </div>
-      <a class="primary-button" href="/catalog/teams/graph">Open builder</a>
+      <a class="primary-button" href="/catalog/teams/graph?lang={{ lang }}">{{ t("Open builder") }}</a>
     </div>
   </section>
 
@@ -23,13 +23,14 @@
         type="search"
         name="q"
         value="{{ query }}"
-        placeholder="Search by title, tag, markup type"
+        placeholder="{{ t('Search by title, tag, markup type') }}"
       />
+      <input type="hidden" name="lang" value="{{ lang }}" />
       <div class="filter-controls">
         <label class="filter-control">
-          <span>{{ "Criticality level" | humanize_text }}</span>
+          <span>{{ t("Criticality level") }}</span>
           <select name="criticality_level">
-            <option value="">All levels</option>
+            <option value="">{{ t("All levels") }}</option>
             {% for level in criticality_levels %}
               <option value="{{ level }}" {% if criticality_level == level %}selected{% endif %}>
                 {{ level | humanize_text }}
@@ -38,9 +39,9 @@
           </select>
         </label>
         <label class="filter-control">
-          <span>{{ "Team" | humanize_text }}</span>
+          <span>{{ t("Team") }}</span>
           <select name="team_id">
-            <option value="">All teams</option>
+            <option value="">{{ t("All teams") }}</option>
             {% for team_key, team_label in team_options %}
               <option value="{{ team_key }}" {% if team_id == team_key %}selected{% endif %}>
                 {{ team_label }}
@@ -55,17 +56,17 @@
     </form>
     <div class="filters">
       {% if active_filters %}
-        <div class="filter-label">Active filters</div>
+        <div class="filter-label">{{ t("Active filters") }}</div>
         <div class="filter-row">
           {% for filter in active_filters %}
             <span class="filter-pill">
               {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
             </span>
           {% endfor %}
-          <a class="ghost-button" href="/catalog{% if query %}?q={{ query|urlencode }}{% endif %}">Clear filters</a>
+          <a class="ghost-button" href="/catalog?lang={{ lang }}{% if query %}&q={{ query|urlencode }}{% endif %}">{{ t("Clear filters") }}</a>
         </div>
       {% else %}
-        <div class="filter-hint">Filter by group values inside each section.</div>
+        <div class="filter-hint">{{ t("Filter by group values inside each section.") }}</div>
       {% endif %}
     </div>
 

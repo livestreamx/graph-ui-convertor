@@ -82,6 +82,9 @@ catalog:
 - `unknown_value`: Placeholder when a field is missing.
 - `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
   When set via environment variables, pass a JSON object.
+- Catalog UI supports `en`/`ru` localization via `lang` query parameter
+  (`/catalog?lang=ru`) with persistence in `cjm_catalog_ui_lang` cookie.
+  If `lang` is not set, the app falls back to cookie and then `Accept-Language`.
 - `rebuild_token`: Empty disables `/api/rebuild-index`. Set to a shared secret to enable.
 - `procedure_link_path`: URL template for procedure links in Excalidraw/Unidraw (use `{procedure_id}`).
 - `block_link_path`: URL template for block links in Excalidraw/Unidraw (use `{block_id}` or
@@ -114,6 +117,8 @@ catalog:
 
 - Detail view includes downloads for `.excalidraw` and `Unidraw`; `Open Excalidraw` is controlled by
   `diagram_excalidraw_enabled`.
+- The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
+  locale across catalog pages and HTMX updates.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` supports comma-separated values). The builder also accepts

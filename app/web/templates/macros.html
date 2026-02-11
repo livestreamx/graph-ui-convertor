@@ -5,13 +5,13 @@
         <div class="group-title">
           {{ group.field | humanize_text }}: {{ group.display_value | humanize_text }}
         </div>
-        <div class="group-count">{{ group.count }} scenes</div>
+        <div class="group-count">{{ group.count }} {{ t("scenes") }}</div>
       </div>
       <a
         class="group-filter"
-        href="/catalog{% if group_query_base %}?{{ group_query_base }}&group={{ group.field | urlencode }}:{{ group.value | urlencode }}{% else %}?group={{ group.field | urlencode }}:{{ group.value | urlencode }}{% endif %}"
+        href="/catalog?lang={{ lang }}{% if group_query_base %}&{{ group_query_base }}{% endif %}&group={{ group.field | urlencode }}:{{ group.value | urlencode }}"
       >
-        Filter
+        {{ t("Filter") }}
       </a>
     </div>
     {% if group.children %}
@@ -30,7 +30,7 @@
                 <span>
                   {{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}
                 </span>
-                <span>Updated {{ item.updated_at | msk_datetime }}</span>
+                <span>{{ t("Updated") }} {{ item.updated_at | msk_datetime }}</span>
               </div>
               {% if item.tags %}
                 <div class="tag-row">
@@ -41,7 +41,7 @@
               {% endif %}
             </div>
             <div class="card-actions">
-              <a class="primary-button" href="/catalog/{{ item.scene_id }}">View</a>
+              <a class="primary-button" href="/catalog/{{ item.scene_id }}?lang={{ lang }}">{{ t("View") }}</a>
             </div>
           </article>
         {% endfor %}

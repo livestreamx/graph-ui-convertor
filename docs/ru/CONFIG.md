@@ -80,6 +80,9 @@ catalog:
 - `unknown_value`: заглушка для отсутствующих полей.
 - `ui_text_overrides`: опциональный словарь для подмены значений/ключей в Catalog UI.
   При установке через переменные окружения используйте JSON-объект.
+- Catalog UI поддерживает локализацию `en`/`ru` через query-параметр `lang`
+  (`/catalog?lang=ru`) с сохранением выбора в cookie `cjm_catalog_ui_lang`.
+  Если `lang` не задан, используется cookie, затем `Accept-Language`.
 - `rebuild_token`: пустое значение отключает `/api/rebuild-index`. Задайте секрет для включения.
 - `procedure_link_path`: шаблон URL для ссылок на процедуры в Excalidraw/Unidraw (используйте `{procedure_id}`).
 - `block_link_path`: шаблон URL для ссылок на блоки в Excalidraw/Unidraw (используйте `{block_id}` либо
@@ -112,6 +115,8 @@ catalog:
 
 - В деталях диаграммы доступны скачивания `.excalidraw` и `Unidraw`; кнопка `Open Excalidraw`
   управляется `diagram_excalidraw_enabled`.
+- В хедере рядом с `Index JSON` добавлен переключатель языка (с иконками); выбранная локаль
+  сохраняется между страницами каталога и HTMX-обновлениями.
 - На странице каталога есть отдельный раздел для кросс-командных диаграмм: можно выбрать несколько
   команд и открыть общий граф процедур на основе `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` поддерживает значения через запятую). В билдере доступен параметр

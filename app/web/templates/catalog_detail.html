@@ -2,12 +2,12 @@
 
 {% block content %}
   <section class="detail-header">
-    <a class="ghost-button" href="/catalog">Back to catalog</a>
+    <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
     <div class="detail-title">{{ item.title }}</div>
     <div class="detail-meta">
       <span>{{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}</span>
-      <span>Updated {{ item.updated_at | msk_datetime }}</span>
-      <span>Scene ID {{ item.scene_id }}</span>
+      <span>{{ t("Updated") }} {{ item.updated_at | msk_datetime }}</span>
+      <span>{{ t("Scene ID") }} {{ item.scene_id }}</span>
     </div>
     {% if item.tags %}
       <div class="tag-row">
@@ -20,54 +20,56 @@
 
   <section class="detail-grid">
     <div class="detail-card">
-      <h3>Open the diagram</h3>
+      <h3>{{ t("Open the diagram") }}</h3>
       <p>
-        Open in Excalidraw or download both diagram formats for manual import and editing.
+        {{ t("Open in Excalidraw or download both diagram formats for manual import and editing.") }}
       </p>
       <div class="button-row">
         {% if diagram_excalidraw_enabled %}
-          <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">Open Excalidraw</a>
+          <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">{{ t("Open Excalidraw") }}</a>
         {% endif %}
         <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?format=excalidraw&download=true">
-          Download .excalidraw
+          {{ t("Download .excalidraw") }}
         </a>
         <a class="ghost-button unidraw-button" href="/api/scenes/{{ item.scene_id }}?format=unidraw&download=true">
-          Download .unidraw
+          {{ t("Download .unidraw") }}
         </a>
       </div>
       {% if not excalidraw_scene_available %}
         {% if on_demand_enabled %}
-          <p class="note">Scene will be generated on demand from markup.</p>
+          <p class="note">{{ t("Scene will be generated on demand from markup.") }}</p>
         {% else %}
-          <p class="note">Scene file not found in {{ excalidraw_dir_label }}. Run build-all before opening.</p>
+          <p class="note">
+            {{ t("Scene file not found in {dir_name}. Run build-all before opening.", dir_name=excalidraw_dir_label) }}
+          </p>
         {% endif %}
       {% elif open_mode == "manual" %}
-        <p class="note">Scene is too large for URL sharing. Use Download + Import.</p>
+        <p class="note">{{ t("Scene is too large for URL sharing. Use Download + Import.") }}</p>
       {% elif open_mode == "local_storage" %}
-        <p class="note">Scene is injected via local storage for same-origin Excalidraw.</p>
+        <p class="note">{{ t("Scene is injected via local storage for same-origin Excalidraw.") }}</p>
       {% else %}
-        <p class="note">If the scene does not load, import the downloaded file manually.</p>
+        <p class="note">{{ t("If the scene does not load, import the downloaded file manually.") }}</p>
       {% endif %}
     </div>
   </section>
 
   <section class="detail-card">
-    <h3>Metadata snapshot</h3>
+    <h3>{{ t("Metadata snapshot") }}</h3>
     <div class="meta-grid">
       <div>
-        <div class="meta-label">Markup file</div>
+        <div class="meta-label">{{ t("Markup file") }}</div>
         <div class="meta-value">{{ item.markup_rel_path }}</div>
       </div>
       <div>
-        <div class="meta-label">Excalidraw file</div>
+        <div class="meta-label">{{ t("Excalidraw file") }}</div>
         <div class="meta-value">{{ excalidraw_rel_path }}</div>
       </div>
       <div>
-        <div class="meta-label">Unidraw file</div>
+        <div class="meta-label">{{ t("Unidraw file") }}</div>
         <div class="meta-value">{{ unidraw_rel_path }}</div>
       </div>
       <div>
-        <div class="meta-label">FineDog unit</div>
+        <div class="meta-label">{{ t("FineDog unit") }}</div>
         <div class="meta-value">{{ item.finedog_unit_id }}</div>
       </div>
       <div>

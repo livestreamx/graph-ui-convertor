@@ -22,6 +22,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 Catalog UI now exposes both downloads at once (`.excalidraw` and Unidraw).  
 Use `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false` to hide the `Open Excalidraw` button.
+UI language can be toggled between English and Russian from the header (next to `Index JSON`).
 
 ## Commands (Typer CLI)
 
@@ -137,6 +138,7 @@ cjm catalog serve --config config/catalog/app.s3.yaml
 
 UI теперь одновременно поддерживает скачивание `.excalidraw` и `Unidraw`.  
 Если нужно скрыть открытие в Excalidraw, задайте `CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED=false`.
+Язык интерфейса переключается в хедере между English и Русским (рядом с `Index JSON`).
 
 ## Команды (Typer CLI)
 

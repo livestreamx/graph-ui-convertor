@@ -50,10 +50,10 @@
 
 {% block content %}
   <section class="detail-header">
-    <a class="ghost-button" href="/catalog">Back to catalog</a>
-    <div class="detail-title">Cross-team graphs builder</div>
+    <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
+    <div class="detail-title">{{ t("Cross-team graphs builder") }}</div>
     <div class="detail-meta">
-      <span>Build combined procedure graphs across selected teams.</span>
+      <span>{{ t("Build combined procedure graphs across selected teams.") }}</span>
     </div>
   </section>
 
@@ -61,25 +61,25 @@
     <div class="detail-card team-graph-card">
       <div class="team-graph-header">
         <div>
-          <h3>Step 1. Select teams</h3>
+          <h3>{{ t("Step 1. Select teams") }}</h3>
           <p class="team-graph-subtitle">
-            Select teams to merge their <code>procedure_graph</code> into a single overview.
+            {{ t("Select teams to merge their procedure_graph into a single overview.") }}
           </p>
         </div>
         <div class="team-graph-header-actions">
           <div class="team-graph-help">
             <button class="team-graph-help-button" type="button" aria-label="Teams in graph">?</button>
             <div class="team-graph-help-popover">
-              <div class="team-graph-help-title">Teams in graph</div>
+              <div class="team-graph-help-title">{{ t("Teams in graph") }}</div>
               {% if selected_teams %}
                 <div class="team-graph-summary">
                   <div class="team-graph-summary-item">
                     <span class="team-graph-summary-value">{{ selected_team_count }}</span>
-                    <span class="team-graph-summary-label">teams</span>
+                    <span class="team-graph-summary-label">{{ t("teams") }}</span>
                   </div>
                   <div class="team-graph-summary-item">
                     <span class="team-graph-summary-value">{{ selected_markups_count }}</span>
-                    <span class="team-graph-summary-label">markups merged</span>
+                    <span class="team-graph-summary-label">{{ t("markups merged") }}</span>
                   </div>
                 </div>
               {% endif %}
@@ -90,17 +90,17 @@
                       <div class="team-chip-name">{{ team.label }}</div>
                       <div class="team-chip-id">{{ team.id }}</div>
                       <div class="team-chip-count">
-                        {{ team.markup_count }} markup{% if team.markup_count != 1 %}s{% endif %}
+                        {{ team.markup_count }} {{ t("markups") }}
                       </div>
                     </div>
                   {% endfor %}
                 {% else %}
-                  <div class="team-chip-empty">Select teams to build a combined graph.</div>
+                  <div class="team-chip-empty">{{ t("Select teams to build a combined graph.") }}</div>
                 {% endif %}
               </div>
               <div class="team-graph-help-hint">
-                Builds a procedure-level graph using <code>procedure_graph</code> across selected teams.
-                Disabled teams are fully omitted from builder analytics.
+                {{ t("Builds a procedure-level graph using procedure_graph across selected teams.") }}
+                {{ t("Disabled teams are fully omitted from builder analytics.") }}
               </div>
             </div>
           </div>
@@ -126,7 +126,7 @@
             data-exclude-toggle
             aria-expanded="{% if disabled_team_count %}true{% else %}false{% endif %}"
           >
-            {% if disabled_team_count %}Hide disabled teams{% else %}Disable teams{% endif %}
+            {% if disabled_team_count %}{{ t("Hide disabled teams") }}{% else %}{{ t("Disable teams") }}{% endif %}
           </button>
         </div>
         <div
@@ -135,9 +135,9 @@
         >
           <div class="team-graph-select-group">
             <div class="team-graph-select-header">
-              <div class="team-graph-select-title">Teams to merge</div>
+              <div class="team-graph-select-title">{{ t("Teams to merge") }}</div>
               <div class="team-graph-select-hint">
-                Included in graph build and analytics.
+                {{ t("Included in graph build and analytics.") }}
               </div>
             </div>
             <label class="filter-control">
@@ -157,13 +157,13 @@
               <span class="team-graph-select-summary-value" data-summary-value="included-teams">
                 {{ selected_team_count }}
               </span>
-              <span class="team-graph-select-summary-label">included teams</span>
+              <span class="team-graph-select-summary-label">{{ t("included teams") }}</span>
               <span class="team-graph-select-summary-muted">
                 ·
                 <span data-summary-value="included-markups">
                   {{ selected_markups_count }}
                 </span>
-                markups
+                {{ t("markups") }}
               </span>
             </div>
           </div>
@@ -172,9 +172,9 @@
             data-exclude-panel
           >
             <div class="team-graph-select-header">
-              <div class="team-graph-select-title">Disable teams from analytics</div>
+              <div class="team-graph-select-title">{{ t("Disable teams from analytics") }}</div>
               <div class="team-graph-select-hint">
-                Ignored in all builder metrics, merge-node detection, and overlap stats.
+                {{ t("Ignored in all builder metrics, merge-node detection, and overlap stats.") }}
               </div>
             </div>
             <div class="team-graph-select-body">
@@ -195,13 +195,13 @@
                 <span class="team-graph-select-summary-value" data-summary-value="disabled-teams">
                   {{ disabled_team_count }}
                 </span>
-                <span class="team-graph-select-summary-label">disabled teams</span>
+                <span class="team-graph-select-summary-label">{{ t("disabled teams") }}</span>
                 <span class="team-graph-select-summary-muted">
                   ·
                   <span data-summary-value="disabled-markups">
                     {{ disabled_markups_count }}
                   </span>
-                  markups
+                  {{ t("markups") }}
                 </span>
               </div>
             </div>
@@ -219,21 +219,22 @@
           name="excluded_team_ids"
           value="{{ disabled_team_ids | join(',') }}"
         />
+        <input type="hidden" name="lang" value="{{ lang }}" />
       </form>
     </div>
 
     <div class="detail-card team-graph-flags-card">
       <div class="team-graph-flags-header">
-        <h3>Step 2. Feature flags</h3>
+        <h3>{{ t("Step 2. Feature flags") }}</h3>
         <p class="team-graph-subtitle">
-          Tune how selected markups render and how merge nodes are detected.
+          {{ t("Tune how selected markups render and how merge nodes are detected.") }}
         </p>
       </div>
       <div class="team-graph-merge-threshold-card">
         <div class="team-graph-merge-threshold-header">
           <div class="team-graph-merge-threshold-title-row">
             <div class="team-graph-merge-threshold-title">
-              Merge node chain threshold
+              {{ t("Merge node chain threshold") }}
             </div>
             <div class="team-graph-help team-graph-help-inline team-graph-merge-threshold-help">
               <button
@@ -244,22 +245,19 @@
                 ?
               </button>
               <div class="team-graph-help-popover team-graph-help-popover-wide">
-                <div class="team-graph-help-title">How merge chain threshold works</div>
+                <div class="team-graph-help-title">{{ t("How merge chain threshold works") }}</div>
                 <div class="team-graph-help-hint">
-                  Selects the minimum size of consecutive shared procedures to count as one merge
-                  chain.
+                  {{ t("Selects the minimum size of consecutive shared procedures to count as one merge chain.") }}
                 </div>
                 <ul class="team-graph-merge-threshold-rules">
-                  <li><code>0</code>: merge node detection is fully disabled.</li>
-                  <li><code>1</code>: each shared procedure is treated as a merge node.</li>
+                  <li>{{ t("0: merge node detection is fully disabled.") }}</li>
+                  <li>{{ t("1: each shared procedure is treated as a merge node.") }}</li>
                   <li>
-                    <code>N &gt; 1</code>: only non-overlapping strictly linear chains of at least
-                    <code>N</code> shared procedures are counted.
+                    {{ t("N > 1: only non-overlapping strictly linear chains of at least N shared procedures are counted.") }}
                   </li>
-                  <li>Cycles are excluded from merge-chain detection.</li>
+                  <li>{{ t("Cycles are excluded from merge-chain detection.") }}</li>
                   <li>
-                    Branch/fork and join procedures are treated as chain boundaries for
-                    <code>N &gt; 1</code>.
+                    {{ t("Branch/fork and join procedures are treated as chain boundaries for N > 1.") }}
                   </li>
                 </ul>
               </div>
@@ -268,18 +266,17 @@
           <div class="team-graph-merge-threshold-value">
             <span data-merge-threshold-value>{{ merge_node_min_chain_size }}</span>
             <span data-merge-threshold-value-unit>
-              node{% if merge_node_min_chain_size != 1 %}s{% endif %}
+              {% if merge_node_min_chain_size == 1 %}{{ t("node") }}{% else %}{{ t("nodes") }}{% endif %}
             </span>
           </div>
         </div>
         <div class="team-graph-merge-threshold-text" data-merge-threshold-text>
           {% if merge_node_min_chain_size == 0 %}
-            0: merge nodes are disabled.
+            {{ t("0: merge nodes are disabled.") }}
           {% elif merge_node_min_chain_size == 1 %}
-            1: each shared procedure is a merge node.
+            {{ t("1: each shared procedure is a merge node.") }}
           {% else %}
-            {{ merge_node_min_chain_size }}: only non-overlapping linear chains of
-            {{ merge_node_min_chain_size }}+ shared procedures are counted.
+            {{ t("{count}: only non-overlapping linear chains of {count}+ shared procedures are counted.", count=merge_node_min_chain_size) }}
           {% endif %}
         </div>
         <label class="team-graph-merge-threshold-input" for="merge_node_min_chain_size">
@@ -312,14 +309,14 @@
               data-flag-status
               data-state="{% if merge_selected_markups %}on{% else %}off{% endif %}"
             >
-              {% if merge_selected_markups %}Enabled{% else %}Disabled{% endif %}
+              {% if merge_selected_markups %}{{ t("Enabled") }}{% else %}{{ t("Disabled") }}{% endif %}
             </span>
           </div>
           <div class="team-graph-flag-title">
-            Merge markups by shared nodes
+            {{ t("Merge markups by shared nodes") }}
           </div>
           <div class="team-graph-flag-text">
-            How selected graphs render their components in according to shared nodes.
+            {{ t("How selected graphs render their components in according to shared nodes.") }}
           </div>
           <div class="team-graph-flag-action">
             <button
@@ -329,7 +326,7 @@
               data-state="{% if merge_selected_markups %}on{% else %}off{% endif %}"
               aria-pressed="{% if merge_selected_markups %}true{% else %}false{% endif %}"
             >
-              {% if merge_selected_markups %}Disable{% else %}Enable{% endif %}
+              {% if merge_selected_markups %}{{ t("Disable") }}{% else %}{{ t("Enable") }}{% endif %}
             </button>
           </div>
           <input
@@ -351,14 +348,14 @@
               data-flag-status
               data-state="{% if merge_nodes_all_markups %}on{% else %}off{% endif %}"
             >
-              {% if merge_nodes_all_markups %}Enabled{% else %}Disabled{% endif %}
+              {% if merge_nodes_all_markups %}{{ t("Enabled") }}{% else %}{{ t("Disabled") }}{% endif %}
             </span>
           </div>
           <div class="team-graph-flag-title">
-            Render merge nodes from all available markups
+            {{ t("Render merge nodes from all available markups") }}
           </div>
           <div class="team-graph-flag-text">
-            Merge nodes are derived from the full catalog, while only selected teams render.
+            {{ t("Merge nodes are derived from the full catalog, while only selected teams render.") }}
           </div>
           <div class="team-graph-flag-action">
             <button
@@ -368,7 +365,7 @@
               data-state="{% if merge_nodes_all_markups %}on{% else %}off{% endif %}"
               aria-pressed="{% if merge_nodes_all_markups %}true{% else %}false{% endif %}"
             >
-              {% if merge_nodes_all_markups %}Disable{% else %}Enable{% endif %}
+              {% if merge_nodes_all_markups %}{{ t("Disable") }}{% else %}{{ t("Enable") }}{% endif %}
             </button>
           </div>
           <input
@@ -384,12 +381,12 @@
     </div>
 
     <div class="detail-card team-graph-result-card">
-      <h3>Step 3. Merge graphs</h3>
+      <h3>{{ t("Step 3. Merge graphs") }}</h3>
       <div class="team-graph-cta">
           <div class="team-graph-cta-copy">
-            <div class="team-graph-cta-title">Merge selected teams</div>
+            <div class="team-graph-cta-title">{{ t("Merge selected teams") }}</div>
             <div class="team-graph-cta-text">
-              Once merged, status appears here; analytics opens in Step 4 and actions in Step 5.
+              {{ t("Once merged, status appears here; analytics opens in Step 4 and actions in Step 5.") }}
             </div>
           </div>
         <div class="team-graph-cta-action">
@@ -400,7 +397,7 @@
             data-merge-button
             {% if not team_ids %}disabled aria-disabled="true"{% endif %}
           >
-            Merge
+            {{ t("Merge") }}
           </button>
         </div>
       </div>
@@ -410,12 +407,12 @@
         role="status"
         aria-live="polite"
       >
-        Select at least one team to enable Merge.
+        {{ t("Select at least one team to enable Merge.") }}
       </div>
       <div class="team-graph-merge-loader" id="team-graph-merge-loader" aria-live="polite">
         <div class="team-graph-merge-loader-spinner" aria-hidden="true"></div>
         <div class="team-graph-merge-loader-copy">
-          <div class="team-graph-merge-loader-title">Merging selected graphs</div>
+          <div class="team-graph-merge-loader-title">{{ t("Merging selected graphs") }}</div>
           <div class="team-graph-merge-loader-text">
             Mapping shared nodes and building a cross-team dashboard...
           </div>
@@ -425,7 +422,7 @@
         {% set team_dashboard_section = "" %}
         {% if diagram_ready %}
           <div class="team-graph-result-header">
-            <span class="team-graph-result-status team-graph-result-ready">Merge ready</span>
+            <span class="team-graph-result-status team-graph-result-ready">{{ t("Merge ready") }}</span>
             {% if selected_team_count %}
               <span class="team-graph-result-meta">
                 {{ selected_team_count }} teams · {{ selected_markups_count }} markups merged
@@ -433,7 +430,7 @@
             {% endif %}
           </div>
           <div class="team-graph-result-body">
-            Merge completed. Continue to Step 4 for analytics and Step 5 for diagram actions.
+            {{ t("Merge completed. Continue to Step 4 for analytics and Step 5 for diagram actions.") }}
           </div>
           {% if team_dashboard %}
             {% set total_procedures = team_dashboard.total_procedure_count %}
@@ -442,33 +439,33 @@
             <section class="team-graph-dashboard">
               <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
                 <summary class="team-graph-dashboard-summary">
-                  <span class="team-graph-dashboard-title">Graphs info</span>
-                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                  <span class="team-graph-dashboard-title">{{ t("Graphs info") }}</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
                 </summary>
                 <div class="team-graph-dashboard-content">
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Graphs</div>
+                      <div class="team-graph-kpi-label">{{ t("Graphs") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Graphs help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Unique graphs</div>
-                          <div class="team-graph-help-hint">Count of unique graphs from selected teams.</div>
+                          <div class="team-graph-help-title">{{ t("Unique graphs") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Count of unique graphs from selected teams.") }}</div>
                         </div>
                       </div>
                     </div>
                     <div class="team-graph-kpi-value">{{ team_dashboard.unique_graph_count }}</div>
-                    <div class="team-graph-kpi-note">Detailed list is shown below.</div>
+                    <div class="team-graph-kpi-note">{{ t("Detailed list is shown below.") }}</div>
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Bot graphs</div>
+                      <div class="team-graph-kpi-label">{{ t("Bot graphs") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Bot graphs help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Bot graphs</div>
-                          <div class="team-graph-help-hint">Graphs where at least one <code>procedure_id</code> contains <code>bot</code>.</div>
+                          <div class="team-graph-help-title">{{ t("Bot graphs") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Graphs where at least one procedure_id contains bot.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -485,12 +482,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Multi graphs</div>
+                      <div class="team-graph-kpi-label">{{ t("Multi graphs") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Multi graphs help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Multichannel graphs</div>
-                          <div class="team-graph-help-hint">Graphs where at least one <code>procedure_id</code> contains <code>multi</code>.</div>
+                          <div class="team-graph-help-title">{{ t("Multichannel graphs") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Graphs where at least one procedure_id contains multi.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -507,12 +504,12 @@
                   </article>
                   <article class="team-graph-kpi-card">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Unique procedures</div>
+                      <div class="team-graph-kpi-label">{{ t("Unique procedures") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Unique procedures help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Unique procedures</div>
-                          <div class="team-graph-help-hint">Unique <code>procedure_id</code> count across all selected markups.</div>
+                          <div class="team-graph-help-title">{{ t("Unique procedures") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Unique procedure_id count across all selected markups.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -521,19 +518,19 @@
                 </div>
                 <article class="team-graph-data-card team-graph-graphs-details-card">
                   <div class="team-graph-data-head">
-                    <div class="team-graph-data-title">Graphs and intersections details</div>
+                    <div class="team-graph-data-title">{{ t("Graphs and intersections details") }}</div>
                     <div class="team-graph-help team-graph-help-inline">
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Graphs and intersections details help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
-                        <div class="team-graph-help-title">Graphs and intersections details</div>
-                        <div class="team-graph-help-hint">Grouped by markup or by unique merged-markup combination, ranked by graph count.</div>
+                        <div class="team-graph-help-title">{{ t("Graphs and intersections details") }}</div>
+                        <div class="team-graph-help-hint">{{ t("Grouped by markup or by unique merged-markup combination, ranked by graph count.") }}</div>
                       </div>
                     </div>
                   </div>
                   {% if team_dashboard.graph_groups %}
                     <div class="team-graph-graphs-list" data-sortable-table>
                       <div class="team-graph-graphs-row team-graph-graphs-row-header">
-                        <span>Graphs</span>
+                        <span>{{ t("Graphs") }}</span>
                         <span>
                           <button
                             class="team-graph-sort-button"
@@ -604,8 +601,7 @@
                               </div>
                               {% if not merge_selected_markups %}
                                 <div class="team-graph-potential-note">
-                                  Potential merges only: markups are rendered separately because
-                                  <code>Merge markups by shared nodes</code> is disabled.
+                                  {{ t("Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled.") }}
                                 </div>
                               {% endif %}
                               {% for component in item.components %}
@@ -638,18 +634,18 @@
                       </div>
                     </div>
                   {% else %}
-                    <div class="team-graph-empty">No graphs detected for selected markups.</div>
+                    <div class="team-graph-empty">{{ t("No graphs detected for selected markups.") }}</div>
                   {% endif %}
                 </article>
                 <div class="team-graph-split-grid">
                   <article class="team-graph-data-card">
                     <div class="team-graph-data-head">
-                      <div class="team-graph-data-title">Markup types</div>
+                      <div class="team-graph-data-title">{{ t("Markup types") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Markup types help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Markup types</div>
-                          <div class="team-graph-help-hint">Total selected markups split by <code>markup_type</code>.</div>
+                          <div class="team-graph-help-title">{{ t("Markup types") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Total selected markups split by markup_type.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -672,17 +668,17 @@
                   </article>
                   <article class="team-graph-data-card">
                     <div class="team-graph-data-head">
-                      <div class="team-graph-data-title">Procedure mix</div>
+                      <div class="team-graph-data-title">{{ t("Procedure mix") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Procedure mix help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Procedure mix</div>
-                          <div class="team-graph-help-hint">Share among all procedures in selected markups by <code>procedure_id</code> substring: <code>bot</code>, <code>multi</code>, and everything else is employee procedures.</div>
+                          <div class="team-graph-help-title">{{ t("Procedure mix") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Share among all procedures in selected markups by procedure_id substring: bot, multi, and everything else is employee procedures.") }}</div>
                         </div>
                       </div>
                     </div>
                     <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
-                      <span class="team-graph-inline-metric-label">Bot procedures</span>
+                      <span class="team-graph-inline-metric-label">{{ t("Bot procedures") }}</span>
                       <span class="team-graph-inline-metric-value">
                         {% if total_procedures %}
                           {{ (team_dashboard.bot_procedure_count * 100 / total_procedures) | round(1) }}%
@@ -700,7 +696,7 @@
                       {% endif %}
                     </div>
                     <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
-                      <span class="team-graph-inline-metric-label">Multichannel procedures</span>
+                      <span class="team-graph-inline-metric-label">{{ t("Multichannel procedures") }}</span>
                       <span class="team-graph-inline-metric-value">
                         {% if total_procedures %}
                           {{ (team_dashboard.multi_procedure_count * 100 / total_procedures) | round(1) }}%
@@ -718,7 +714,7 @@
                       {% endif %}
                     </div>
                     <div class="team-graph-inline-metric team-graph-inline-metric-drilldown">
-                      <span class="team-graph-inline-metric-label">Employee procedures</span>
+                      <span class="team-graph-inline-metric-label">{{ t("Employee procedures") }}</span>
                       <span class="team-graph-inline-metric-value">
                         {% if total_procedures %}
                           {{ (team_dashboard.employee_procedure_count * 100 / total_procedures) | round(1) }}%
@@ -742,19 +738,19 @@
 
               <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
                 <summary class="team-graph-dashboard-summary">
-                  <span class="team-graph-dashboard-title">Entity integrity</span>
-                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                  <span class="team-graph-dashboard-title">{{ t("Entity integrity") }}</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
                 </summary>
                 <div class="team-graph-dashboard-content">
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Internal overlap entities</div>
+                      <div class="team-graph-kpi-label">{{ t("Internal overlap entities") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Internal overlap help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Internal overlap entities</div>
-                          <div class="team-graph-help-hint">Entities that share at least one procedure with another selected entity.</div>
+                          <div class="team-graph-help-title">{{ t("Internal overlap entities") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Entities that share at least one procedure with another selected entity.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -773,12 +769,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">External overlap entities</div>
+                      <div class="team-graph-kpi-label">{{ t("External overlap entities") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External overlap help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">External overlap entities</div>
-                          <div class="team-graph-help-hint">Entities that intersect with at least one entity from teams outside selection.</div>
+                          <div class="team-graph-help-title">{{ t("External overlap entities") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Entities that intersect with at least one entity from teams outside selection.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -797,12 +793,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Split entities</div>
+                      <div class="team-graph-kpi-label">{{ t("Split entities") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Split entities help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Split entities</div>
-                          <div class="team-graph-help-hint">Entities with more than one disconnected component in their procedure graph.</div>
+                          <div class="team-graph-help-title">{{ t("Split entities") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Entities with more than one disconnected component in their procedure graph.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -819,12 +815,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">Target entities</div>
+                      <div class="team-graph-kpi-label">{{ t("Target entities") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Target entities help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">Target entities</div>
-                          <div class="team-graph-help-hint">Entities without overlaps with other entities and without disconnected parts.</div>
+                          <div class="team-graph-help-title">{{ t("Target entities") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Entities without overlaps with other entities and without disconnected parts.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -849,12 +845,12 @@
                 </div>
                 <article class="team-graph-data-card">
                   <div class="team-graph-data-head">
-                    <div class="team-graph-data-title">External team overlaps</div>
+                    <div class="team-graph-data-title">{{ t("External team overlaps") }}</div>
                     <div class="team-graph-help team-graph-help-inline">
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External team overlaps help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
-                        <div class="team-graph-help-title">External team overlaps</div>
-                        <div class="team-graph-help-hint">Teams outside selection are ranked by total merge intersections with a split by dependency direction: external team depends on selected teams, and selected teams depend on external team. Click a team row to view service-level details.</div>
+                        <div class="team-graph-help-title">{{ t("External team overlaps") }}</div>
+                        <div class="team-graph-help-hint">{{ t("Teams outside selection are ranked by total merge intersections with a split by dependency direction: external team depends on selected teams, and selected teams depend on external team. Click a team row to view service-level details.") }}</div>
                       </div>
                     </div>
                   </div>
@@ -867,7 +863,7 @@
                       data-overlap-limit="10"
                     >
                       <div class="team-graph-overlap-row team-graph-overlap-row-header">
-                        <span>Team</span>
+                        <span>{{ t("Team") }}</span>
                         <span>
                           <button
                             class="team-graph-sort-button"
@@ -963,12 +959,12 @@
                       </div>
                       {% if hidden_external_team_count > 0 %}
                         <button class="team-graph-overlap-more-button" type="button" data-overlap-more-toggle aria-expanded="false">
-                          Show {{ hidden_external_team_count }} more teams
+                          {{ t("Show {count} more teams", count=hidden_external_team_count) }}
                         </button>
                       {% endif %}
                     </div>
                   {% else %}
-                    <div class="team-graph-empty">No intersections with teams outside the selection.</div>
+                    <div class="team-graph-empty">{{ t("No intersections with teams outside the selection.") }}</div>
                   {% endif %}
                 </article>
                 </div>
@@ -976,26 +972,26 @@
 
               <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
                 <summary class="team-graph-dashboard-summary">
-                  <span class="team-graph-dashboard-title">Risk hotspots</span>
-                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>Click to expand</span>
+                  <span class="team-graph-dashboard-title">{{ t("Risk hotspots") }}</span>
+                  <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
                 </summary>
                 <div class="team-graph-dashboard-content">
                 <article class="team-graph-data-card">
                   <div class="team-graph-data-head">
-                    <div class="team-graph-data-title">Top linking procedures</div>
+                    <div class="team-graph-data-title">{{ t("Top linking procedures") }}</div>
                     <div class="team-graph-help team-graph-help-inline">
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top linking procedures help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
-                        <div class="team-graph-help-title">Top linking procedures</div>
-                        <div class="team-graph-help-hint">Rank by cross-entity reuse and dependency fan-in/fan-out in merged <code>procedure_graph</code> data. Click a row to inspect per-graph dependency impact for the same procedure.</div>
+                        <div class="team-graph-help-title">{{ t("Top linking procedures") }}</div>
+                        <div class="team-graph-help-hint">{{ t("Rank by cross-entity reuse and dependency fan-in/fan-out in merged procedure_graph data. Click a row to inspect per-graph dependency impact for the same procedure.") }}</div>
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-data-context">Ranking priority: cross-entity reuse &rarr; total dependencies (incoming + outgoing) &rarr; incoming &rarr; outgoing. Based only on selected markups, deterministic for the same input.</div>
+                  <div class="team-graph-data-context">{{ t("Ranking priority: cross-entity reuse -> total dependencies (incoming + outgoing) -> incoming -> outgoing. Based only on selected markups, deterministic for the same input.") }}</div>
                   {% if team_dashboard.linking_procedures %}
                     <div class="team-graph-ranked-table" data-sortable-table>
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
-                        <span>Procedure</span>
+                        <span>{{ t("Procedure") }}</span>
                         <span>
                           <button
                             class="team-graph-sort-button"
@@ -1066,7 +1062,7 @@
                             <span>{{ item.outgoing_edges }}</span>
                           </summary>
                           <div class="team-graph-ranked-table-details">
-                            <div class="team-graph-ranked-details-label">Graph-level breakdown</div>
+                            <div class="team-graph-ranked-details-label">{{ t("Graph-level breakdown") }}</div>
                             <div class="team-graph-ranked-table">
                               {% for graph_item in item.graph_usage_stats %}
                                 <div class="team-graph-ranked-table-row">
@@ -1085,32 +1081,32 @@
                       </div>
                     </div>
                   {% else %}
-                    <div class="team-graph-empty">No procedure-level data.</div>
+                    <div class="team-graph-empty">{{ t("No procedure-level data.") }}</div>
                   {% endif %}
                 </article>
                 <article class="team-graph-data-card team-graph-data-card-spaced">
                   <div class="team-graph-data-head">
-                    <div class="team-graph-data-title">Top overloaded entities</div>
+                    <div class="team-graph-data-title">{{ t("Top overloaded entities") }}</div>
                     <div class="team-graph-help team-graph-help-inline">
                       <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Top overloaded entities help">?</button>
                       <div class="team-graph-help-popover team-graph-help-popover-wide">
-                        <div class="team-graph-help-title">Top overloaded entities</div>
+                        <div class="team-graph-help-title">{{ t("Top overloaded entities") }}</div>
                         <div class="team-graph-help-hint">
-                          Rank by structural risk in merged <code>procedure_graph</code>: shared-node merges with other entities, cycles, procedure volume, then block volume.
-                          Click a row for per-procedure breakdown.
-                          In breakdown, <code>Links</code> is the sum of incoming and outgoing unique procedure links for each procedure.
+                          {{ t("Rank by structural risk in merged procedure_graph: shared-node merges with other entities, cycles, procedure volume, then block volume.") }}
+                          {{ t("Click a row for per-procedure breakdown.") }}
+                          {{ t("In breakdown, Links is the sum of incoming and outgoing unique procedure links for each procedure.") }}
                           {% if not merge_selected_markups %}
-                            With <code>Merge markups by shared nodes</code> disabled, merge metrics are shown as potential merges.
+                            {{ t("With Merge markups by shared nodes disabled, merge metrics are shown as potential merges.") }}
                           {% endif %}
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-data-context">Ranking priority: merges &rarr; cycles &rarr; procedures &rarr; blocks. These metrics are computed directly from graph structure and block lists.</div>
+                  <div class="team-graph-data-context">{{ t("Ranking priority: merges -> cycles -> procedures -> blocks. These metrics are computed directly from graph structure and block lists.") }}</div>
                   {% if team_dashboard.overloaded_services %}
                     <div class="team-graph-ranked-table team-graph-ranked-table-services" data-sortable-table>
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
-                        <span>Entity</span>
+                        <span>{{ t("Entity") }}</span>
                         <span>
                           <button
                             class="team-graph-sort-button"
@@ -1196,7 +1192,7 @@
                             {% endif %}
                             <div class="team-graph-ranked-table">
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
-                                <span>Procedure</span>
+                                <span>{{ t("Procedure") }}</span>
                                 <span>
                                   {% if merge_selected_markups %}Merges{% else %}Potential merges{% endif %}
                                 </span>
@@ -1275,7 +1271,7 @@
                       </div>
                     </div>
                   {% else %}
-                    <div class="team-graph-empty">No service-level data.</div>
+                    <div class="team-graph-empty">{{ t("No service-level data.") }}</div>
                   {% endif %}
                 </article>
                 </div>
@@ -1285,97 +1281,115 @@
           {% endif %}
         {% elif error_message %}
           <div class="team-graph-result-header">
-            <span class="team-graph-result-status team-graph-result-error">Merge blocked</span>
+            <span class="team-graph-result-status team-graph-result-error">{{ t("Merge blocked") }}</span>
           </div>
           <div class="team-graph-result-body">{{ error_message }}</div>
         {% else %}
           <div class="team-graph-result-header">
-            <span class="team-graph-result-status team-graph-result-idle">Waiting for input</span>
+            <span class="team-graph-result-status team-graph-result-idle">{{ t("Waiting for input") }}</span>
           </div>
           <div class="team-graph-result-body">
-            Select teams and click Merge. Status, analytics, and diagram actions appear in Steps 3–5.
+            {{ t("Select teams and click Merge. Status, analytics, and diagram actions appear in Steps 3-5.") }}
           </div>
         {% endif %}
       </div>
     </div>
 
     <div class="detail-card team-graph-analysis-card">
-      <h3>Step 4. Analyze graphs</h3>
+      <h3>{{ t("Step 4. Analyze graphs") }}</h3>
       {% if diagram_ready and team_dashboard %}
         <div class="team-graph-analysis-host" data-team-graph-analysis-host>
           {{ team_dashboard_section | safe }}
         </div>
       {% elif diagram_ready %}
-        <p class="team-graph-subtitle">Analytics is unavailable for the selected graph set.</p>
+        <p class="team-graph-subtitle">{{ t("Analytics is unavailable for the selected graph set.") }}</p>
       {% elif error_message %}
-        <p class="team-graph-subtitle">Resolve merge issues in Step 3 to unlock analytics.</p>
+        <p class="team-graph-subtitle">{{ t("Resolve merge issues in Step 3 to unlock analytics.") }}</p>
       {% else %}
-        <p class="team-graph-subtitle">Merge graphs in Step 3 to open analytics.</p>
+        <p class="team-graph-subtitle">{{ t("Merge graphs in Step 3 to open analytics.") }}</p>
       {% endif %}
     </div>
 
     <div class="detail-card team-graph-actions-card">
-      <h3>Step 5. Get diagram</h3>
+      <h3>{{ t("Step 5. Get diagram") }}</h3>
       {% if diagram_ready %}
         <div class="team-graph-actions-split">
           <article class="team-graph-actions-group" data-graph-level="procedure">
-            <div class="team-graph-actions-group-title">Procedure-level diagram</div>
+            <div class="team-graph-actions-group-title">{{ t("Procedure-level diagram") }}</div>
             <p class="team-graph-actions-group-subtitle">
-              Detailed flow between procedures with analytics context from Step 4.
+              {{ t("Detailed flow between procedures with analytics context from Step 4.") }}
             </p>
             <div class="button-row">
               {% if diagram_excalidraw_enabled %}
                 <a class="primary-button" target="_blank" href="{{ procedure_excalidraw_open_url }}">
-                  Open Excalidraw
+                  {{ t("Open Excalidraw") }}
                 </a>
               {% endif %}
               <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&format=excalidraw&download=true">
-                Download .excalidraw
+                {{ t("Download .excalidraw") }}
               </a>
               <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ procedure_team_query }}&format=unidraw&download=true">
-                Download .unidraw
+                {{ t("Download .unidraw") }}
               </a>
             </div>
           </article>
           <article class="team-graph-actions-group" data-graph-level="service">
-            <div class="team-graph-actions-group-title">Service-level diagram</div>
+            <div class="team-graph-actions-group-title">{{ t("Service-level diagram") }}</div>
             <p class="team-graph-actions-group-subtitle">
-              High-level service map: service nodes aggregate all selected service graphs.
+              {{ t("High-level service map: service nodes aggregate all selected service graphs.") }}
             </p>
             <div class="button-row">
               {% if diagram_excalidraw_enabled %}
                 <a class="primary-button" target="_blank" href="{{ service_excalidraw_open_url }}">
-                  Open Excalidraw
+                  {{ t("Open Excalidraw") }}
                 </a>
               {% endif %}
               <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&format=excalidraw&download=true">
-                Download .excalidraw
+                {{ t("Download .excalidraw") }}
               </a>
               <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ service_team_query }}&format=unidraw&download=true">
-                Download .unidraw
+                {{ t("Download .unidraw") }}
               </a>
             </div>
           </article>
         </div>
       {% else %}
-        <p class="team-graph-subtitle">Merge graphs in Step 3 to enable diagram actions.</p>
+        <p class="team-graph-subtitle">{{ t("Merge graphs in Step 3 to enable diagram actions.") }}</p>
       {% endif %}
     </div>
   </section>
 
   <script>
     (() => {
+      const I18N = {
+        enable: {{ t("Enable") | tojson }},
+        disable: {{ t("Disable") | tojson }},
+        enabled: {{ t("Enabled") | tojson }},
+        disabled: {{ t("Disabled") | tojson }},
+        hideDisabledTeams: {{ t("Hide disabled teams") | tojson }},
+        disableTeams: {{ t("Disable teams") | tojson }},
+        mergeNodesDisabled: {{ t("0: merge nodes are disabled.") | tojson }},
+        mergeNodePerProcedure: {{ t("1: each shared procedure is a merge node.") | tojson }},
+        mergeNodeLinearTemplate: {{ t("{count}: only non-overlapping linear chains of {count}+ shared procedures are counted.", count="__COUNT__") | tojson }},
+        node: {{ t("node") | tojson }},
+        nodes: {{ t("nodes") | tojson }},
+        showFewerTeams: {{ t("Show fewer teams") | tojson }},
+        showMoreTeamsTemplate: {{ t("Show {count} more teams", count="__COUNT__") | tojson }},
+        clickToCollapse: {{ t("Click to collapse") | tojson }},
+        clickToExpand: {{ t("Click to expand") | tojson }},
+      };
+
       const updateToggle = (button, input) => {
         const enabled = input.disabled === false;
         button.dataset.state = enabled ? "on" : "off";
         button.setAttribute("aria-pressed", enabled ? "true" : "false");
-        button.textContent = enabled ? "Disable" : "Enable";
+        button.textContent = enabled ? I18N.disable : I18N.enable;
         const card = button.closest("[data-flag-item]");
         if (card) {
           card.classList.toggle("is-on", enabled);
           const status = card.querySelector("[data-flag-status]");
           if (status) {
-            status.textContent = enabled ? "Enabled" : "Disabled";
+            status.textContent = enabled ? I18N.enabled : I18N.disabled;
             status.dataset.state = enabled ? "on" : "off";
           }
         }
@@ -1450,7 +1464,7 @@
         const setExcludeOpen = (isOpen) => {
           if (excludeToggle instanceof HTMLButtonElement) {
             excludeToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-            excludeToggle.textContent = isOpen ? "Hide disabled teams" : "Disable teams";
+            excludeToggle.textContent = isOpen ? I18N.hideDisabledTeams : I18N.disableTeams;
           }
           if (excludePanel instanceof HTMLElement) {
             excludePanel.classList.toggle("is-collapsed", !isOpen);
@@ -1496,12 +1510,12 @@
         };
         const mergeThresholdDescription = (value) => {
           if (value === 0) {
-            return "0: merge nodes are disabled.";
+            return I18N.mergeNodesDisabled;
           }
           if (value === 1) {
-            return "1: each shared procedure is a merge node.";
+            return I18N.mergeNodePerProcedure;
           }
-          return `${value}: only non-overlapping linear chains of ${value}+ shared procedures are counted.`;
+          return I18N.mergeNodeLinearTemplate.replaceAll("__COUNT__", String(value));
         };
         const syncMergeThreshold = () => {
           if (!(mergeThresholdInput instanceof HTMLInputElement)) {
@@ -1513,7 +1527,7 @@
             mergeThresholdValue.textContent = String(value);
           }
           if (mergeThresholdValueUnit instanceof HTMLElement) {
-            mergeThresholdValueUnit.textContent = value === 1 ? "node" : "nodes";
+            mergeThresholdValueUnit.textContent = value === 1 ? I18N.node : I18N.nodes;
           }
           if (mergeThresholdText instanceof HTMLElement) {
             mergeThresholdText.textContent = mergeThresholdDescription(value);
@@ -1693,7 +1707,7 @@
           }
           const overlapMoreToggle = overlapTable.querySelector("[data-overlap-more-toggle]");
           const visibleLimit = Math.max(1, toNumber(overlapTable.getAttribute("data-overlap-limit")));
-          const lessLabel = "Show fewer teams";
+          const lessLabel = I18N.showFewerTeams;
 
           const updateTeamsVisibility = () => {
             const cards = Array.from(overlapTeamsList.querySelectorAll("[data-overlap-team-card]")).filter(
@@ -1716,7 +1730,7 @@
               overlapMoreToggle.hidden = hiddenCount === 0;
               overlapMoreToggle.textContent = expanded
                 ? lessLabel
-                : `Show ${hiddenCount} more teams`;
+                : I18N.showMoreTeamsTemplate.replaceAll("__COUNT__", String(hiddenCount));
             }
           };
 
@@ -1747,7 +1761,7 @@
           const updateHint = (section) => {
             const hint = section.querySelector("[data-dashboard-summary-hint]");
             if (hint instanceof HTMLElement) {
-              hint.textContent = section.open ? "Click to collapse" : "Click to expand";
+              hint.textContent = section.open ? I18N.clickToCollapse : I18N.clickToExpand;
             }
           };
 
