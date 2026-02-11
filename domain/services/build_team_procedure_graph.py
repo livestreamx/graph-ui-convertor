@@ -207,6 +207,10 @@ class BuildTeamProcedureGraph:
                     merge_chain_groups_by_proc,
                     source_proc_by_scoped,
                 )
+            self._normalize_chain_intersections(
+                procedure_meta,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+            )
 
         for proc in procedures:
             procedure_graph.setdefault(proc.procedure_id, [])
@@ -666,6 +670,8 @@ class BuildTeamProcedureGraph:
             if not groups:
                 continue
             first_group = groups[0]
+            if len(first_group) < 2:
+                continue
             group_id = "merge_chain::" + "|".join(first_group)
             meta["merge_chain_group_id"] = group_id
             meta["merge_chain_members"] = list(first_group)
@@ -711,11 +717,43 @@ class BuildTeamProcedureGraph:
                 if member_id in unique_scoped_members:
                     continue
                 unique_scoped_members.append(member_id)
-            if not unique_scoped_members:
+            if len(unique_scoped_members) < 2:
                 continue
             group_id = "merge_chain::" + "|".join(unique_scoped_members)
             meta["merge_chain_group_id"] = group_id
             meta["merge_chain_members"] = unique_scoped_members
+
+    def _normalize_chain_intersections(
+        self,
+        procedure_meta: dict[str, dict[str, object]],
+        *,
+        merge_node_min_chain_size: int,
+    ) -> None:
+        if merge_node_min_chain_size <= 1:
+            return
+
+        for meta in procedure_meta.values():
+            if meta.get("is_intersection") is not True:
+                continue
+
+            members_raw = meta.get("merge_chain_members")
+            if not isinstance(members_raw, list):
+                meta["is_intersection"] = False
+                continue
+
+            members = [member for member in members_raw if isinstance(member, str)]
+            visible_members = [member for member in members if member in procedure_meta]
+            if len(visible_members) < 2:
+                meta["is_intersection"] = False
+                meta.pop("merge_chain_group_id", None)
+                meta.pop("merge_chain_members", None)
+                services_raw = meta.get("services")
+                if isinstance(services_raw, list) and services_raw:
+                    first = services_raw[0]
+                    if isinstance(first, dict):
+                        service_color = first.get("service_color")
+                        if isinstance(service_color, str) and service_color:
+                            meta["procedure_color"] = service_color
 
     def _build_service_node_states(
         self,

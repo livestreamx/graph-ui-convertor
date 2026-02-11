@@ -273,6 +273,8 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             if not is_intersection:
                 continue
             group_id = meta.get("merge_chain_group_id")
+            if isinstance(group_id, str) and frame.procedure_id not in grouped_proc_ids:
+                continue
             if (
                 isinstance(group_id, str)
                 and frame.procedure_id in grouped_proc_ids

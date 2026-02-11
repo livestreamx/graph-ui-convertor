@@ -102,6 +102,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
 
         origin_x = 0.0
         origin_y = 0.0
+        scenario_cursor_y = 0.0
         separator_ys: list[float] = []
         frame_lookup: dict[str, FramePlacement] = {}
         procedure_map = {proc.procedure_id: proc for proc in procedures}
@@ -300,6 +301,19 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         )
                         component_height = max(component_height, max_bottom - origin_y)
 
+            component_frames = self._align_merge_chain_frames(
+                component_frames=component_frames,
+                procedure_meta=procedure_meta,
+            )
+            if component_frames:
+                component_frame_lookup = {frame.procedure_id: frame for frame in component_frames}
+                if zone_enabled:
+                    zones_for_component = self._build_component_service_zones(
+                        service_info_by_key=service_info_by_key,
+                        proc_service_keys=proc_service_keys,
+                        frame_lookup=component_frame_lookup,
+                    )
+
             if zone_enabled and component_frames:
                 zones_for_component = self._build_component_service_zones(
                     service_info_by_key=service_info_by_key,
@@ -341,7 +355,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                         ]
 
             scenario_total_height = 0.0
+            scenario_extent_from_component_top = 0.0
             if component_frames and not is_service_graph:
+                scenario_top = max(component_top, scenario_cursor_y)
                 scenario = self._scenario_with_services(
                     component=component,
                     component_index=idx + 1,
@@ -352,7 +368,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     layout_edges_by_proc=layout_edges_by_proc,
                     order_index=order_index,
                     procedure_meta=procedure_meta,
-                    component_top_y=component_top,
+                    component_top_y=scenario_top,
                 )
                 if scenario:
                     scenarios.append(scenario)
@@ -362,7 +378,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     merge_bottom = procedures_bottom
                     if scenario.merge_origin and scenario.merge_size:
                         merge_bottom = scenario.merge_origin.y + scenario.merge_size.height
-                    scenario_total_height = max(procedures_bottom, merge_bottom) - scenario.origin.y
+                    scenario_bottom = max(procedures_bottom, merge_bottom)
+                    scenario_total_height = scenario_bottom - scenario.origin.y
+                    scenario_extent_from_component_top = max(
+                        0.0, scenario_bottom - component_top
+                    )
+                    scenario_cursor_y = scenario.origin.y + scenario_total_height + component_gap
 
             if component_frames:
                 frames.extend(component_frames)
@@ -382,9 +403,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
                 component_height = max(component_height, max_zone_bottom - component_top)
 
-            component_visual_height = max(component_height, scenario_total_height)
+            component_visual_height = component_height
+            component_separator_height = max(component_height, scenario_extent_from_component_top)
             if idx < len(components) - 1:
-                separator_ys.append(component_top + component_visual_height + component_gap / 2)
+                separator_ys.append(component_top + component_separator_height + component_gap / 2)
                 origin_y = component_top + component_visual_height + component_gap
             else:
                 origin_y = component_top + component_visual_height + proc_gap_y
@@ -635,6 +657,198 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             lines.pop()
         return blocks, "\n".join(lines), service_padding
 
+    def _align_merge_chain_frames(
+        self,
+        *,
+        component_frames: list[FramePlacement],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+    ) -> list[FramePlacement]:
+        if len(component_frames) < 2:
+            return component_frames
+
+        frame_by_proc = {frame.procedure_id: frame for frame in component_frames}
+        chain_groups: dict[str, list[str]] = {}
+        for frame in component_frames:
+            meta = procedure_meta.get(frame.procedure_id, {})
+            if meta.get("is_intersection") is not True:
+                continue
+            group_id = meta.get("merge_chain_group_id")
+            members_raw = meta.get("merge_chain_members")
+            if not isinstance(group_id, str) or not isinstance(members_raw, list):
+                continue
+            members = [
+                member
+                for member in members_raw
+                if isinstance(member, str) and member in frame_by_proc
+            ]
+            unique_members = list(dict.fromkeys(members))
+            if len(unique_members) < 2:
+                continue
+            chain_groups[group_id] = unique_members
+        if not chain_groups:
+            return component_frames
+
+        group_member_ids = {proc_id for members in chain_groups.values() for proc_id in members}
+        occupied_rects: list[tuple[float, float, float, float]] = []
+        for frame in component_frames:
+            if frame.procedure_id in group_member_ids:
+                continue
+            occupied_rects.append(self._frame_rect(frame))
+
+        updated = dict(frame_by_proc)
+        horizontal_gap = max(20.0, self.config.gap_y * 0.5)
+        vertical_step = max(30.0, self.config.gap_y * 0.8)
+        vertical_padding = max(6.0, self.config.gap_y * 0.2)
+        ordered_groups = sorted(
+            chain_groups.values(),
+            key=lambda members: min(
+                frame_by_proc[proc_id].origin.y for proc_id in members if proc_id in frame_by_proc
+            ),
+        )
+        for members in ordered_groups:
+            member_frames = [updated[proc_id] for proc_id in members if proc_id in updated]
+            if len(member_frames) < 2:
+                continue
+
+            member_frames.sort(
+                key=lambda frame: (
+                    frame.origin.x,
+                    frame.origin.y,
+                    frame.procedure_id,
+                )
+            )
+            base_x = min(frame.origin.x for frame in member_frames)
+            base_y = min(frame.origin.y for frame in member_frames)
+            max_height = max(frame.size.height for frame in member_frames)
+
+            planned: list[FramePlacement] = []
+            next_x = base_x
+            for frame in member_frames:
+                aligned_y = base_y + (max_height - frame.size.height) / 2
+                planned.append(
+                    FramePlacement(
+                        procedure_id=frame.procedure_id,
+                        origin=Point(next_x, aligned_y),
+                        size=frame.size,
+                    )
+                )
+                next_x += frame.size.width + horizontal_gap
+
+            attempts = 0
+            while attempts < 20:
+                rects = [self._frame_rect(item) for item in planned]
+                if not self._chain_rects_overlap_any(
+                    rects,
+                    occupied_rects,
+                    padding=vertical_padding,
+                ):
+                    break
+                planned = [
+                    FramePlacement(
+                        procedure_id=item.procedure_id,
+                        origin=Point(item.origin.x, item.origin.y + vertical_step),
+                        size=item.size,
+                    )
+                    for item in planned
+                ]
+                attempts += 1
+
+            for item in planned:
+                updated[item.procedure_id] = item
+                occupied_rects.append(self._frame_rect(item))
+
+        aligned_frames = [updated.get(frame.procedure_id, frame) for frame in component_frames]
+        return self._normalize_component_row_spacing(aligned_frames)
+
+    def _frame_rect(self, frame: FramePlacement) -> tuple[float, float, float, float]:
+        return (
+            frame.origin.x,
+            frame.origin.y,
+            frame.origin.x + frame.size.width,
+            frame.origin.y + frame.size.height,
+        )
+
+    def _chain_rects_overlap_any(
+        self,
+        rects: list[tuple[float, float, float, float]],
+        occupied: list[tuple[float, float, float, float]],
+        *,
+        padding: float,
+    ) -> bool:
+        for left in rects:
+            for right in occupied:
+                if self._chain_rects_overlap(left, right, padding=padding):
+                    return True
+        return False
+
+    def _chain_rects_overlap(
+        self,
+        left: tuple[float, float, float, float],
+        right: tuple[float, float, float, float],
+        *,
+        padding: float,
+    ) -> bool:
+        left_x1, left_y1, left_x2, left_y2 = left
+        right_x1, right_y1, right_x2, right_y2 = right
+        return not (
+            left_x2 + padding <= right_x1
+            or right_x2 + padding <= left_x1
+            or left_y2 + padding <= right_y1
+            or right_y2 + padding <= left_y1
+        )
+
+    def _normalize_component_row_spacing(
+        self,
+        frames: list[FramePlacement],
+    ) -> list[FramePlacement]:
+        if len(frames) < 2:
+            return frames
+
+        row_tolerance = max(10.0, self.config.gap_y * 0.3)
+        sorted_frames = sorted(frames, key=lambda frame: (frame.origin.y, frame.origin.x))
+        rows: list[list[FramePlacement]] = []
+        row_tops: list[float] = []
+        for frame in sorted_frames:
+            frame_y = frame.origin.y
+            row_index = -1
+            for idx, top in enumerate(row_tops):
+                if abs(frame_y - top) <= row_tolerance:
+                    row_index = idx
+                    break
+            if row_index < 0:
+                rows.append([frame])
+                row_tops.append(frame_y)
+                continue
+            rows[row_index].append(frame)
+            top = min(item.origin.y for item in rows[row_index])
+            row_tops[row_index] = top
+
+        if len(rows) <= 1:
+            return frames
+
+        row_specs = sorted(
+            (
+                min(item.origin.y for item in row),
+                max(item.size.height for item in row),
+                row,
+            )
+            for row in rows
+        )
+        top_anchor = row_specs[0][0]
+        next_top = top_anchor
+        remapped: dict[str, FramePlacement] = {}
+        for original_top, row_height, row in row_specs:
+            delta_y = next_top - original_top
+            for frame in row:
+                remapped[frame.procedure_id] = FramePlacement(
+                    procedure_id=frame.procedure_id,
+                    origin=Point(frame.origin.x, frame.origin.y + delta_y),
+                    size=frame.size,
+                )
+            next_top += row_height + self.config.gap_y
+
+        return [remapped.get(frame.procedure_id, frame) for frame in frames]
+
     def _component_merge_blocks(
         self,
         component: set[str],
@@ -704,8 +918,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     for member_id in chain_members
                     if isinstance(member_id, str) and member_id in merge_ids
                 ]
-                if not group_node_ids:
-                    group_node_ids = [proc_id]
+                group_node_ids = list(dict.fromkeys(group_node_ids))
+                if len(group_node_ids) < 2:
+                    continue
             else:
                 group_node_ids = [proc_id]
             group.proc_ids.append("|".join(group_node_ids))

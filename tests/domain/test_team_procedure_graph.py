@@ -556,6 +556,112 @@ def test_build_team_procedure_graph_chain_threshold_keeps_adjacent_non_merge_nod
     assert merged.procedure_meta["proc_shared_routing"]["is_intersection"] is False
 
 
+def test_build_team_procedure_graph_chain_threshold_aligns_chain_horizontally() -> None:
+    basic = load_markup_fixture("basic.json")
+    graphs_set = load_markup_fixture("graphs_set.json")
+
+    merged = BuildTeamProcedureGraph().build(
+        [basic],
+        merge_documents=[basic, graphs_set],
+        merge_selected_markups=True,
+        merge_node_min_chain_size=2,
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(merged)
+    frame_by_id = {frame.procedure_id: frame for frame in plan.frames}
+    intake = frame_by_id["proc_shared_intake"]
+    handoff = frame_by_id["proc_shared_handoff"]
+
+    assert intake.origin.x < handoff.origin.x
+    assert intake.origin.y == pytest.approx(handoff.origin.y, abs=0.1)
+
+
+def test_procedure_graph_layout_normalizes_row_spacing_after_chain_alignment() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "merge_a",
+                "proc_name": "Merge A",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "side_a",
+                "proc_name": "Side A",
+                "start_block_ids": ["c"],
+                "end_block_ids": [],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "side_b",
+                "proc_name": "Side B",
+                "start_block_ids": [],
+                "end_block_ids": ["e::end"],
+                "branches": {"d": ["e"]},
+            },
+            {
+                "proc_id": "merge_b",
+                "proc_name": "Merge B",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {"b": ["f"]},
+            },
+            {
+                "proc_id": "merge_c",
+                "proc_name": "Merge C",
+                "start_block_ids": [],
+                "end_block_ids": ["g::end"],
+                "branches": {"f": ["g"]},
+            },
+        ],
+        "procedure_graph": {
+            "merge_a": ["merge_b"],
+            "side_a": ["side_b"],
+            "side_b": [],
+            "merge_b": ["merge_c"],
+            "merge_c": [],
+        },
+    }
+    chain_group_id = "merge_chain::merge_a|merge_b|merge_c"
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "merge_a": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["merge_a", "merge_b", "merge_c"],
+                },
+                "merge_b": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["merge_a", "merge_b", "merge_c"],
+                },
+                "merge_c": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": chain_group_id,
+                    "merge_chain_members": ["merge_a", "merge_b", "merge_c"],
+                },
+                "side_a": {"is_intersection": False},
+                "side_b": {"is_intersection": False},
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    frame_by_id = {frame.procedure_id: frame for frame in plan.frames}
+
+    merge_y = frame_by_id["merge_a"].origin.y
+    assert frame_by_id["merge_b"].origin.y == pytest.approx(merge_y, abs=0.1)
+    assert frame_by_id["merge_c"].origin.y == pytest.approx(merge_y, abs=0.1)
+
+    rows = sorted({round(frame.origin.y, 1) for frame in plan.frames})
+    row_deltas = [rows[idx + 1] - rows[idx] for idx in range(len(rows) - 1)]
+    if row_deltas:
+        assert max(row_deltas) - min(row_deltas) <= 0.1
+
+
 def test_build_team_procedure_graph_scoped_chain_groups_do_not_cross_documents() -> None:
     basic = load_markup_fixture("basic.json")
     graphs_set = load_markup_fixture("graphs_set.json")
@@ -578,6 +684,31 @@ def test_build_team_procedure_graph_scoped_chain_groups_do_not_cross_documents()
     assert "proc_shared_handoff::doc1" in group_id_doc1
     assert "proc_shared_intake::doc2" in group_id_doc2
     assert "proc_shared_handoff::doc2" in group_id_doc2
+
+
+def test_build_team_procedure_graph_scoped_merge_layout_has_uniform_row_spacing() -> None:
+    basic = load_markup_fixture("basic.json")
+    graphs_set = load_markup_fixture("graphs_set.json")
+
+    merged = BuildTeamProcedureGraph().build(
+        [basic, graphs_set],
+        merge_selected_markups=False,
+        merge_node_min_chain_size=2,
+    )
+    plan = ProcedureGraphLayoutEngine().build_plan(merged)
+
+    frame_by_id = {frame.procedure_id: frame for frame in plan.frames}
+    assert frame_by_id["proc_shared_intake::doc1"].origin.y == pytest.approx(
+        frame_by_id["proc_shared_handoff::doc1"].origin.y, abs=0.1
+    )
+    assert frame_by_id["proc_shared_intake::doc2"].origin.y == pytest.approx(
+        frame_by_id["proc_shared_handoff::doc2"].origin.y, abs=0.1
+    )
+
+    rows = sorted({round(frame.origin.y, 1) for frame in plan.frames})
+    row_deltas = [rows[idx + 1] - rows[idx] for idx in range(len(rows) - 1)]
+    assert row_deltas
+    assert max(row_deltas) - min(row_deltas) <= 0.1
 
 
 def test_build_team_procedure_graph_marks_singleton_shared_nodes_when_flag_is_off() -> None:
@@ -2031,6 +2162,45 @@ def test_procedure_graph_converter_uses_single_highlight_for_chain_group() -> No
         if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_index_label"
     ]
     assert marker_labels == ["1"]
+
+
+def test_procedure_graph_converter_skips_singleton_chain_highlight() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "proc_shared_intake",
+                "proc_name": "Intake",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"proc_shared_intake": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "proc_shared_intake": {
+                    "is_intersection": True,
+                    "merge_chain_group_id": "merge_chain::proc_shared_intake",
+                    "merge_chain_members": ["proc_shared_intake"],
+                    "services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Beta", "service_name": "Routing"},
+                    ],
+                }
+            }
+        }
+    )
+
+    scene = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    highlights = [
+        element
+        for element in scene.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "intersection_highlight"
+    ]
+    assert highlights == []
 
 
 def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
