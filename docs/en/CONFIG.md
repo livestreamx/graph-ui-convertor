@@ -8,7 +8,7 @@ absolute.
 
 ```yaml
 catalog:
-  title: "CJM Catalog"
+  title: "Graphs Analyzer"
   s3:
     bucket: "cjm-markup"
     prefix: "markup/"

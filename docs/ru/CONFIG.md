@@ -8,7 +8,7 @@ Catalog UI по умолчанию читает настройки из `config/
 
 ```yaml
 catalog:
-  title: "CJM Catalog"
+  title: "Graphs Analyzer"
   s3:
     bucket: "cjm-markup"
     prefix: "markup/"

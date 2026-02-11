@@ -23,7 +23,7 @@ def test_catalog_ui_language_switch_to_russian_and_cookie_persistence(
     ) as context:
         ru_response = context.client.get("/catalog?lang=ru")
         assert ru_response.status_code == 200
-        assert "Конвертер бизнес-разметки в диаграммы Excalidraw" in ru_response.text
+        assert "Инструмент просмотра и анализа графов обслуживания" in ru_response.text
         assert "Индекс JSON" in ru_response.text
         assert "Кросс-командная аналитика графов" in ru_response.text
         assert 'href="/catalog?lang=en"' in ru_response.text

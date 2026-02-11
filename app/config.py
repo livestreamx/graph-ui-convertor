@@ -65,7 +65,7 @@ class S3Settings(BaseModel):
 
 
 class CatalogSettings(BaseModel):
-    title: str = "CJM Catalog"
+    title: str = "Graphs Analyzer"
     s3: S3Settings = S3Settings()
     diagram_excalidraw_enabled: bool = True
     excalidraw_in_dir: Path = Path("data/excalidraw_in")

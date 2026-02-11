@@ -18,7 +18,7 @@ UI_LANGUAGE_COOKIE_NAME: Final[str] = "cjm_catalog_ui_lang"
 _UI_LANGUAGE: ContextVar[str] = ContextVar("ui_language", default=DEFAULT_UI_LANGUAGE)
 
 _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
-    "Converter of business entity markups into Excalidraw diagrams": "Конвертер бизнес-разметки в диаграммы Excalidraw",
+    "Tool for viewing and analyzing service graphs": "Инструмент просмотра и анализа графов обслуживания",
     "Index JSON": "Индекс JSON",
     "Created by": "Создано",
     "Switch language": "Переключить язык",
