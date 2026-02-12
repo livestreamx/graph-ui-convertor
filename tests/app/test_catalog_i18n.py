@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.config import AppSettings
+from app.web_i18n import translate_humanized_text
 from tests.app.catalog_test_setup import build_catalog_test_context
 
 
@@ -56,3 +57,7 @@ def test_catalog_open_and_team_graph_are_localized_in_russian(
         assert "Шаг 1. Выберите команды" in team_graph_response.text
         assert "Шаг 5. Получите диаграмму" in team_graph_response.text
         assert "Отключить команды" in team_graph_response.text
+
+
+def test_humanized_service_translates_to_usluga_in_russian() -> None:
+    assert translate_humanized_text("service", "ru") == "Услуга"

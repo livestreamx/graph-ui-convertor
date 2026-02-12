@@ -716,7 +716,9 @@ def test_build_team_procedure_graph_scoped_chain_groups_do_not_cross_documents()
     assert "proc_shared_handoff::doc2" in group_id_doc2
 
 
-def test_build_team_procedure_graph_scoped_merge_layout_has_uniform_row_spacing() -> None:
+def test_build_team_procedure_graph_scoped_merge_layout_keeps_separators_between_components() -> (
+    None
+):
     basic = load_markup_fixture("basic.json")
     graphs_set = load_markup_fixture("graphs_set.json")
 
@@ -735,10 +737,18 @@ def test_build_team_procedure_graph_scoped_merge_layout_has_uniform_row_spacing(
         frame_by_id["proc_shared_handoff::doc2"].origin.y, abs=0.1
     )
 
-    rows = sorted({round(frame.origin.y, 1) for frame in plan.frames})
-    row_deltas = [rows[idx + 1] - rows[idx] for idx in range(len(rows) - 1)]
-    assert row_deltas
-    assert max(row_deltas) - min(row_deltas) <= 0.1
+    scenarios = sorted(plan.scenarios, key=lambda scenario: scenario.origin.y)
+    assert len(scenarios) > 1
+    assert len(plan.separators) == len(scenarios) - 1
+    for idx, separator in enumerate(plan.separators):
+        scenario = scenarios[idx]
+        scenario_bottom = scenario.procedures_origin.y + scenario.procedures_size.height
+        if scenario.merge_origin and scenario.merge_size:
+            scenario_bottom = max(
+                scenario_bottom, scenario.merge_origin.y + scenario.merge_size.height
+            )
+        assert separator.start.y > scenario_bottom
+        assert separator.start.y < scenarios[idx + 1].origin.y
 
 
 def test_build_team_procedure_graph_marks_singleton_shared_nodes_when_flag_is_off() -> None:
@@ -1708,6 +1718,68 @@ def test_procedure_graph_separator_below_services_block() -> None:
     separator_y = plan.separators[0].start.y
     scenario_bottom = top_scenario.procedures_origin.y + top_scenario.procedures_size.height
     assert separator_y > scenario_bottom
+
+
+def test_procedure_graph_separator_stays_between_components_with_scenarios() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "proc_name": "Alpha Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "p2",
+                "proc_name": "Beta Flow",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+            {
+                "proc_id": "p3",
+                "proc_name": "Gamma Flow",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f::end"],
+                "branches": {"e": ["f"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p1": {"team_name": "Alpha", "service_name": "Payments"},
+                "p2": {"team_name": "Beta", "service_name": "Refunds"},
+                "p3": {"team_name": "Gamma", "service_name": "Loans"},
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+
+    assert len(plan.separators) == 2
+    assert len(plan.scenarios) == 3
+
+    frames_by_proc = {frame.procedure_id: frame for frame in plan.frames}
+    scenarios_by_top = sorted(plan.scenarios, key=lambda scenario: scenario.origin.y)
+
+    first_separator_y = plan.separators[0].start.y
+    first_scenario_bottom = (
+        scenarios_by_top[0].procedures_origin.y + scenarios_by_top[0].procedures_size.height
+    )
+    assert first_separator_y > first_scenario_bottom
+    assert first_separator_y < frames_by_proc["p2"].origin.y
+
+    second_separator_y = plan.separators[1].start.y
+    second_scenario_bottom = (
+        scenarios_by_top[1].procedures_origin.y + scenarios_by_top[1].procedures_size.height
+    )
+    assert second_separator_y > second_scenario_bottom
+    assert second_separator_y < frames_by_proc["p3"].origin.y
 
 
 def test_procedure_graph_converter_adds_stats_and_label() -> None:

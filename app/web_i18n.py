@@ -187,7 +187,7 @@ _HUMANIZE_RU_TRANSLATIONS: Final[dict[str, str]] = {
     "criticality_level": "Уровень критичности",
     "team_id": "Команда",
     "team_name": "Название команды",
-    "service": "Сервис",
+    "service": "Услуга",
     "unknown": "неизвестно",
     "yes": "да",
     "no": "нет",

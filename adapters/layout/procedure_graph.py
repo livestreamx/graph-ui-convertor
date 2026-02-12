@@ -408,10 +408,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 component_height = max(component_height, max_zone_bottom - component_top)
 
             component_visual_height = component_height
-            component_separator_height = max(component_height, scenario_extent_from_component_top)
+            component_stack_height = max(component_height, scenario_extent_from_component_top)
             if idx < len(components) - 1:
-                separator_ys.append(component_top + component_separator_height + component_gap / 2)
-                origin_y = component_top + component_visual_height + component_gap
+                separator_ys.append(component_top + component_stack_height + component_gap / 2)
+                origin_y = component_top + component_stack_height + component_gap
             else:
                 origin_y = component_top + component_visual_height + proc_gap_y
 
