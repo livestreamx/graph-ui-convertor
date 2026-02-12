@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Setup project environment
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install --upgrade pip
+          .venv/bin/pip install poetry==2.2.1
+          .venv/bin/poetry config virtualenvs.create false --local
+          .venv/bin/poetry config virtualenvs.in-project true --local
+          .venv/bin/poetry install --no-interaction --no-ansi
+
+      - name: Run tests
+        run: make test
+
+      - name: Run lint
+        run: make lint
+
+      - name: Check formatting
+        run: |
+          make fmt
+          git diff --exit-code
