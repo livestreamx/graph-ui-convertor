@@ -633,7 +633,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         try:
             payload = context.scene_repo.load(path)
         except FileNotFoundError as exc:
-            if format != "excalidraw" or not context.settings.catalog.generate_excalidraw_on_demand:
+            if not context.settings.catalog.generate_excalidraw_on_demand:
                 raise HTTPException(status_code=404, detail="Scene file missing") from exc
             payload = build_diagram_payload(context, item, format)
             if context.settings.catalog.cache_excalidraw_on_demand:
@@ -909,8 +909,10 @@ def resolve_diagram_extension(diagram_format: SceneFormat) -> str:
 
 
 def resolve_scene_rel_path(item: CatalogItem, diagram_format: SceneFormat) -> str:
-    if diagram_format == "unidraw" and item.unidraw_rel_path:
-        return item.unidraw_rel_path
+    if diagram_format == "unidraw":
+        if item.unidraw_rel_path:
+            return item.unidraw_rel_path
+        return infer_unidraw_rel_path(item)
     return item.excalidraw_rel_path
 
 
@@ -918,6 +920,17 @@ def resolve_diagram_in_dir(settings: AppSettings, diagram_format: SceneFormat) -
     if diagram_format == "unidraw":
         return settings.catalog.unidraw_in_dir
     return settings.catalog.excalidraw_in_dir
+
+
+def infer_unidraw_rel_path(item: CatalogItem) -> str:
+    markup_rel_path = item.markup_rel_path.strip()
+    if markup_rel_path:
+        markup_path = Path(markup_rel_path)
+        return str(markup_path.with_suffix(".unidraw").as_posix())
+    excalidraw_rel_path = item.excalidraw_rel_path.strip()
+    if excalidraw_rel_path.endswith(".excalidraw"):
+        return f"{excalidraw_rel_path[:-len('.excalidraw')]}.unidraw"
+    return excalidraw_rel_path
 
 
 def build_diagram_payload(

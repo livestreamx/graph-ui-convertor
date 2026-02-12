@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from pathlib import Path
 
@@ -53,6 +54,52 @@ def test_catalog_api_smoke(
         convert_response = context.client.post(f"/api/scenes/{scene_id}/convert-back")
         assert convert_response.status_code == 200
         assert (roundtrip_dir / "billing.json").exists()
+
+
+def test_catalog_api_unidraw_download_with_legacy_index_item(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        index_path = tmp_path / "catalog" / "index.json"
+        payload = json.loads(index_path.read_text(encoding="utf-8"))
+        payload["items"][0].pop("unidraw_rel_path", None)
+        index_path.write_text(json.dumps(payload), encoding="utf-8")
+
+        response = context.client.get(
+            f"/api/scenes/{context.scene_id}?format=unidraw&download=true"
+        )
+        assert response.status_code == 200
+        assert response.json().get("type") == "unidraw"
+        assert "billing.unidraw" in response.headers.get("content-disposition", "")
+
+
+def test_catalog_api_unidraw_download_generated_on_demand_when_file_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        unidraw_path = tmp_path / "unidraw_in" / "billing.unidraw"
+        unidraw_path.unlink()
+
+        response = context.client.get(
+            f"/api/scenes/{context.scene_id}?format=unidraw&download=true"
+        )
+        assert response.status_code == 200
+        assert response.json().get("type") == "unidraw"
+        assert "billing.unidraw" in response.headers.get("content-disposition", "")
 
 
 def test_catalog_scene_links_applied(
