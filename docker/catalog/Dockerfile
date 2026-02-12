@@ -1,4 +1,5 @@
-FROM python:3.14-slim
+ARG BASE_REGISTRY=docker.io
+FROM ${BASE_REGISTRY}/python:3.14-slim
 
 WORKDIR /app
 
