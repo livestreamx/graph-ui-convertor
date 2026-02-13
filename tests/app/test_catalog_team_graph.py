@@ -189,7 +189,9 @@ def test_catalog_team_graph_api(
         assert "graph_level=service" in html_response.text
         assert "graph_level=procedure" not in html_response.text
         assert "Graphs info" in html_response.text
-        assert "Entity integrity" in html_response.text
+        assert "Markup self-sufficiency" in html_response.text
+        assert "data-dashboard-section-key" in html_response.text
+        assert "team-graph:step4:dashboard-sections" in html_response.text
         assert "Risk hotspots" in html_response.text
         assert "team-graph-dashboard-section-collapsible" in html_response.text
         assert "Click to expand" in html_response.text

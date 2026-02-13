@@ -437,7 +437,10 @@
             {% set total_services = team_dashboard.total_service_count %}
             {% set team_dashboard_section %}
             <section class="team-graph-dashboard">
-              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+              <details
+                class="team-graph-dashboard-section team-graph-dashboard-section-collapsible"
+                data-dashboard-section-key="graphs-info"
+              >
                 <summary class="team-graph-dashboard-summary">
                   <span class="team-graph-dashboard-title">{{ t("Graphs info") }}</span>
                   <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
@@ -736,21 +739,24 @@
                 </div>
               </details>
 
-              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+              <details
+                class="team-graph-dashboard-section team-graph-dashboard-section-collapsible"
+                data-dashboard-section-key="markup-self-sufficiency"
+              >
                 <summary class="team-graph-dashboard-summary">
-                  <span class="team-graph-dashboard-title">{{ t("Entity integrity") }}</span>
+                  <span class="team-graph-dashboard-title">{{ t("Markup self-sufficiency") }}</span>
                   <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
                 </summary>
                 <div class="team-graph-dashboard-content">
                 <div class="team-graph-dashboard-grid">
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">{{ t("Internal overlap entities") }}</div>
+                      <div class="team-graph-kpi-label">{{ t("Internal overlap markups") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Internal overlap help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">{{ t("Internal overlap entities") }}</div>
-                          <div class="team-graph-help-hint">{{ t("Entities that share at least one procedure with another selected entity.") }}</div>
+                          <div class="team-graph-help-title">{{ t("Internal overlap markups") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Markups that share at least one procedure with another selected markup.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -769,12 +775,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">{{ t("External overlap entities") }}</div>
+                      <div class="team-graph-kpi-label">{{ t("External overlap markups") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
                         <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="External overlap help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">{{ t("External overlap entities") }}</div>
-                          <div class="team-graph-help-hint">{{ t("Entities that intersect with at least one entity from teams outside selection.") }}</div>
+                          <div class="team-graph-help-title">{{ t("External overlap markups") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Markups that intersect with at least one markup from teams outside selection.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -793,12 +799,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">{{ t("Split entities") }}</div>
+                      <div class="team-graph-kpi-label">{{ t("Split markups") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
-                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Split entities help">?</button>
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Split markups help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">{{ t("Split entities") }}</div>
-                          <div class="team-graph-help-hint">{{ t("Entities with more than one disconnected component in their procedure graph.") }}</div>
+                          <div class="team-graph-help-title">{{ t("Split markups") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Markups with more than one disconnected component in their procedure graph.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -815,12 +821,12 @@
                   </article>
                   <article class="team-graph-kpi-card team-graph-kpi-card-drilldown">
                     <div class="team-graph-kpi-head">
-                      <div class="team-graph-kpi-label">{{ t("Target entities") }}</div>
+                      <div class="team-graph-kpi-label">{{ t("Target markups") }}</div>
                       <div class="team-graph-help team-graph-help-inline">
-                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Target entities help">?</button>
+                        <button class="team-graph-help-button team-graph-help-button-sm" type="button" aria-label="Target markups help">?</button>
                         <div class="team-graph-help-popover team-graph-help-popover-wide">
-                          <div class="team-graph-help-title">{{ t("Target entities") }}</div>
-                          <div class="team-graph-help-hint">{{ t("Entities without overlaps with other entities and without disconnected parts.") }}</div>
+                          <div class="team-graph-help-title">{{ t("Target markups") }}</div>
+                          <div class="team-graph-help-hint">{{ t("Markups without overlaps with other markups and without disconnected parts.") }}</div>
                         </div>
                       </div>
                     </div>
@@ -970,7 +976,10 @@
                 </div>
               </details>
 
-              <details class="team-graph-dashboard-section team-graph-dashboard-section-collapsible">
+              <details
+                class="team-graph-dashboard-section team-graph-dashboard-section-collapsible"
+                data-dashboard-section-key="risk-hotspots"
+              >
                 <summary class="team-graph-dashboard-summary">
                   <span class="team-graph-dashboard-title">{{ t("Risk hotspots") }}</span>
                   <span class="team-graph-dashboard-summary-hint" data-dashboard-summary-hint>{{ t("Click to expand") }}</span>
@@ -1753,10 +1762,34 @@
           if (!sections.length) {
             return;
           }
+          const dashboardSectionStorageKey = "team-graph:step4:dashboard-sections";
 
           const prefersReducedMotion =
             typeof window.matchMedia === "function" &&
             window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+          const readSectionState = () => {
+            try {
+              const raw = window.sessionStorage.getItem(dashboardSectionStorageKey);
+              if (!raw) {
+                return {};
+              }
+              const parsed = JSON.parse(raw);
+              return parsed && typeof parsed === "object" ? parsed : {};
+            } catch {
+              return {};
+            }
+          };
+
+          const writeSectionState = (nextState) => {
+            try {
+              window.sessionStorage.setItem(dashboardSectionStorageKey, JSON.stringify(nextState));
+            } catch {
+              // Ignore storage failures (private mode / disabled storage).
+            }
+          };
+
+          const sectionState = readSectionState();
 
           const updateHint = (section) => {
             const hint = section.querySelector("[data-dashboard-summary-hint]");
@@ -1765,16 +1798,25 @@
             }
           };
 
-          sections.forEach((section) => {
+          sections.forEach((section, index) => {
             const summary = section.querySelector(".team-graph-dashboard-summary");
             const content = section.querySelector(".team-graph-dashboard-content");
             if (!(summary instanceof HTMLElement) || !(content instanceof HTMLElement)) {
               return;
             }
+            const sectionKey = section.getAttribute("data-dashboard-section-key") || `section-${index + 1}`;
+
+            if (Object.prototype.hasOwnProperty.call(sectionState, sectionKey)) {
+              section.open = sectionState[sectionKey] === true;
+            }
 
             updateHint(section);
 
             let isAnimating = false;
+            const persistOpenState = (isOpen) => {
+              sectionState[sectionKey] = isOpen;
+              writeSectionState(sectionState);
+            };
             summary.addEventListener("click", (event) => {
               event.preventDefault();
               if (isAnimating) {
@@ -1784,6 +1826,7 @@
               const expand = !section.open;
               if (prefersReducedMotion || typeof section.animate !== "function") {
                 section.open = expand;
+                persistOpenState(expand);
                 updateHint(section);
                 return;
               }
@@ -1811,6 +1854,7 @@
                 if (!expand) {
                   section.open = false;
                 }
+                persistOpenState(expand);
                 section.style.height = "";
                 section.style.overflow = "";
                 section.classList.remove("is-animating");
