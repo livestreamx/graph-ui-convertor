@@ -31,7 +31,7 @@ from app.web_i18n import (
     build_language_switch_url,
     build_localizer,
     get_active_ui_language,
-    humanize_markup_type_label,
+    humanize_markup_type_column_label,
     reset_active_ui_language,
     set_active_ui_language,
     translate_humanized_text,
@@ -1024,7 +1024,7 @@ def _localize_markup_type_column_titles(payload: dict[str, Any], language: str) 
         markup_type = str(metadata.get("markup_type") or "").strip()
         if not markup_type:
             continue
-        localized = humanize_markup_type_label(markup_type, language)
+        localized = humanize_markup_type_column_label(markup_type, language)
         if localized:
             element["text"] = localized
 

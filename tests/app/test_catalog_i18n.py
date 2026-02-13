@@ -8,7 +8,11 @@ from pathlib import Path
 import pytest
 
 from app.config import AppSettings
-from app.web_i18n import translate_humanized_text, translate_ui_text
+from app.web_i18n import (
+    humanize_markup_type_column_label,
+    translate_humanized_text,
+    translate_ui_text,
+)
 from tests.app.catalog_test_setup import build_catalog_test_context
 
 
@@ -61,6 +65,11 @@ def test_catalog_open_and_team_graph_are_localized_in_russian(
 
 def test_humanized_service_translates_to_usluga_in_russian() -> None:
     assert translate_humanized_text("service", "ru") == "Услуга"
+
+
+def test_markup_type_column_label_uses_plural_forms() -> None:
+    assert humanize_markup_type_column_label("service", "ru") == "Услуги"
+    assert humanize_markup_type_column_label("service", "en") == "Services"
 
 
 @pytest.mark.parametrize(

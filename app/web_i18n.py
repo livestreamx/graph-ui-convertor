@@ -203,6 +203,20 @@ _HUMANIZE_EN_TRANSLATIONS: Final[dict[str, str]] = {
     "system_default": "Default System",
     "unknown": "Unknown",
 }
+_MARKUP_TYPE_COLUMN_RU_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Услуги",
+    "system_service_search": "Системы поиска услуг",
+    "system_task_processor": "Обработчики задач",
+    "system_default": "Системы",
+    "unknown": "Неизвестные",
+}
+_MARKUP_TYPE_COLUMN_EN_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Services",
+    "system_service_search": "Service Search Systems",
+    "system_task_processor": "Task Processors",
+    "system_default": "Default Systems",
+    "unknown": "Unknown",
+}
 
 _LANGUAGE_ICONS: Final[dict[str, str]] = {
     "en": "🇬🇧",
@@ -344,3 +358,18 @@ def humanize_markup_type_label(markup_type: str, language: str) -> str:
     if not translated:
         return translated
     return translated[:1].upper() + translated[1:]
+
+
+def humanize_markup_type_column_label(markup_type: str, language: str) -> str:
+    normalized = str(markup_type or "").strip()
+    if not normalized:
+        return normalized
+    if " + " in normalized:
+        parts = [part.strip() for part in normalized.split("+")]
+        localized_parts = [humanize_markup_type_column_label(part, language) for part in parts]
+        return " + ".join(item for item in localized_parts if item)
+    if language == "ru":
+        return _MARKUP_TYPE_COLUMN_RU_TRANSLATIONS.get(normalized, normalized)
+    if language == "en":
+        return _MARKUP_TYPE_COLUMN_EN_TRANSLATIONS.get(normalized, normalized)
+    return normalized

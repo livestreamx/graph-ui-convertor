@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from domain.markup_type_labels import humanize_markup_type_for_brackets
+from domain.markup_type_labels import humanize_markup_type_for_column
 from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
@@ -26,6 +26,8 @@ from domain.services.convert_markup_base import (
 
 
 class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
+    _TITLE_GAP_WITH_MARKUP_TYPE_COLUMNS = 240.0
+
     def _convert_procedure_graph(self, document: MarkupDocument) -> Any:
         plan = self.layout_engine.build_plan(document)
         registry = ElementRegistry()
@@ -72,6 +74,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             base_metadata,
             document.service_name,
             None,
+            (self._TITLE_GAP_WITH_MARKUP_TYPE_COLUMNS if plan.markup_type_columns else 160.0),
         )
         self._center_on_first_frame(plan, registry.elements)
         self._post_process_elements(registry.elements)
@@ -849,14 +852,16 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             title = (
                 markup_type
                 if is_merged_markup_types
-                else humanize_markup_type_for_brackets(markup_type)
+                else humanize_markup_type_for_column(markup_type)
             )
             group_id = self._stable_id("markup-type-column-group", markup_type)
             panel_id = self._stable_id("markup-type-column-panel", markup_type)
             rule_id = self._stable_id("markup-type-column-rule", markup_type)
             text_id = self._stable_id("markup-type-column-text", markup_type)
             panel_background_color = (
-                MERGE_ALERT_PANEL_COLOR if is_merged_markup_types else "#d9d9d9"
+                MERGE_ALERT_PANEL_COLOR
+                if (is_merged_markup_types or str(markup_type).strip().casefold() == "mixed")
+                else "#d9d9d9"
             )
             panel_meta = self._with_base_metadata(
                 {

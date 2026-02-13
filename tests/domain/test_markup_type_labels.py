@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from domain.markup_type_labels import humanize_markup_type, humanize_markup_type_for_brackets
+from domain.markup_type_labels import (
+    humanize_markup_type,
+    humanize_markup_type_for_brackets,
+    humanize_markup_type_for_column,
+)
 
 
 @pytest.mark.parametrize(
@@ -24,3 +28,7 @@ def test_humanize_markup_type_preserves_unknown() -> None:
 
 def test_humanize_markup_type_for_brackets_capitalizes_first_letter() -> None:
     assert humanize_markup_type_for_brackets("service") == "Услуга"
+
+
+def test_humanize_markup_type_for_column_uses_plural_labels() -> None:
+    assert humanize_markup_type_for_column("service") == "Услуги"

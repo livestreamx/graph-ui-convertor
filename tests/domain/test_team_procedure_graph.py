@@ -385,10 +385,10 @@ def test_service_graph_layout_sorts_markup_type_columns_and_components() -> None
         if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
     ]
     assert {str(item.get("text", "")).replace("\n", " ").strip() for item in header_titles} == {
-        "Система поиска услуги",
-        "Услуга",
-        "Обработчик задач",
-        "Система",
+        "Системы поиска услуг",
+        "Услуги",
+        "Обработчики задач",
+        "Системы",
     }
 
 
@@ -2513,8 +2513,8 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_panel"
     )
-    assert merge_panel.get("backgroundColor") == "#ffb3b3"
-    assert merge_panel.get("strokeColor") == "#ffb3b3"
+    assert merge_panel.get("backgroundColor") == "#ff9d9d99"
+    assert merge_panel.get("strokeColor") == "#ff9d9d99"
 
     highlight = next(
         element
@@ -2905,8 +2905,8 @@ def test_procedure_graph_layout_builds_markup_type_column_headers() -> None:
     ]
     assert len(header_panels) == 2
     assert {str(item.get("text", "")).replace("\n", " ").strip() for item in header_titles} == {
-        "Система поиска услуги",
-        "Услуга",
+        "Системы поиска услуг",
+        "Услуги",
     }
     assert {panel.get("backgroundColor") for panel in header_panels} == {"#d9d9d9"}
     panel_ys = {round(float(panel.get("y", 0.0)), 1) for panel in header_panels}
@@ -2921,7 +2921,7 @@ def test_procedure_graph_layout_builds_markup_type_column_headers() -> None:
         diagram_title_panel.get("height", 0.0)
     )
     headers_top = min(float(panel.get("y", 0.0)) for panel in header_panels)
-    assert headers_top - title_bottom <= 24.0
+    assert headers_top - title_bottom >= 32.0
 
 
 def test_procedure_graph_layout_builds_merged_markup_type_column_for_intersections() -> None:
@@ -2989,11 +2989,61 @@ def test_procedure_graph_layout_builds_merged_markup_type_column_for_intersectio
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
     )
-    assert header_panel.get("backgroundColor") == "#ffb3b3"
+    assert header_panel.get("backgroundColor") == "#ff9d9d99"
     assert header_panel.get("customData", {}).get("cjm", {}).get("is_merged_markup_types") is True
     assert str(header_title.get("text", "")).replace("\n", " ").strip() == (
         "service + system_task_processor"
     )
+
+
+def test_procedure_graph_layout_uses_merge_alert_color_for_mixed_markup_type_column() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
+        "procedures": [
+            {
+                "proc_id": "p_mixed",
+                "proc_name": "Mixed Source",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p_mixed": {
+                    "team_name": "Alpha",
+                    "service_name": "Shared",
+                    "markup_type": "mixed",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "mixed",
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    excal = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    header_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_panel"
+    )
+    header_title = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    )
+    assert header_panel.get("backgroundColor") == "#ff9d9d99"
+    assert header_panel.get("customData", {}).get("cjm", {}).get("is_merged_markup_types") is False
+    assert str(header_title.get("text", "")).replace("\n", " ").strip() == "Mixed"
 
 
 def test_procedure_graph_layout_does_not_aggregate_markup_type_for_potential_merges() -> None:

@@ -402,8 +402,8 @@ def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
                 if element.get("customData", {}).get("cjm", {}).get("role")
                 == "markup_type_column_title"
             }
-            assert "Система поиска услуги" in ru_titles
-            assert "Услуга" in ru_titles
+            assert "Системы поиска услуг" in ru_titles
+            assert "Услуги" in ru_titles
 
             en_response = client_api.get("/api/teams/graph", params={**graph_params, "lang": "en"})
             assert en_response.status_code == 200
@@ -413,8 +413,8 @@ def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
                 if element.get("customData", {}).get("cjm", {}).get("role")
                 == "markup_type_column_title"
             }
-            assert "Service Search System" in en_titles
-            assert "Service" in en_titles
+            assert "Service Search Systems" in en_titles
+            assert "Services" in en_titles
     finally:
         if client_api is not None:
             client_api.close()

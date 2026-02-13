@@ -30,7 +30,7 @@ from domain.ports.layout import LayoutEngine
 Metadata = dict[str, Any]
 Element = dict[str, Any]
 MERGE_ALERT_COLOR = "#ff2d2d"
-MERGE_ALERT_PANEL_COLOR = "#ffb3b3"
+MERGE_ALERT_PANEL_COLOR = "#ff9d9d99"
 
 
 @dataclass
@@ -299,6 +299,7 @@ class MarkupToDiagramConverter(ABC):
         base_metadata: Metadata,
         service_name: str | None,
         markup_type: str | None = None,
+        title_gap_y: float = 160.0,
     ) -> None:
         if not service_name:
             return
@@ -312,7 +313,7 @@ class MarkupToDiagramConverter(ABC):
         content_width = max_x - min_x
         title_width = max(content_width + 160.0, 420.0)
         title_height = 96.0
-        gap_y = 160.0
+        gap_y = title_gap_y
         origin_x = (min_x + max_x) / 2 - title_width / 2
         origin_y = min_y - gap_y - title_height
         group_id = self._stable_id("diagram-title-group", title)
