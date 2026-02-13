@@ -1815,7 +1815,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separators.sort(key=lambda separator: (separator.start.y, separator.start.x))
 
         markup_type_columns: list[MarkupTypeColumnPlacement] = []
-        header_gap = max(56.0, self.config.scenario_procedures_gap * 2.5)
+        header_gap = max(88.0, self.config.scenario_procedures_gap * 4.0)
         header_height = 96.0
         header_padding_x = 40.0
         min_header_width = 420.0
