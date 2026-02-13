@@ -71,6 +71,7 @@ class _ComponentPlacementInfo:
     component_index: int
     procedure_ids: tuple[str, ...]
     markup_type: str
+    is_merged_markup_types: bool
     primary_service_name: str
     sort_key: tuple[object, ...]
     min_x: float
@@ -1598,7 +1599,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             )
             if bounds is None:
                 continue
-            column_markup_type = self._component_column_markup_type(
+            (
+                column_markup_type,
+                is_merged_markup_types,
+            ) = self._component_column_markup_type(
                 procedure_ids=proc_ids,
                 procedure_meta=procedure_meta,
                 default_markup_type=default_markup_type,
@@ -1614,6 +1618,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     component_index=component_idx,
                     procedure_ids=proc_ids,
                     markup_type=column_markup_type,
+                    is_merged_markup_types=is_merged_markup_types,
                     primary_service_name=str(sort_key[0]),
                     sort_key=sort_key,
                     min_x=bounds[0],
@@ -1815,7 +1820,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separators.sort(key=lambda separator: (separator.start.y, separator.start.x))
 
         markup_type_columns: list[MarkupTypeColumnPlacement] = []
-        header_gap = max(88.0, self.config.scenario_procedures_gap * 4.0)
+        header_gap = max(104.0, self.config.scenario_procedures_gap * 4.0)
         header_height = 96.0
         header_padding_x = 40.0
         min_header_width = 420.0
@@ -1846,6 +1851,11 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     markup_type=markup_type,
                     origin=Point(origin_x, header_origin_y),
                     size=Size(header_width, header_height),
+                    is_merged_markup_types=any(
+                        info_by_component[component_idx].is_merged_markup_types
+                        for component_idx in ordered_component_ids
+                        if component_idx in info_by_component
+                    ),
                 )
             )
 
@@ -1914,7 +1924,22 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         procedure_ids: tuple[str, ...],
         procedure_meta: Mapping[str, Mapping[str, object]],
         default_markup_type: str,
-    ) -> str:
+    ) -> tuple[str, bool]:
+        intersection_markup_types: set[str] = set()
+        for proc_id in procedure_ids:
+            meta = procedure_meta.get(proc_id, {})
+            if not self._is_real_intersection_merge(proc_id, meta):
+                continue
+            for entry in self._procedure_merge_entries(meta, default_markup_type):
+                markup_type = str(entry.get("markup_type") or default_markup_type).strip()
+                intersection_markup_types.add(markup_type or "unknown")
+        if len(intersection_markup_types) > 1:
+            ordered_types = sorted(
+                intersection_markup_types,
+                key=self._markup_type_column_sort_key,
+            )
+            return " + ".join(ordered_types), True
+
         markup_types: set[str] = set()
         for proc_id in procedure_ids:
             meta = procedure_meta.get(proc_id, {})
@@ -1922,8 +1947,20 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 markup_type = str(entry.get("markup_type") or default_markup_type).strip()
                 markup_types.add(markup_type or "unknown")
         if not markup_types:
-            return default_markup_type or "unknown"
-        return min(markup_types, key=self._markup_type_column_sort_key)
+            return default_markup_type or "unknown", False
+        return min(markup_types, key=self._markup_type_column_sort_key), False
+
+    def _is_real_intersection_merge(
+        self,
+        proc_id: str,
+        meta: Mapping[str, object],
+    ) -> bool:
+        if meta.get("is_intersection") is not True:
+            return False
+        source_proc_id = meta.get("source_procedure_id")
+        if isinstance(source_proc_id, str) and source_proc_id and source_proc_id != proc_id:
+            return False
+        return True
 
     def _component_sort_key(
         self,

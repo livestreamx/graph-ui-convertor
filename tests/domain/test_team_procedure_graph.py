@@ -2513,8 +2513,8 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_panel"
     )
-    assert merge_panel.get("backgroundColor") == "#ff2d2d"
-    assert merge_panel.get("strokeColor") == "#ff2d2d"
+    assert merge_panel.get("backgroundColor") == "#ffb3b3"
+    assert merge_panel.get("strokeColor") == "#ffb3b3"
 
     highlight = next(
         element
@@ -2922,6 +2922,139 @@ def test_procedure_graph_layout_builds_markup_type_column_headers() -> None:
     )
     headers_top = min(float(panel.get("y", 0.0)) for panel in header_panels)
     assert headers_top - title_bottom <= 24.0
+
+
+def test_procedure_graph_layout_builds_merged_markup_type_column_for_intersections() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
+        "procedures": [
+            {
+                "proc_id": "p_merge",
+                "proc_name": "Shared",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p_merge": {
+                    "team_name": "Alpha",
+                    "service_name": "Shared",
+                    "markup_type": "service",
+                    "is_intersection": True,
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "service",
+                        }
+                    ],
+                    "merge_services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "service",
+                        },
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Shared",
+                            "markup_type": "system_task_processor",
+                        },
+                    ],
+                }
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    assert len(plan.markup_type_columns) == 1
+    column = plan.markup_type_columns[0]
+    assert column.markup_type == "service + system_task_processor"
+    assert column.is_merged_markup_types is True
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    header_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_panel"
+    )
+    header_title = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    )
+    assert header_panel.get("backgroundColor") == "#ffb3b3"
+    assert header_panel.get("customData", {}).get("cjm", {}).get("is_merged_markup_types") is True
+    assert str(header_title.get("text", "")).replace("\n", " ").strip() == (
+        "service + system_task_processor"
+    )
+
+
+def test_procedure_graph_layout_does_not_aggregate_markup_type_for_potential_merges() -> None:
+    doc_service = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_processor = MarkupDocument.model_validate(
+        {
+            "markup_type": "system_task_processor",
+            "service_name": "Router",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_service, doc_processor],
+        merge_selected_markups=False,
+    )
+    assert any(
+        meta.get("is_intersection") is True for meta in merged.procedure_meta.values()
+    ), "Expected potential merge markers in metadata"
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(merged)
+    assert {column.markup_type for column in plan.markup_type_columns} == {
+        "service",
+        "system_task_processor",
+    }
+    assert all(column.is_merged_markup_types is False for column in plan.markup_type_columns)
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(merged)
+    header_titles = {
+        str(element.get("text", "")).replace("\n", " ").strip()
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    }
+    assert "service + system_task_processor" not in header_titles
 
 
 def test_procedure_graph_layout_expands_outer_service_zone() -> None:

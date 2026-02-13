@@ -18,6 +18,7 @@ from domain.models import (
 )
 from domain.services.convert_markup_base import (
     MERGE_ALERT_COLOR,
+    MERGE_ALERT_PANEL_COLOR,
     ElementRegistry,
     MarkupToDiagramConverter,
     Metadata,
@@ -844,13 +845,25 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
     ) -> None:
         for column in columns:
             markup_type = str(column.markup_type or "").strip() or "unknown"
-            title = humanize_markup_type_for_brackets(markup_type)
+            is_merged_markup_types = column.is_merged_markup_types is True
+            title = (
+                markup_type
+                if is_merged_markup_types
+                else humanize_markup_type_for_brackets(markup_type)
+            )
             group_id = self._stable_id("markup-type-column-group", markup_type)
             panel_id = self._stable_id("markup-type-column-panel", markup_type)
             rule_id = self._stable_id("markup-type-column-rule", markup_type)
             text_id = self._stable_id("markup-type-column-text", markup_type)
+            panel_background_color = (
+                MERGE_ALERT_PANEL_COLOR if is_merged_markup_types else "#d9d9d9"
+            )
             panel_meta = self._with_base_metadata(
-                {"role": "markup_type_column_panel", "markup_type": markup_type},
+                {
+                    "role": "markup_type_column_panel",
+                    "markup_type": markup_type,
+                    "is_merged_markup_types": is_merged_markup_types,
+                },
                 base_metadata,
             )
             rule_meta = self._with_base_metadata(
@@ -869,7 +882,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                     frame_id=None,
                     group_ids=[group_id],
                     metadata=panel_meta,
-                    background_color="#d9d9d9",
+                    background_color=panel_background_color,
                     stroke_color="#616161",
                     fill_style="solid",
                     roundness={"type": 3},

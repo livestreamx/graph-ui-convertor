@@ -30,6 +30,7 @@ from domain.ports.layout import LayoutEngine
 Metadata = dict[str, Any]
 Element = dict[str, Any]
 MERGE_ALERT_COLOR = "#ff2d2d"
+MERGE_ALERT_PANEL_COLOR = "#ffb3b3"
 
 
 @dataclass
@@ -480,8 +481,8 @@ class MarkupToDiagramConverter(ABC):
                             base_metadata,
                         ),
                         group_ids=[merge_group],
-                        background_color=MERGE_ALERT_COLOR,
-                        stroke_color=MERGE_ALERT_COLOR,
+                        background_color=MERGE_ALERT_PANEL_COLOR,
+                        stroke_color=MERGE_ALERT_PANEL_COLOR,
                     )
                 )
                 if merge_blocks:

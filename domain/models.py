@@ -404,6 +404,7 @@ class MarkupTypeColumnPlacement:
     markup_type: str
     origin: Point
     size: Size
+    is_merged_markup_types: bool = False
 
 
 @dataclass(frozen=True)
