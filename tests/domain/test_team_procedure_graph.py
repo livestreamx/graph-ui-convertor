@@ -93,7 +93,7 @@ def test_team_graph_title_does_not_include_markup_type_prefix() -> None:
         if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title"
     )
     title_text = str(title.get("text", ""))
-    assert "[service]" not in title_text
+    assert "[Услуга]" not in title_text
     assert "[procedure_graph]" not in title_text
 
 
@@ -179,8 +179,8 @@ def test_build_team_service_graph_aggregates_by_service() -> None:
     assert merged.procedure_meta[alpha_id]["is_intersection"] is False
     assert merged.procedure_meta[beta_id]["is_intersection"] is False
     name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
-    assert name_lookup[alpha_id] == "[Alpha] [service] Payments"
-    assert name_lookup[beta_id] == "[Beta] [service] Refunds"
+    assert name_lookup[alpha_id] == "[Alpha] [Услуга] Payments"
+    assert name_lookup[beta_id] == "[Beta] [Услуга] Refunds"
 
 
 def test_service_graph_layout_skips_left_dashboard_panels() -> None:
@@ -190,14 +190,14 @@ def test_service_graph_layout_skips_left_dashboard_panels() -> None:
         "procedures": [
             {
                 "proc_id": "service::alpha::payments::entry",
-                "proc_name": "[Alpha] [service] Payments",
+                "proc_name": "[Alpha] [Услуга] Payments",
                 "start_block_ids": [],
                 "end_block_ids": [],
                 "branches": {},
             },
             {
                 "proc_id": "service::beta::refunds::shared",
-                "proc_name": "[Beta] [service] Refunds",
+                "proc_name": "[Beta] [Услуга] Refunds",
                 "start_block_ids": [],
                 "end_block_ids": [],
                 "branches": {},
@@ -271,12 +271,12 @@ def test_service_graph_splits_multiple_procedures_by_service() -> None:
     name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
     names = sorted(name for name in name_lookup.values() if name is not None)
     assert names == [
-        "[Alpha] [service] Payments (Graph #1)",
-        "[Alpha] [service] Payments (Graph #2)",
+        "[Alpha] [Услуга] Payments (Graph #1)",
+        "[Alpha] [Услуга] Payments (Graph #2)",
     ]
     by_name = {name: proc_id for proc_id, name in name_lookup.items()}
-    assert merged.procedure_graph[by_name["[Alpha] [service] Payments (Graph #1)"]] == []
-    assert merged.procedure_graph[by_name["[Alpha] [service] Payments (Graph #2)"]] == []
+    assert merged.procedure_graph[by_name["[Alpha] [Услуга] Payments (Graph #1)"]] == []
+    assert merged.procedure_graph[by_name["[Alpha] [Услуга] Payments (Graph #2)"]] == []
 
 
 def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
@@ -287,21 +287,21 @@ def test_service_graph_node_sizes_scale_with_procedure_count() -> None:
             "procedures": [
                 {
                     "proc_id": "svc-one",
-                    "proc_name": "[Alpha] [service] Payments",
+                    "proc_name": "[Alpha] [Услуга] Payments",
                     "start_block_ids": [],
                     "end_block_ids": [],
                     "branches": {},
                 },
                 {
                     "proc_id": "svc-ten",
-                    "proc_name": "[Alpha] [service] Payments (Graph #2)",
+                    "proc_name": "[Alpha] [Услуга] Payments (Graph #2)",
                     "start_block_ids": [],
                     "end_block_ids": [],
                     "branches": {},
                 },
                 {
                     "proc_id": "svc-twenty",
-                    "proc_name": "[Alpha] [service] Payments (Graph #3)",
+                    "proc_name": "[Alpha] [Услуга] Payments (Graph #3)",
                     "start_block_ids": [],
                     "end_block_ids": [],
                     "branches": {},
@@ -1287,7 +1287,7 @@ def test_procedure_graph_panel_colors_match_graph() -> None:
         )
     block_colors = {block.text: block.color for block in service_blocks}
     for service_name, color in service_colors.items():
-        assert block_colors.get(f"[service] {service_name}") == color
+        assert block_colors.get(f"[Услуга] {service_name}") == color
 
     excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
     for element in excal.elements:
@@ -1351,9 +1351,9 @@ def test_procedure_graph_layout_lists_services_per_component() -> None:
     procedures_text = plan.scenarios[0].procedures_text
     assert "Разметки:" in procedures_text
     assert "Alpha" in procedures_text
-    assert "- [service] Payments" in procedures_text
+    assert "- [Услуга] Payments" in procedures_text
     assert "Beta" in procedures_text
-    assert "- [service] Refunds" in procedures_text
+    assert "- [Услуга] Refunds" in procedures_text
 
 
 def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None:
@@ -1391,8 +1391,8 @@ def test_procedure_graph_layout_repeats_procedures_for_shared_services() -> None
     assert "Разметки:" in procedures_text
     assert "Alpha" in procedures_text
     assert "Beta" in procedures_text
-    assert procedures_text.count("- [service] Payments") == 1
-    assert procedures_text.count("- [service] Loans") == 1
+    assert procedures_text.count("- [Услуга] Payments") == 1
+    assert procedures_text.count("- [Услуга] Loans") == 1
 
 
 def test_procedure_graph_layout_includes_merge_panel() -> None:
@@ -1432,7 +1432,7 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     scenario = plan.scenarios[0]
     merge_text = scenario.merge_text or ""
     assert "Узлы слияния" in merge_text
-    assert "> [Alpha] [service] Payments x [Beta] [service] Loans:" in merge_text
+    assert "> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:" in merge_text
     assert "(1) Shared Flow" in merge_text
     assert scenario.merge_origin is not None
     assert scenario.merge_size is not None
@@ -1475,7 +1475,7 @@ def test_procedure_graph_layout_uses_merge_services_for_groups() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert "> [Alpha] [service] Payments x [Beta] [service] Loans:" in merge_text
+    assert "> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:" in merge_text
 
 
 def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
@@ -1525,7 +1525,7 @@ def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert merge_text.count("> [Alpha] [service] Payments x [Beta] [service] Loans:") == 1
+    assert merge_text.count("> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:") == 1
     assert "(1) Shared One" in merge_text
     assert "(2) Shared Two" in merge_text
 
@@ -2019,11 +2019,11 @@ def test_procedure_graph_converter_renders_service_zones_for_multiple_services()
         if element.get("customData", {}).get("cjm", {}).get("role") == "service_zone_label"
     ]
     label_texts = {label.get("text", "").replace("\n", " ").strip() for label in labels}
-    assert "[procedure_graph] Payments" in label_texts
-    assert "[procedure_graph] Refunds" in label_texts
+    assert "[Procedure_graph] Payments" in label_texts
+    assert "[Procedure_graph] Refunds" in label_texts
     label_colors = {label.get("text", "").strip(): label.get("strokeColor") for label in labels}
-    assert label_colors.get("[procedure_graph] Payments") == "#d9f5ff"
-    assert label_colors.get("[procedure_graph] Refunds") == "#e3f7d9"
+    assert label_colors.get("[Procedure_graph] Payments") == "#d9f5ff"
+    assert label_colors.get("[Procedure_graph] Refunds") == "#e3f7d9"
     assert all(label.get("fontStyle") == "bold" for label in labels)
     assert all(
         label.get("fontFamily") == EXCALIDRAW_SERVICE_ZONE_LABEL_FONT_FAMILY for label in labels

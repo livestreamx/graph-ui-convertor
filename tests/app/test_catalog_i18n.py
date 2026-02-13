@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from app.config import AppSettings
-from app.web_i18n import translate_humanized_text
+from app.web_i18n import translate_humanized_text, translate_ui_text
 from tests.app.catalog_test_setup import build_catalog_test_context
 
 
@@ -61,3 +61,29 @@ def test_catalog_open_and_team_graph_are_localized_in_russian(
 
 def test_humanized_service_translates_to_usluga_in_russian() -> None:
     assert translate_humanized_text("service", "ru") == "Услуга"
+
+
+@pytest.mark.parametrize(
+    ("technical", "humanized"),
+    [
+        ("system_service_search", "Система поиска услуги"),
+        ("system_task_processor", "Обработчик задач"),
+        ("system_default", "Система"),
+    ],
+)
+def test_humanized_system_markup_types_translate_in_russian(
+    technical: str,
+    humanized: str,
+) -> None:
+    assert translate_humanized_text(technical, "ru") == humanized
+
+
+def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
+    assert translate_ui_text("Service-level diagram", "ru") == "Диаграмма уровня услуг"
+    assert (
+        translate_ui_text(
+            "High-level service map: service nodes aggregate all selected service graphs.",
+            "ru",
+        )
+        == "Верхнеуровневая карта услуг и их взаимосвязей"
+    )
