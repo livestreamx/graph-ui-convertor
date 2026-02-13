@@ -14,7 +14,7 @@
   <span class="team-graph-graph-entity {{ extra_class }}" data-team="{{ team_name }}" {% if colorize %}data-colorize-team="true"{% endif %}>
     <span class="team-graph-graph-entity-team">{{ team_name }}</span>
     {% if markup_type %}
-      <span class="team-graph-graph-entity-type">{{ markup_type }}</span>
+      <span class="team-graph-graph-entity-type">{{ markup_type | humanize_text }}</span>
     {% endif %}
     <span class="team-graph-graph-entity-service">
       {{ service_name }}
@@ -652,7 +652,7 @@
                     <div class="team-graph-chip-row">
                       {% for stat in team_dashboard.markup_type_counts %}
                         <span class="team-graph-chip team-graph-chip-drilldown">
-                          {{ stat.markup_type }} · {{ stat.count }}
+                          {{ stat.markup_type | humanize_text }} · {{ stat.count }}
                           {% if stat.item_labels %}
                             <span class="team-graph-chip-list">
                               {% for item in stat.item_labels %}

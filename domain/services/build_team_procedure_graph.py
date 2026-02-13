@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from hashlib import sha1
 from typing import Any, Literal
 
+from domain.markup_type_labels import humanize_markup_type_for_brackets
 from domain.models import MarkupDocument, Procedure, merge_end_types
 from domain.services.shared_node_merge_rules import (
     ServiceNodeState,
@@ -975,10 +976,11 @@ class BuildTeamProcedureGraph:
             service_name = str(payload.get("service_name") or "Unknown service")
             service_key = str(payload.get("service_key") or "")
             markup_type = str(payload.get("markup_type") or "").strip() or "unknown"
+            display_markup_type = humanize_markup_type_for_brackets(markup_type)
             current_index = service_graph_index.get(service_key, 0) + 1
             service_graph_index[service_key] = current_index
             total_graphs = service_graph_total.get(service_key, 1)
-            label = f"[{team_name}] [{markup_type}] {service_name}"
+            label = f"[{team_name}] [{display_markup_type}] {service_name}"
             if total_graphs > 1:
                 label = f"{label} (Graph #{current_index})"
             color = service_colors.get(service_key, _SERVICE_COLORS[0])

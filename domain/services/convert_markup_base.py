@@ -7,6 +7,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Any
 
+from domain.markup_type_labels import humanize_markup_type, humanize_markup_type_for_brackets
 from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
@@ -160,7 +161,7 @@ class MarkupToDiagramConverter(ABC):
     def _resolve_display_markup_type(self, document: MarkupDocument) -> str:
         technical_markup_type = str(document.markup_type or "").strip() or "unknown"
         if technical_markup_type not in {"procedure_graph", "service_graph"}:
-            return technical_markup_type
+            return humanize_markup_type(technical_markup_type)
 
         procedure_meta = document.procedure_meta or {}
         source_types: set[str] = set()
@@ -179,10 +180,10 @@ class MarkupToDiagramConverter(ABC):
                     source_types.add(service_markup_type)
 
         if len(source_types) == 1:
-            return next(iter(source_types))
+            return humanize_markup_type(next(iter(source_types)))
         if len(source_types) > 1:
             return "mixed"
-        return technical_markup_type
+        return humanize_markup_type(technical_markup_type)
 
     @abstractmethod
     def _build_document(self, elements: list[Element], app_state: dict[str, Any]) -> Any:
@@ -215,6 +216,7 @@ class MarkupToDiagramConverter(ABC):
         markup_label = str(markup_type or "").strip()
         if not markup_label:
             return title
+        markup_label = humanize_markup_type_for_brackets(markup_label)
         return f"[{markup_label}] {title}"
 
     @abstractmethod

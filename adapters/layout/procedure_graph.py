@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from adapters.layout.grid import GridLayoutEngine, LayoutConfig
+from domain.markup_type_labels import humanize_markup_type_for_brackets
 from domain.models import (
     FramePlacement,
     LayoutPlan,
@@ -638,7 +639,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 service_color,
                 finedog_unit_id,
             ) in enumerate(services):
-                service_label = f"[{markup_type}] {service_name}"
+                service_label = f"[{humanize_markup_type_for_brackets(markup_type)}] {service_name}"
                 wrapped = self._wrap_lines(
                     [service_label],
                     content_width - service_padding * 2,
@@ -932,7 +933,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 key=lambda item: (item[0].lower(), item[1].lower(), item[2].lower()),
             )
             label_parts = [
-                f"[{team}] [{markup_type}] {service}"
+                f"[{team}] [{humanize_markup_type_for_brackets(markup_type)}] {service}"
                 for team, markup_type, service in unique_tokens
             ]
             label = " x ".join(label_parts)

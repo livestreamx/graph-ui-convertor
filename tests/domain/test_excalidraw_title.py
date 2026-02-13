@@ -49,7 +49,7 @@ def test_injects_title_when_missing() -> None:
         for element in elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title"
     )
-    assert "[service] Billing Flow" in str(title.get("text", ""))
+    assert "[Услуга] Billing Flow" in str(title.get("text", ""))
     app_state: dict[str, Any] = {}
     apply_title_focus(app_state, elements)
     assert "scrollX" in app_state
@@ -76,3 +76,27 @@ def test_skips_title_without_service_name() -> None:
 
     roles = [element.get("customData", {}).get("cjm", {}).get("role") for element in elements]
     assert "diagram_title" not in roles
+
+
+def test_title_uses_humanized_system_markup_type() -> None:
+    payload = {
+        "markup_type": "system_task_processor",
+        "finedog_unit_meta": {"service_name": "Billing Flow"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    title = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title"
+    )
+    assert "[Обработчик задач] Billing Flow" in str(title.get("text", ""))

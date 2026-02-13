@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Mapping
 from typing import Any
 
+from domain.markup_type_labels import humanize_markup_type, humanize_markup_type_for_brackets
 from domain.models import CUSTOM_DATA_KEY
 
 Element = dict[str, Any]
@@ -79,13 +80,13 @@ class ExcalidrawTitleInjector:
             meta = self._metadata(element)
             raw_display = meta.get("display_markup_type")
             if raw_display is not None:
-                display_text = str(raw_display).strip()
+                display_text = humanize_markup_type(str(raw_display).strip())
                 if display_text:
                     return display_text
             raw = meta.get("markup_type")
             if raw is None:
                 continue
-            text = str(raw).strip()
+            text = humanize_markup_type(str(raw).strip())
             if text:
                 return text
         return None
@@ -101,6 +102,7 @@ class ExcalidrawTitleInjector:
         markup_label = str(markup_type or "").strip()
         if not markup_label:
             return title
+        markup_label = humanize_markup_type_for_brackets(markup_label)
         return f"[{markup_label}] {title}"
 
     def _has_title(self, elements: list[Element]) -> bool:
