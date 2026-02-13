@@ -36,7 +36,12 @@ class CatalogTestContext:
 def billing_payload() -> dict[str, Any]:
     return {
         "markup_type": "service",
-        "finedog_unit_meta": {"service_name": "Billing"},
+        "finedog_unit_id": "billing-unit-42",
+        "finedog_unit_meta": {
+            "service_name": "Billing",
+            "team_id": "team-billing",
+            "team_name": "Billing Team",
+        },
         "procedures": [
             {
                 "proc_id": "p1",

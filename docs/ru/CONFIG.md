@@ -47,7 +47,6 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
-  unidraw_base_url: ""
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
@@ -99,7 +98,6 @@ catalog:
   ассеты Excalidraw (например `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: префикс пути для прокси Excalidraw.
 - `excalidraw_max_url_length`: максимальная длина URL для `#json`, после чего требуется ручной импорт.
-- `unidraw_base_url`: опциональный URL внешнего Unidraw UI (зарезервирован для будущего parity open-flow).
 - `unidraw_proxy_upstream`: опциональный upstream для проксирования Unidraw через Catalog.
 - `unidraw_proxy_prefix`: префикс пути для прокси Unidraw.
 - `unidraw_max_url_length`: параметр для паритета с Excalidraw URL (пока не используется).
@@ -113,8 +111,9 @@ catalog:
 
 ## Catalog UI
 
-- В деталях диаграммы доступны скачивания `.excalidraw` и `Unidraw`; кнопка `Open Excalidraw`
-  управляется `diagram_excalidraw_enabled`.
+- В деталях диаграммы доступны скачивания `.excalidraw` и `.unidraw`; кнопка `Open Excalidraw`
+  управляется `diagram_excalidraw_enabled`. Если настроены `service_link_path` / `team_link_path`,
+  на этой же странице показываются прямые внешние ссылки, собранные из `finedog_unit_id` и `team_id`.
 - В хедере рядом с `Index JSON` добавлен переключатель языка (с иконками); выбранная локаль
   сохраняется между страницами каталога и HTMX-обновлениями.
 - На странице каталога есть отдельный раздел для кросс-командных диаграмм: можно выбрать несколько
@@ -205,7 +204,6 @@ Dot-path проходят по вложенным объектам raw markup JS
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
 export CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED="true"
-export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'

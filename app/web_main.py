@@ -24,7 +24,7 @@ from adapters.filesystem.scene_repository import FileSystemSceneRepository
 from adapters.layout.grid import GridLayoutEngine, LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from app.catalog_wiring import build_markup_repository, build_markup_source
-from app.config import AppSettings, load_settings, validate_unidraw_settings
+from app.config import AppSettings, load_settings
 from app.web_i18n import (
     UILocalizer,
     apply_ui_language_cookie,
@@ -97,7 +97,6 @@ class CatalogContext:
 
 
 def create_app(settings: AppSettings) -> FastAPI:
-    validate_unidraw_settings(settings)
     templates.env.filters["msk_datetime"] = format_msk_datetime
     templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
 
@@ -499,6 +498,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 else:
                     excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
+        service_external_url = resolve_service_external_url(context, item)
+        team_external_url = resolve_team_external_url(context, item)
         return render_catalog_template(
             request,
             "catalog_detail.html",
@@ -514,6 +515,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "excalidraw_scene_available": excalidraw_scene_available,
                 "open_mode": open_mode,
                 "on_demand_enabled": on_demand,
+                "service_external_url": service_external_url,
+                "team_external_url": team_external_url,
             },
         )
 
@@ -908,6 +911,24 @@ def find_item(index_data: CatalogIndex | None, scene_id: str) -> CatalogItem | N
         if item.scene_id == scene_id:
             return item
     return None
+
+
+def resolve_service_external_url(context: CatalogContext, item: CatalogItem) -> str | None:
+    if not context.link_templates:
+        return None
+    unit_id = item.finedog_unit_id.strip()
+    if not unit_id or unit_id == context.settings.catalog.unknown_value:
+        return None
+    return context.link_templates.service_link(unit_id)
+
+
+def resolve_team_external_url(context: CatalogContext, item: CatalogItem) -> str | None:
+    if not context.link_templates:
+        return None
+    team_id = item.team_id.strip()
+    if not team_id or team_id == context.settings.catalog.unknown_value:
+        return None
+    return context.link_templates.team_link(team_id)
 
 
 def resolve_diagram_extension(diagram_format: SceneFormat) -> str:

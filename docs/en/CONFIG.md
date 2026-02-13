@@ -47,7 +47,6 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
-  unidraw_base_url: ""
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
@@ -101,7 +100,6 @@ catalog:
   also proxies Excalidraw static assets (for example `/assets/*`, `/manifest.webmanifest`).
 - `excalidraw_proxy_prefix`: Path prefix used for proxying Excalidraw.
 - `excalidraw_max_url_length`: Max URL length for `#json` fallback before switching to manual import.
-- `unidraw_base_url`: Optional URL for external Unidraw UI integration (reserved for future open-flow parity).
 - `unidraw_proxy_upstream`: Optional upstream for proxying Unidraw through the Catalog service.
 - `unidraw_proxy_prefix`: Path prefix used for proxying Unidraw.
 - `unidraw_max_url_length`: Reserved for parity with Excalidraw URLs (currently unused).
@@ -115,8 +113,9 @@ catalog:
 
 ## Catalog UI
 
-- Detail view includes downloads for `.excalidraw` and `Unidraw`; `Open Excalidraw` is controlled by
-  `diagram_excalidraw_enabled`.
+- Detail view includes downloads for `.excalidraw` and `.unidraw`; `Open Excalidraw` is controlled by
+  `diagram_excalidraw_enabled`. When `service_link_path` / `team_link_path` are configured, the same
+  page also shows direct external links built from `finedog_unit_id` and `team_id`.
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
@@ -205,7 +204,6 @@ nesting delimiter. Example:
 ```bash
 export CJM_CATALOG__EXCALIDRAW_BASE_URL="https://draw.example.com"
 export CJM_CATALOG__DIAGRAM_EXCALIDRAW_ENABLED="true"
-export CJM_CATALOG__UNIDRAW_BASE_URL="https://unidraw.example.com"
 export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'

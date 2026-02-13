@@ -75,7 +75,6 @@ def catalog_settings(tmp_path: Path, s3_settings: S3Settings) -> CatalogSettings
         excalidraw_proxy_upstream=None,
         excalidraw_proxy_prefix="/excalidraw",
         excalidraw_max_url_length=8000,
-        unidraw_base_url="http://testserver/unidraw",
         unidraw_proxy_upstream=None,
         unidraw_proxy_prefix="/unidraw",
         unidraw_max_url_length=8000,
