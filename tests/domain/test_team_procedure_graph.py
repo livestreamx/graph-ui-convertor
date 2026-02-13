@@ -239,6 +239,159 @@ def test_service_graph_layout_skips_left_dashboard_panels() -> None:
     assert not any(role.startswith("scenario_") for role in roles)
 
 
+def test_service_graph_layout_sorts_markup_type_columns_and_components() -> None:
+    payload = {
+        "markup_type": "service_graph",
+        "service_name": "Services · Alpha + Beta",
+        "procedures": [
+            {
+                "proc_id": "search_z",
+                "proc_name": "Search Z",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "search_a",
+                "proc_name": "Search A",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "svc_flow_beta",
+                "proc_name": "Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+                "block_id_to_block_name": {"sb_start": "Beta"},
+            },
+            {
+                "proc_id": "svc_flow_alpha",
+                "proc_name": "Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+                "block_id_to_block_name": {"sa_start": "Alpha"},
+            },
+            {
+                "proc_id": "svc_refunds",
+                "proc_name": "Refunds Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "task_proc",
+                "proc_name": "Task Proc",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "default_proc",
+                "proc_name": "Default Proc",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+        ],
+        "procedure_graph": {
+            "search_z": [],
+            "search_a": [],
+            "svc_flow_beta": [],
+            "svc_flow_alpha": [],
+            "svc_refunds": [],
+            "task_proc": [],
+            "default_proc": [],
+        },
+    }
+    procedure_meta = {
+        "search_z": {
+            "team_name": "Alpha",
+            "service_name": "Zeta Search",
+            "markup_type": "system_service_search",
+        },
+        "search_a": {
+            "team_name": "Alpha",
+            "service_name": "Alpha Search",
+            "markup_type": "system_service_search",
+        },
+        "svc_flow_beta": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_flow_alpha": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_refunds": {
+            "team_name": "Beta",
+            "service_name": "Refunds",
+            "markup_type": "service",
+        },
+        "task_proc": {
+            "team_name": "Gamma",
+            "service_name": "Queue",
+            "markup_type": "system_task_processor",
+        },
+        "default_proc": {
+            "team_name": "Gamma",
+            "service_name": "Fallback",
+            "markup_type": "system_default",
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={"procedure_meta": procedure_meta}
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    assert {column.markup_type for column in plan.markup_type_columns} == {
+        "system_service_search",
+        "service",
+        "system_task_processor",
+        "system_default",
+    }
+
+    frame_by_proc = {frame.procedure_id: frame for frame in plan.frames}
+    mean_x_by_markup_type = {
+        markup_type: sum(frame_by_proc[proc_id].origin.x for proc_id in proc_ids) / len(proc_ids)
+        for markup_type, proc_ids in {
+            "system_service_search": ["search_a", "search_z"],
+            "service": ["svc_flow_alpha", "svc_flow_beta", "svc_refunds"],
+            "system_task_processor": ["task_proc"],
+            "system_default": ["default_proc"],
+        }.items()
+    }
+    assert (
+        mean_x_by_markup_type["system_service_search"]
+        < mean_x_by_markup_type["service"]
+        < mean_x_by_markup_type["system_task_processor"]
+        < mean_x_by_markup_type["system_default"]
+    )
+    assert frame_by_proc["search_a"].origin.y < frame_by_proc["search_z"].origin.y
+    assert frame_by_proc["svc_flow_alpha"].origin.y < frame_by_proc["svc_flow_beta"].origin.y
+    assert frame_by_proc["svc_flow_beta"].origin.y < frame_by_proc["svc_refunds"].origin.y
+    assert not plan.scenarios
+    assert not plan.service_zones
+
+    scene = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    header_titles = [
+        element
+        for element in scene.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    ]
+    assert {str(item.get("text", "")).replace("\n", " ").strip() for item in header_titles} == {
+        "Система поиска услуги",
+        "Услуга",
+        "Обработчик задач",
+        "Система",
+    }
+
+
 def test_service_graph_splits_multiple_procedures_by_service() -> None:
     document = MarkupDocument.model_validate(
         {

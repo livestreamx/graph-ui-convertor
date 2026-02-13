@@ -471,7 +471,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 for y in separator_ys
             ]
 
-        if frames and not is_service_graph:
+        if frames:
             (
                 frames,
                 separators,

@@ -336,6 +336,30 @@ def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
         key="markup/search.json",
         payload=payload_search,
     )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -366,27 +390,31 @@ def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
         client_api = TestClient(create_app(settings))
 
         params = {"team_ids": "team-a,team-b"}
-        ru_response = client_api.get("/api/teams/graph", params={**params, "lang": "ru"})
-        assert ru_response.status_code == 200
-        ru_titles = {
-            str(element.get("text", "")).replace("\n", " ").strip()
-            for element in ru_response.json()["elements"]
-            if element.get("customData", {}).get("cjm", {}).get("role")
-            == "markup_type_column_title"
-        }
-        assert "Система поиска услуги" in ru_titles
-        assert "Услуга" in ru_titles
+        for graph_level in ("procedure", "service"):
+            graph_params = (
+                {**params, "graph_level": graph_level} if graph_level == "service" else dict(params)
+            )
+            ru_response = client_api.get("/api/teams/graph", params={**graph_params, "lang": "ru"})
+            assert ru_response.status_code == 200
+            ru_titles = {
+                str(element.get("text", "")).replace("\n", " ").strip()
+                for element in ru_response.json()["elements"]
+                if element.get("customData", {}).get("cjm", {}).get("role")
+                == "markup_type_column_title"
+            }
+            assert "Система поиска услуги" in ru_titles
+            assert "Услуга" in ru_titles
 
-        en_response = client_api.get("/api/teams/graph", params={**params, "lang": "en"})
-        assert en_response.status_code == 200
-        en_titles = {
-            str(element.get("text", "")).replace("\n", " ").strip()
-            for element in en_response.json()["elements"]
-            if element.get("customData", {}).get("cjm", {}).get("role")
-            == "markup_type_column_title"
-        }
-        assert "Service Search System" in en_titles
-        assert "Service" in en_titles
+            en_response = client_api.get("/api/teams/graph", params={**graph_params, "lang": "en"})
+            assert en_response.status_code == 200
+            en_titles = {
+                str(element.get("text", "")).replace("\n", " ").strip()
+                for element in en_response.json()["elements"]
+                if element.get("customData", {}).get("cjm", {}).get("role")
+                == "markup_type_column_title"
+            }
+            assert "Service Search System" in en_titles
+            assert "Service" in en_titles
     finally:
         if client_api is not None:
             client_api.close()
