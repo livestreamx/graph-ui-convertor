@@ -196,6 +196,14 @@ _HUMANIZE_RU_TRANSLATIONS: Final[dict[str, str]] = {
     "no": "нет",
 }
 
+_HUMANIZE_EN_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Service",
+    "system_service_search": "Service Search System",
+    "system_task_processor": "Task Processor",
+    "system_default": "Default System",
+    "unknown": "Unknown",
+}
+
 _LANGUAGE_ICONS: Final[dict[str, str]] = {
     "en": "🇬🇧",
     "ru": "🇷🇺",
@@ -321,6 +329,18 @@ def translate_ui_text(key: str, language: str) -> str:
 
 
 def translate_humanized_text(value: str, language: str) -> str:
-    if language != "ru":
-        return value
-    return _HUMANIZE_RU_TRANSLATIONS.get(value, value)
+    if language == "ru":
+        return _HUMANIZE_RU_TRANSLATIONS.get(value, value)
+    if language == "en":
+        return _HUMANIZE_EN_TRANSLATIONS.get(value, value)
+    return value
+
+
+def humanize_markup_type_label(markup_type: str, language: str) -> str:
+    normalized = str(markup_type or "").strip()
+    if not normalized:
+        return normalized
+    translated = translate_humanized_text(normalized, language)
+    if not translated:
+        return translated
+    return translated[:1].upper() + translated[1:]

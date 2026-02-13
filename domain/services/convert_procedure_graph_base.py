@@ -3,11 +3,14 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from domain.markup_type_labels import humanize_markup_type_for_brackets
 from domain.models import (
     END_TYPE_COLORS,
     END_TYPE_DEFAULT,
     FramePlacement,
+    LayoutPlan,
     MarkupDocument,
+    MarkupTypeColumnPlacement,
     Point,
     ScenarioPlacement,
     ServiceZonePlacement,
@@ -46,8 +49,24 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         self._build_scenarios(plan.scenarios, registry, base_metadata)
         self._build_procedure_flow_edges(document, plan.frames, frame_ids, registry, base_metadata)
         self._build_service_zone_labels(plan.service_zones, registry, base_metadata)
+        self._build_markup_type_column_titles(
+            plan.markup_type_columns,
+            registry,
+            base_metadata,
+        )
+        title_plan = plan
+        if plan.markup_type_columns:
+            title_plan = LayoutPlan(
+                frames=plan.frames,
+                blocks=plan.blocks,
+                markers=plan.markers,
+                separators=plan.separators,
+                scenarios=plan.scenarios,
+                service_zones=plan.service_zones,
+                markup_type_columns=[],
+            )
         self._build_service_title(
-            plan,
+            title_plan,
             registry,
             base_metadata,
             document.service_name,
@@ -816,3 +835,73 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             f"{zone.size.width:.3f}",
             f"{zone.size.height:.3f}",
         )
+
+    def _build_markup_type_column_titles(
+        self,
+        columns: list[MarkupTypeColumnPlacement],
+        registry: ElementRegistry,
+        base_metadata: Metadata,
+    ) -> None:
+        for column in columns:
+            markup_type = str(column.markup_type or "").strip() or "unknown"
+            title = humanize_markup_type_for_brackets(markup_type)
+            group_id = self._stable_id("markup-type-column-group", markup_type)
+            panel_id = self._stable_id("markup-type-column-panel", markup_type)
+            rule_id = self._stable_id("markup-type-column-rule", markup_type)
+            text_id = self._stable_id("markup-type-column-text", markup_type)
+            panel_meta = self._with_base_metadata(
+                {"role": "markup_type_column_panel", "markup_type": markup_type},
+                base_metadata,
+            )
+            rule_meta = self._with_base_metadata(
+                {"role": "markup_type_column_rule", "markup_type": markup_type},
+                base_metadata,
+            )
+            text_meta = self._with_base_metadata(
+                {"role": "markup_type_column_title", "markup_type": markup_type},
+                base_metadata,
+            )
+            registry.add(
+                self._rectangle_element(
+                    element_id=panel_id,
+                    position=column.origin,
+                    size=column.size,
+                    frame_id=None,
+                    group_ids=[group_id],
+                    metadata=panel_meta,
+                    background_color="#d9d9d9",
+                    stroke_color="#616161",
+                    fill_style="solid",
+                    roundness={"type": 3},
+                )
+            )
+            line_y = column.origin.y + column.size.height - 14.0
+            registry.add(
+                self._line_element(
+                    element_id=rule_id,
+                    start=Point(column.origin.x + 26.0, line_y),
+                    end=Point(column.origin.x + column.size.width - 26.0, line_y),
+                    metadata=rule_meta,
+                    stroke_color="#7a7a7a",
+                    stroke_width=2.5,
+                    group_ids=[group_id],
+                )
+            )
+            title_center = Point(
+                x=column.origin.x + column.size.width / 2,
+                y=column.origin.y + column.size.height / 2,
+            )
+            registry.add(
+                self._text_element(
+                    element_id=text_id,
+                    text=title,
+                    center=title_center,
+                    container_id=None,
+                    frame_id=None,
+                    metadata=text_meta,
+                    group_ids=[group_id],
+                    max_width=column.size.width - 96.0,
+                    max_height=column.size.height - 40.0,
+                    font_size=30.0,
+                )
+            )

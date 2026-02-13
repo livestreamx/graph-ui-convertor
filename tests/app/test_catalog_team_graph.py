@@ -251,6 +251,148 @@ def test_catalog_team_graph_api(
         stubber.deactivate()
 
 
+def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_search = {
+        "markup_type": "system_service_search",
+        "finedog_unit_meta": {
+            "service_name": "Search Service",
+            "team_id": "team-a",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "p_search",
+                "proc_name": "Search",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p_search": []},
+    }
+    payload_service = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Billing Service",
+            "team_id": "team-b",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p_service",
+                "proc_name": "Billing",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p_service": []},
+    }
+    objects = {
+        "markup/search.json": payload_search,
+        "markup/service.json": payload_service,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    client_api: TestClient | None = None
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        params = {"team_ids": "team-a,team-b"}
+        ru_response = client_api.get("/api/teams/graph", params={**params, "lang": "ru"})
+        assert ru_response.status_code == 200
+        ru_titles = {
+            str(element.get("text", "")).replace("\n", " ").strip()
+            for element in ru_response.json()["elements"]
+            if element.get("customData", {}).get("cjm", {}).get("role")
+            == "markup_type_column_title"
+        }
+        assert "Система поиска услуги" in ru_titles
+        assert "Услуга" in ru_titles
+
+        en_response = client_api.get("/api/teams/graph", params={**params, "lang": "en"})
+        assert en_response.status_code == 200
+        en_titles = {
+            str(element.get("text", "")).replace("\n", " ").strip()
+            for element in en_response.json()["elements"]
+            if element.get("customData", {}).get("cjm", {}).get("role")
+            == "markup_type_column_title"
+        }
+        assert "Service Search System" in en_titles
+        assert "Service" in en_titles
+    finally:
+        if client_api is not None:
+            client_api.close()
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_excluded_teams_preselected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

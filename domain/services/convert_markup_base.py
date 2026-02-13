@@ -311,7 +311,7 @@ class MarkupToDiagramConverter(ABC):
         content_width = max_x - min_x
         title_width = max(content_width + 160.0, 420.0)
         title_height = 96.0
-        gap_y = 120.0
+        gap_y = 160.0
         origin_x = (min_x + max_x) / 2 - title_width / 2
         origin_y = min_y - gap_y - title_height
         group_id = self._stable_id("diagram-title-group", title)
@@ -1456,6 +1456,11 @@ class MarkupToDiagramConverter(ABC):
             max_x = max(max_x, separator.start.x, separator.end.x)
             min_y = min(min_y, separator.start.y, separator.end.y)
             max_y = max(max_y, separator.start.y, separator.end.y)
+        for column in plan.markup_type_columns:
+            min_x = min(min_x, column.origin.x)
+            min_y = min(min_y, column.origin.y)
+            max_x = max(max_x, column.origin.x + column.size.width)
+            max_y = max(max_y, column.origin.y + column.size.height)
         if min_x == float("inf"):
             return None
         return min_x, min_y, max_x, max_y
