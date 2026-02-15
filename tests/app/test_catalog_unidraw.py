@@ -31,13 +31,6 @@ def test_catalog_unidraw_open_uses_unidraw_storage(
         assert payload.get("elements")
 
 
-def test_unidraw_does_not_require_external_url_env(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("CJM_CATALOG__UNIDRAW_BASE_URL", raising=False)
-    monkeypatch.delenv("CJM_CONFIG_PATH", raising=False)
-    settings = load_settings()
-    assert settings.catalog.unidraw_base_url == ""
-
-
 def test_builder_excluded_team_ids_env_json_array_does_not_break_catalog_ui_start(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

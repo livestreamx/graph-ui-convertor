@@ -31,7 +31,6 @@ catalog:
   excalidraw_proxy_upstream: "http://localhost:5010"
   excalidraw_proxy_prefix: "/excalidraw"
   excalidraw_max_url_length: 8000
-  unidraw_base_url: ""
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000

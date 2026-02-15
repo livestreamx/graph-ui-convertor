@@ -40,10 +40,14 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Back to catalog": "Назад в каталог",
     "Scene ID": "ID сцены",
     "Open the diagram": "Открыть диаграмму",
+    "Get the diagram": "Получите диаграмму",
     "Open in Excalidraw or download both diagram formats for manual import and editing.": "Откройте в Excalidraw или скачайте оба формата диаграмм для ручного импорта и редактирования.",
     "Open Excalidraw": "Открыть Excalidraw",
     "Download .excalidraw": "Скачать .excalidraw",
     "Download .unidraw": "Скачать .unidraw",
+    "External resources": "Внешние ресурсы",
+    "Open service resource": "Открыть ресурс услуги",
+    "Open team resource": "Открыть ресурс команды",
     "Scene will be generated on demand from markup.": "Сцена будет сгенерирована по запросу из разметки.",
     "Scene file not found in {dir_name}. Run build-all before opening.": "Файл сцены не найден в {dir_name}. Запустите build-all перед открытием.",
     "Scene is too large for URL sharing. Use Download + Import.": "Сцена слишком большая для передачи через URL. Используйте Скачать + Импорт.",
@@ -136,13 +140,14 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Count of unique graphs from selected teams.": "Количество уникальных графов из выбранных команд.",
     "Detailed list is shown below.": "Подробный список показан ниже.",
     "Bot graphs": "Bot-графы",
+    "Graphs with bot": "Графы с ботом",
     "Graphs where at least one procedure_id contains bot.": "Графы, где хотя бы один procedure_id содержит bot.",
     "Multi graphs": "Multi-графы",
     "Multichannel graphs": "Мультиканальные графы",
     "Graphs where at least one procedure_id contains multi.": "Графы, где хотя бы один procedure_id содержит multi.",
     "Unique procedures": "Уникальные процедуры",
     "Unique procedure_id count across all selected markups.": "Количество уникальных procedure_id по всем выбранным разметкам.",
-    "Graphs and intersections details": "Детали графов и пересечений",
+    "Graphs and intersections details": "Детализация графов и их пересечений",
     "Grouped by markup or by unique merged-markup combination, ranked by graph count.": "Группировка по разметке или по уникальной комбинации объединенных разметок с ранжированием по числу графов.",
     "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled.": "Только потенциальные объединения: разметки отображаются отдельно, потому что «Объединять разметки по общим узлам» отключено.",
     "No graphs detected for selected markups.": "Для выбранных разметок графы не обнаружены.",
@@ -152,33 +157,62 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Share among all procedures in selected markups by procedure_id substring: bot, multi, and everything else is employee procedures.": "Доля среди всех процедур выбранных разметок по подстрокам procedure_id: bot, multi, остальные считаются employee-процедурами.",
     "Bot procedures": "Bot-процедуры",
     "Multichannel procedures": "Мультиканальные процедуры",
-    "Employee procedures": "Сотруднические процедуры",
-    "Entity integrity": "Целостность сущностей",
-    "Internal overlap entities": "Сущности с внутренними пересечениями",
-    "Entities that share at least one procedure with another selected entity.": "Сущности, которые делят хотя бы одну процедуру с другой выбранной сущностью.",
-    "External overlap entities": "Сущности с внешними пересечениями",
-    "Entities that intersect with at least one entity from teams outside selection.": "Сущности, пересекающиеся хотя бы с одной сущностью из внешних команд.",
-    "Split entities": "Разделенные сущности",
-    "Entities with more than one disconnected component in their procedure graph.": "Сущности с более чем одной несвязной компонентой в графе процедур.",
-    "Target entities": "Целевые сущности",
-    "Entities without overlaps with other entities and without disconnected parts.": "Сущности без пересечений с другими сущностями и без разрывов на компоненты.",
+    "Employee procedures": "Процедуры сотрудника",
+    "Markup self-sufficiency": "Самодостаточность разметок",
+    "Internal overlap markups": "Разметки с внутренними пересечениями",
+    "Markups that share at least one procedure with another selected markup.": "Разметки, которые делят хотя бы одну процедуру с другой выбранной разметкой.",
+    "External overlap markups": "Разметки с внешними пересечениями",
+    "Markups that intersect with at least one markup from teams outside selection.": "Разметки, пересекающиеся хотя бы с одной разметкой из внешних команд.",
+    "Split markups": "Разделенные разметки",
+    "Markups with more than one disconnected component in their procedure graph.": "Разметки с более чем одной несвязной компонентой в графе процедур.",
+    "Target markups": "Целевые разметки",
+    "Markups without overlaps with other markups and without disconnected parts.": "Разметки без пересечений с другими разметками и без разрывов на компоненты.",
     "External team overlaps": "Пересечения с внешними командами",
     "Teams outside selection are ranked by total merge intersections with a split by dependency direction: external team depends on selected teams, and selected teams depend on external team. Click a team row to view service-level details.": "Внешние команды ранжируются по общему числу merge-пересечений с разбиением по направлению зависимостей: внешняя команда зависит от выбранных, и выбранные зависят от внешней. Нажмите строку команды для деталей на уровне сервисов.",
     "No intersections with teams outside the selection.": "Нет пересечений с командами вне выбранного набора.",
     "Risk hotspots": "Зоны риска",
-    "Top linking procedures": "Топ связывающих процедур",
-    "Rank by cross-entity reuse and dependency fan-in/fan-out in merged procedure_graph data. Click a row to inspect per-graph dependency impact for the same procedure.": "Рейтинг по межсущностному переиспользованию и входящим/исходящим зависимостям в объединенных данных procedure_graph. Нажмите строку, чтобы посмотреть влияние зависимостей по графам для этой процедуры.",
-    "Ranking priority: cross-entity reuse -> total dependencies (incoming + outgoing) -> incoming -> outgoing. Based only on selected markups, deterministic for the same input.": "Приоритет ранжирования: межсущностное переиспользование -> все зависимости (входящие + исходящие) -> входящие -> исходящие. Рассчитывается только по выбранным разметкам и детерминирован для одинакового входа.",
+    "Top linking procedures": "Топ высокосвязных процедур",
+    "Rank by cross-entity reuse and dependency fan-in/fan-out in merged procedure_graph data. Click a row to inspect per-graph dependency impact for the same procedure.": "Рейтинг по использованию в разных разметках и входящим/исходящим зависимостям в объединенных данных procedure_graph. Нажмите строку, чтобы посмотреть влияние зависимостей по графам для этой процедуры.",
+    "Ranking priority: cross-entity reuse -> total dependencies (incoming + outgoing) -> incoming -> outgoing. Based only on selected markups, deterministic for the same input.": "Приоритет ранжирования: использование в разных разметках -> все зависимости (входящие + исходящие) -> входящие -> исходящие.\nРассчитывается только по выбранным разметкам и детерминирован для одинакового входа.",
     "Procedure": "Процедура",
     "Graph-level breakdown": "Разбивка по графам",
     "No procedure-level data.": "Нет данных на уровне процедур.",
     "Top overloaded entities": "Топ перегруженных сущностей",
     "Rank by structural risk in merged procedure_graph: shared-node merges with other entities, cycles, procedure volume, then block volume.": "Рейтинг по структурному риску в объединенном procedure_graph: слияния по общим узлам с другими сущностями, циклы, объем процедур, затем объем блоков.",
+    "Rank by structural risk in merged procedure_graph: shared-node merges with other markups, cycles, procedure volume, then block volume.": "Рейтинг по структурному риску в объединенном procedure_graph: слияния по общим узлам с другими разметками, циклы, объем процедур, затем объем блоков.",
     "Click a row for per-procedure breakdown.": "Нажмите строку для детализации по процедурам.",
     "In breakdown, Links is the sum of incoming and outgoing unique procedure links for each procedure.": "В детализации «Links» — это сумма входящих и исходящих уникальных связей процедур для каждой процедуры.",
     "With Merge markups by shared nodes disabled, merge metrics are shown as potential merges.": "Когда «Объединять разметки по общим узлам» отключено, merge-метрики показываются как потенциальные.",
     "Ranking priority: merges -> cycles -> procedures -> blocks. These metrics are computed directly from graph structure and block lists.": "Приоритет ранжирования: слияния -> циклы -> процедуры -> блоки. Эти метрики считаются напрямую по структуре графа и спискам блоков.",
     "Entity": "Сущность",
+    "Markups": "Появляется в разметках",
+    "Cross-markup": "Пересекающихся разметок",
+    "Inbound deps": "Входящих зависимостей",
+    "Outbound deps": "Исходящих зависимостей",
+    "Count": "Количество",
+    "Real merges": "Реальные слияния",
+    "Potential merges": "Потенциальные слияния",
+    "graph": "граф",
+    "graphs": "графов",
+    "potential": "узел",
+    "potentials": "узлов",
+    "Intersection node breakdown": "Разбивка по узлам пересечений",
+    "Potential intersection node breakdown": "Разбивка по потенциальным узлам пересечений",
+    "External -> selected": "Внешние -> выбранные",
+    "Selected -> external": "Выбранные -> внешние",
+    "Total": "Итого",
+    "Overlap %": "Пересечение %",
+    "Procedures": "Процедуры",
+    "Merges": "Слияния",
+    "Cycles": "Циклы",
+    "Blocks": "Блоки",
+    "Procedure-level breakdown (graph order)": "Разбивка по процедурам (порядок в графе)",
+    "Procedure-level breakdown (graph order, potential merges)": "Разбивка по процедурам (порядок в графе, потенциальные слияния)",
+    "Potential merges only: graph rendering keeps procedures separated while still surfacing shared-node overlap risk.": "Только потенциальные слияния: визуализация графа оставляет процедуры раздельными, но показывает риск пересечений по общим узлам.",
+    "Cycle": "Цикл",
+    "Links": "Связи",
+    "yes": "да",
+    "no": "нет",
     "No service-level data.": "Нет данных на уровне сервисов.",
 }
 
@@ -194,6 +228,28 @@ _HUMANIZE_RU_TRANSLATIONS: Final[dict[str, str]] = {
     "unknown": "неизвестно",
     "yes": "да",
     "no": "нет",
+}
+
+_HUMANIZE_EN_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Service",
+    "system_service_search": "Service Search System",
+    "system_task_processor": "Task Processor",
+    "system_default": "Default System",
+    "unknown": "Unknown",
+}
+_MARKUP_TYPE_COLUMN_RU_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Услуги",
+    "system_service_search": "Системы поиска услуг",
+    "system_task_processor": "Обработчики задач",
+    "system_default": "Системы",
+    "unknown": "Неизвестные",
+}
+_MARKUP_TYPE_COLUMN_EN_TRANSLATIONS: Final[dict[str, str]] = {
+    "service": "Services",
+    "system_service_search": "Service Search Systems",
+    "system_task_processor": "Task Processors",
+    "system_default": "Default Systems",
+    "unknown": "Unknown",
 }
 
 _LANGUAGE_ICONS: Final[dict[str, str]] = {
@@ -321,6 +377,33 @@ def translate_ui_text(key: str, language: str) -> str:
 
 
 def translate_humanized_text(value: str, language: str) -> str:
-    if language != "ru":
-        return value
-    return _HUMANIZE_RU_TRANSLATIONS.get(value, value)
+    if language == "ru":
+        return _HUMANIZE_RU_TRANSLATIONS.get(value, value)
+    if language == "en":
+        return _HUMANIZE_EN_TRANSLATIONS.get(value, value)
+    return value
+
+
+def humanize_markup_type_label(markup_type: str, language: str) -> str:
+    normalized = str(markup_type or "").strip()
+    if not normalized:
+        return normalized
+    translated = translate_humanized_text(normalized, language)
+    if not translated:
+        return translated
+    return translated[:1].upper() + translated[1:]
+
+
+def humanize_markup_type_column_label(markup_type: str, language: str) -> str:
+    normalized = str(markup_type or "").strip()
+    if not normalized:
+        return normalized
+    if " + " in normalized:
+        parts = [part.strip() for part in normalized.split("+")]
+        localized_parts = [humanize_markup_type_column_label(part, language) for part in parts]
+        return " + ".join(item for item in localized_parts if item)
+    if language == "ru":
+        return _MARKUP_TYPE_COLUMN_RU_TRANSLATIONS.get(normalized, normalized)
+    if language == "en":
+        return _MARKUP_TYPE_COLUMN_EN_TRANSLATIONS.get(normalized, normalized)
+    return normalized

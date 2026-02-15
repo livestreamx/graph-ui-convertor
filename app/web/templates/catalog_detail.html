@@ -20,10 +20,7 @@
 
   <section class="detail-grid">
     <div class="detail-card">
-      <h3>{{ t("Open the diagram") }}</h3>
-      <p>
-        {{ t("Open in Excalidraw or download both diagram formats for manual import and editing.") }}
-      </p>
+      <h3>{{ t("Get the diagram") }}</h3>
       <div class="button-row">
         {% if diagram_excalidraw_enabled %}
           <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">{{ t("Open Excalidraw") }}</a>
@@ -31,7 +28,10 @@
         <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?format=excalidraw&download=true">
           {{ t("Download .excalidraw") }}
         </a>
-        <a class="ghost-button unidraw-button" href="/api/scenes/{{ item.scene_id }}?format=unidraw&download=true">
+        <a
+          class="{% if diagram_excalidraw_enabled %}ghost-button unidraw-button{% else %}primary-button{% endif %}"
+          href="/api/scenes/{{ item.scene_id }}?format=unidraw&download=true"
+        >
           {{ t("Download .unidraw") }}
         </a>
       </div>
@@ -45,12 +45,27 @@
         {% endif %}
       {% elif open_mode == "manual" %}
         <p class="note">{{ t("Scene is too large for URL sharing. Use Download + Import.") }}</p>
-      {% elif open_mode == "local_storage" %}
-        <p class="note">{{ t("Scene is injected via local storage for same-origin Excalidraw.") }}</p>
       {% else %}
         <p class="note">{{ t("If the scene does not load, import the downloaded file manually.") }}</p>
       {% endif %}
     </div>
+    {% if service_external_url or team_external_url %}
+      <div class="detail-card">
+        <h3>{{ t("External resources") }}</h3>
+        <div class="button-row">
+          {% if service_external_url %}
+            <a class="primary-button" target="_blank" href="{{ service_external_url }}">
+              {{ t("Open service resource") }}
+            </a>
+          {% endif %}
+          {% if team_external_url %}
+            <a class="ghost-button" target="_blank" href="{{ team_external_url }}">
+              {{ t("Open team resource") }}
+            </a>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
   </section>
 
   <section class="detail-card">

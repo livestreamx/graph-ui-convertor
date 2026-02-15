@@ -114,6 +114,68 @@ def test_block_graph_edges_ignore_markup_type() -> None:
     assert not procedure_edges
 
 
+def test_block_graph_edges_disambiguate_duplicate_block_ids_by_procedure_graph() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["entry"],
+                "end_block_ids": ["local_end::end"],
+                "branches": {
+                    "entry": ["handoff", "shared"],
+                    "handoff": ["local_end"],
+                    "shared": ["local_end"],
+                },
+            },
+            {
+                "proc_id": "p2",
+                "start_block_ids": ["shared"],
+                "end_block_ids": ["done::end"],
+                "branches": {"shared": ["done"]},
+            },
+        ],
+        "procedure_graph": {"p1": ["p2"], "p2": []},
+        "block_graph": {"handoff": ["shared"]},
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal: ExcalidrawDocument = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    block_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("edge_type")
+        in {"block_graph", "block_graph_cycle"}
+    ]
+    assert len(block_edges) == 1
+
+    blocks_by_proc_and_id = {
+        (
+            element.get("customData", {}).get("cjm", {}).get("procedure_id"),
+            element.get("customData", {}).get("cjm", {}).get("block_id"),
+        ): element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "block"
+    }
+    assert ("p1", "shared") in blocks_by_proc_and_id
+    assert ("p2", "shared") in blocks_by_proc_and_id
+
+    edge = block_edges[0]
+    edge_meta = edge.get("customData", {}).get("cjm", {})
+    assert edge_meta.get("procedure_id") == "p1"
+    assert edge_meta.get("target_procedure_id") == "p2"
+    assert edge_meta.get("source_block_id") == "handoff"
+    assert edge_meta.get("target_block_id") == "shared"
+    assert edge.get("endBinding", {}).get("elementId") == blocks_by_proc_and_id[
+        ("p2", "shared")
+    ].get("id")
+    assert edge.get("endBinding", {}).get("elementId") != blocks_by_proc_and_id[
+        ("p1", "shared")
+    ].get("id")
+
+
 def test_block_graph_cycle_edges_are_marked() -> None:
     payload = {
         "markup_type": "service",

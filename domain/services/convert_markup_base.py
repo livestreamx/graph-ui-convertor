@@ -26,10 +26,14 @@ from domain.models import (
     Size,
 )
 from domain.ports.layout import LayoutEngine
+from domain.services.block_graph_resolution import (
+    resolve_block_graph_edges,
+)
 
 Metadata = dict[str, Any]
 Element = dict[str, Any]
 MERGE_ALERT_COLOR = "#ff2d2d"
+MERGE_ALERT_PANEL_COLOR = "#ff9d9d99"
 
 
 @dataclass
@@ -298,6 +302,7 @@ class MarkupToDiagramConverter(ABC):
         base_metadata: Metadata,
         service_name: str | None,
         markup_type: str | None = None,
+        title_gap_y: float = 160.0,
     ) -> None:
         if not service_name:
             return
@@ -311,7 +316,7 @@ class MarkupToDiagramConverter(ABC):
         content_width = max_x - min_x
         title_width = max(content_width + 160.0, 420.0)
         title_height = 96.0
-        gap_y = 120.0
+        gap_y = title_gap_y
         origin_x = (min_x + max_x) / 2 - title_width / 2
         origin_y = min_y - gap_y - title_height
         group_id = self._stable_id("diagram-title-group", title)
@@ -480,8 +485,8 @@ class MarkupToDiagramConverter(ABC):
                             base_metadata,
                         ),
                         group_ids=[merge_group],
-                        background_color=MERGE_ALERT_COLOR,
-                        stroke_color=MERGE_ALERT_COLOR,
+                        background_color=MERGE_ALERT_PANEL_COLOR,
+                        stroke_color=MERGE_ALERT_PANEL_COLOR,
                     )
                 )
                 if merge_blocks:
@@ -1258,49 +1263,62 @@ class MarkupToDiagramConverter(ABC):
         registry: ElementRegistry,
         base_metadata: Metadata,
     ) -> None:
-        block_by_id: dict[str, list[tuple[str, BlockPlacement]]] = {}
-        for (proc_id, block_id), placement in blocks.items():
-            block_by_id.setdefault(block_id, []).append((proc_id, placement))
-
-        edges_by_source: dict[str, list[tuple[str, str, str, BlockPlacement, BlockPlacement]]] = {}
-        for source_block_id, targets in document.block_graph.items():
-            source_candidates = block_by_id.get(source_block_id, [])
-            if len(source_candidates) != 1:
+        owners_by_block: dict[str, set[str]] = {}
+        for proc_id, block_id in blocks:
+            owners_by_block.setdefault(block_id, set()).add(proc_id)
+        resolved_edges = resolve_block_graph_edges(
+            document.block_graph,
+            owners_by_block,
+            document.procedure_graph,
+        )
+        edges_by_source: dict[
+            tuple[str, str],
+            list[tuple[str, str, BlockPlacement, BlockPlacement]],
+        ] = {}
+        for edge in resolved_edges:
+            source_key = (edge.source_procedure_id, edge.source_block_id)
+            target_key = (edge.target_procedure_id, edge.target_block_id)
+            source_block = blocks.get(source_key)
+            target_block = blocks.get(target_key)
+            if not source_block or not target_block:
                 continue
-            source_proc, source_block = source_candidates[0]
-            for target_block_id in targets:
-                target_candidates = block_by_id.get(target_block_id, [])
-                if len(target_candidates) != 1:
-                    continue
-                target_proc, target_block = target_candidates[0]
-                edges_by_source.setdefault(source_block_id, []).append(
-                    (target_block_id, source_proc, target_proc, source_block, target_block)
+            edges_by_source.setdefault(source_key, []).append(
+                (
+                    edge.target_block_id,
+                    edge.target_procedure_id,
+                    source_block,
+                    target_block,
                 )
+            )
 
         if not edges_by_source:
             return
 
         adjacency = {
-            source_block_id: [edge[0] for edge in edges]
-            for source_block_id, edges in edges_by_source.items()
+            f"{source_proc}\x1f{source_block_id}": [
+                f"{target_proc}\x1f{target_block_id}"
+                for target_block_id, target_proc, _source_block, _target_block in edges
+            ]
+            for (source_proc, source_block_id), edges in edges_by_source.items()
         }
         cycle_edges = self._edges_in_cycles(adjacency)
-        edge_offsets: dict[str, list[float]] = {}
-        for source_block_id, edges in edges_by_source.items():
+        edge_offsets: dict[tuple[str, str], list[float]] = {}
+        for source_key, edges in edges_by_source.items():
             count = max(1, len(edges))
-            edge_offsets[source_block_id] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
+            edge_offsets[source_key] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
 
-        for source_block_id, edges in edges_by_source.items():
-            offsets = edge_offsets.get(source_block_id, [0.0])
+        for (source_proc, source_block_id), edges in edges_by_source.items():
+            offsets = edge_offsets.get((source_proc, source_block_id), [0.0])
             for offset_idx, (
                 target_block_id,
-                source_proc,
                 target_proc,
                 source_block,
                 target_block,
             ) in enumerate(edges):
                 dy = offsets[min(offset_idx, len(offsets) - 1)]
-                is_cycle = (source_block_id, target_block_id) in cycle_edges
+                source_node_key = f"{source_proc}\x1f{source_block_id}"
+                target_node_key = f"{target_proc}\x1f{target_block_id}"
+                is_cycle = (source_node_key, target_node_key) in cycle_edges
                 cycle_marker = is_cycle and self._is_reverse_block_edge(source_block, target_block)
                 if cycle_marker:
                     start_center = self._block_anchor(source_block, side="bottom")
@@ -1456,6 +1474,11 @@ class MarkupToDiagramConverter(ABC):
             max_x = max(max_x, separator.start.x, separator.end.x)
             min_y = min(min_y, separator.start.y, separator.end.y)
             max_y = max(max_y, separator.start.y, separator.end.y)
+        for column in plan.markup_type_columns:
+            min_x = min(min_x, column.origin.x)
+            min_y = min(min_y, column.origin.y)
+            max_x = max(max_x, column.origin.x + column.size.width)
+            max_y = max(max_y, column.origin.y + column.size.height)
         if min_x == float("inf"):
             return None
         return min_x, min_y, max_x, max_y

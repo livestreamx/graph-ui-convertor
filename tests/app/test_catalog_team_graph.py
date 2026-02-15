@@ -189,7 +189,9 @@ def test_catalog_team_graph_api(
         assert "graph_level=service" in html_response.text
         assert "graph_level=procedure" not in html_response.text
         assert "Graphs info" in html_response.text
-        assert "Entity integrity" in html_response.text
+        assert "Markup self-sufficiency" in html_response.text
+        assert "data-dashboard-section-key" in html_response.text
+        assert "team-graph:step4:dashboard-sections" in html_response.text
         assert "Risk hotspots" in html_response.text
         assert "team-graph-dashboard-section-collapsible" in html_response.text
         assert "Click to expand" in html_response.text
@@ -248,6 +250,176 @@ def test_catalog_team_graph_api(
         assert 'disabled aria-disabled="true"' in no_selection_response.text
         assert "Select at least one team to enable Merge." in no_selection_response.text
     finally:
+        stubber.deactivate()
+
+
+def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_search = {
+        "markup_type": "system_service_search",
+        "finedog_unit_meta": {
+            "service_name": "Search Service",
+            "team_id": "team-a",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "p_search",
+                "proc_name": "Search",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"p_search": []},
+    }
+    payload_service = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Billing Service",
+            "team_id": "team-b",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "p_service",
+                "proc_name": "Billing",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"p_service": []},
+    }
+    objects = {
+        "markup/search.json": payload_search,
+        "markup/service.json": payload_service,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/service.json",
+        payload=payload_service,
+    )
+    add_get_object(
+        stubber,
+        bucket="cjm-bucket",
+        key="markup/search.json",
+        payload=payload_search,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    client_api: TestClient | None = None
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        params = {"team_ids": "team-a,team-b"}
+        for graph_level in ("procedure", "service"):
+            graph_params = (
+                {**params, "graph_level": graph_level} if graph_level == "service" else dict(params)
+            )
+            ru_response = client_api.get("/api/teams/graph", params={**graph_params, "lang": "ru"})
+            assert ru_response.status_code == 200
+            ru_titles = {
+                str(element.get("text", "")).replace("\n", " ").strip()
+                for element in ru_response.json()["elements"]
+                if element.get("customData", {}).get("cjm", {}).get("role")
+                == "markup_type_column_title"
+            }
+            assert "Системы поиска услуг" in ru_titles
+            assert "Услуги" in ru_titles
+
+            en_response = client_api.get("/api/teams/graph", params={**graph_params, "lang": "en"})
+            assert en_response.status_code == 200
+            en_titles = {
+                str(element.get("text", "")).replace("\n", " ").strip()
+                for element in en_response.json()["elements"]
+                if element.get("customData", {}).get("cjm", {}).get("role")
+                == "markup_type_column_title"
+            }
+            assert "Service Search Systems" in en_titles
+            assert "Services" in en_titles
+    finally:
+        if client_api is not None:
+            client_api.close()
         stubber.deactivate()
 
 

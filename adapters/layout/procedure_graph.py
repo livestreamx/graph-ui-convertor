@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
+from itertools import pairwise
 
 from adapters.layout.grid import GridLayoutEngine, LayoutConfig
 from domain.markup_type_labels import humanize_markup_type_for_brackets
@@ -9,6 +11,7 @@ from domain.models import (
     FramePlacement,
     LayoutPlan,
     MarkupDocument,
+    MarkupTypeColumnPlacement,
     Point,
     Procedure,
     ScenarioPlacement,
@@ -18,6 +21,16 @@ from domain.models import (
     Size,
     normalize_finedog_unit_id,
 )
+
+_MARKUP_TYPE_COLUMN_ORDER = (
+    "system_service_search",
+    "service",
+    "system_task_processor",
+    "system_default",
+)
+_MARKUP_TYPE_COLUMN_ORDER_INDEX = {
+    markup_type: idx for idx, markup_type in enumerate(_MARKUP_TYPE_COLUMN_ORDER)
+}
 
 
 @dataclass(frozen=True)
@@ -53,6 +66,28 @@ class _MergeGroup:
     proc_ids: list[str]
 
 
+@dataclass(frozen=True)
+class _ComponentPlacementInfo:
+    component_index: int
+    procedure_ids: tuple[str, ...]
+    markup_type: str
+    is_merged_markup_types: bool
+    primary_service_name: str
+    sort_key: tuple[object, ...]
+    min_x: float
+    min_y: float
+    max_x: float
+    max_y: float
+
+    @property
+    def width(self) -> float:
+        return self.max_x - self.min_x
+
+    @property
+    def height(self) -> float:
+        return self.max_y - self.min_y
+
+
 class ProcedureGraphLayoutEngine(GridLayoutEngine):
     def __init__(self, config: LayoutConfig | None = None) -> None:
         super().__init__(config or LayoutConfig())
@@ -62,6 +97,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         separators: list[SeparatorPlacement] = []
         scenarios: list[ScenarioPlacement] = []
         service_zones: list[ServiceZonePlacement] = []
+        markup_type_columns: list[MarkupTypeColumnPlacement] = []
         is_service_graph = str(document.markup_type or "").strip().lower() == "service_graph"
 
         procedures = list(document.procedures)
@@ -73,6 +109,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 separators=separators,
                 scenarios=scenarios,
                 service_zones=service_zones,
+                markup_type_columns=markup_type_columns,
             )
 
         proc_ids = [proc.procedure_id for proc in procedures]
@@ -83,6 +120,12 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
         components.sort(
             key=lambda component: min(order_index.get(proc_id, 0) for proc_id in component)
         )
+        component_index_by_proc: dict[str, int] = {}
+        for component_idx, component in enumerate(components):
+            for proc_id in component:
+                component_index_by_proc[proc_id] = component_idx
+        scenario_index_by_component: dict[int, int] = {}
+        zone_range_by_component: dict[int, tuple[int, int]] = {}
 
         procedure_meta = document.procedure_meta or {}
         default_markup_type = str(document.markup_type or "").strip() or "unknown"
@@ -379,6 +422,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 )
                 if scenario:
                     scenarios.append(scenario)
+                    scenario_index_by_component[idx] = len(scenarios) - 1
                     procedures_bottom = (
                         scenario.procedures_origin.y + scenario.procedures_size.height
                     )
@@ -393,8 +437,10 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             if component_frames:
                 frames.extend(component_frames)
                 frame_lookup.update(component_frame_lookup)
+            zone_start = len(service_zones)
             if zones_for_component:
                 service_zones.extend(zones_for_component)
+            zone_range_by_component[idx] = (zone_start, len(service_zones))
 
             component_height = 0.0
             if component_frames:
@@ -426,6 +472,28 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 for y in separator_ys
             ]
 
+        if frames:
+            (
+                frames,
+                separators,
+                scenarios,
+                service_zones,
+                markup_type_columns,
+            ) = self._arrange_components_by_markup_type_columns(
+                components=components,
+                adjacency=adjacency,
+                order_index=order_index,
+                procedure_map=procedure_map,
+                procedure_meta=procedure_meta,
+                default_markup_type=default_markup_type,
+                frames=frames,
+                scenarios=scenarios,
+                service_zones=service_zones,
+                component_index_by_proc=component_index_by_proc,
+                scenario_index_by_component=scenario_index_by_component,
+                zone_range_by_component=zone_range_by_component,
+            )
+
         return LayoutPlan(
             frames=frames,
             blocks=[],
@@ -433,6 +501,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             separators=separators,
             scenarios=scenarios,
             service_zones=service_zones,
+            markup_type_columns=markup_type_columns,
         )
 
     def _procedure_node_size(self) -> Size:
@@ -1483,6 +1552,552 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     frames.append(frame)
                     frame_lookup[proc_id] = frame
         return frames, frame_lookup, component_height
+
+    def _arrange_components_by_markup_type_columns(
+        self,
+        *,
+        components: list[set[str]],
+        adjacency: Mapping[str, list[str]],
+        order_index: Mapping[str, int],
+        procedure_map: Mapping[str, Procedure],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+        default_markup_type: str,
+        frames: list[FramePlacement],
+        scenarios: list[ScenarioPlacement],
+        service_zones: list[ServiceZonePlacement],
+        component_index_by_proc: Mapping[str, int],
+        scenario_index_by_component: Mapping[int, int],
+        zone_range_by_component: Mapping[int, tuple[int, int]],
+    ) -> tuple[
+        list[FramePlacement],
+        list[SeparatorPlacement],
+        list[ScenarioPlacement],
+        list[ServiceZonePlacement],
+        list[MarkupTypeColumnPlacement],
+    ]:
+        frame_by_proc = {frame.procedure_id: frame for frame in frames}
+        zones_by_component: dict[int, list[ServiceZonePlacement]] = defaultdict(list)
+        for component_idx, (start, end) in zone_range_by_component.items():
+            zones_by_component[component_idx].extend(service_zones[start:end])
+
+        component_infos: list[_ComponentPlacementInfo] = []
+        for component_idx, component in enumerate(components):
+            if not component:
+                continue
+            proc_ids = tuple(
+                sorted(component, key=lambda proc_id: (order_index.get(proc_id, 0), proc_id))
+            )
+            scenario: ScenarioPlacement | None = None
+            scenario_idx = scenario_index_by_component.get(component_idx)
+            if isinstance(scenario_idx, int) and 0 <= scenario_idx < len(scenarios):
+                scenario = scenarios[scenario_idx]
+            bounds = self._component_bounds(
+                procedure_ids=proc_ids,
+                frame_by_proc=frame_by_proc,
+                zones=zones_by_component.get(component_idx, []),
+                scenario=scenario,
+            )
+            if bounds is None:
+                continue
+            (
+                column_markup_type,
+                is_merged_markup_types,
+            ) = self._component_column_markup_type(
+                procedure_ids=proc_ids,
+                procedure_meta=procedure_meta,
+                default_markup_type=default_markup_type,
+            )
+            sort_key = self._component_sort_key(
+                procedure_ids=proc_ids,
+                procedure_map=procedure_map,
+                procedure_meta=procedure_meta,
+                default_markup_type=default_markup_type,
+            )
+            component_infos.append(
+                _ComponentPlacementInfo(
+                    component_index=component_idx,
+                    procedure_ids=proc_ids,
+                    markup_type=column_markup_type,
+                    is_merged_markup_types=is_merged_markup_types,
+                    primary_service_name=str(sort_key[0]),
+                    sort_key=sort_key,
+                    min_x=bounds[0],
+                    min_y=bounds[1],
+                    max_x=bounds[2],
+                    max_y=bounds[3],
+                )
+            )
+
+        if not component_infos:
+            return frames, [], scenarios, service_zones, []
+
+        info_by_component = {info.component_index: info for info in component_infos}
+        column_components: dict[str, list[_ComponentPlacementInfo]] = defaultdict(list)
+        for info in component_infos:
+            column_components[info.markup_type].append(info)
+        for infos in column_components.values():
+            infos.sort(key=lambda info: info.sort_key)
+
+        ordered_columns = sorted(column_components, key=self._markup_type_column_sort_key)
+        column_position = {markup_type: idx for idx, markup_type in enumerate(ordered_columns)}
+        component_column_index: dict[int, int] = {}
+        for column_idx, markup_type in enumerate(ordered_columns):
+            for info in column_components[markup_type]:
+                component_column_index[info.component_index] = column_idx
+
+        cross_component_links: dict[int, set[int]] = defaultdict(set)
+        for source_proc, targets in adjacency.items():
+            source_idx = component_index_by_proc.get(source_proc)
+            if source_idx is None:
+                continue
+            for target_proc in targets:
+                target_idx = component_index_by_proc.get(target_proc)
+                if target_idx is None or target_idx == source_idx:
+                    continue
+                cross_component_links[target_idx].add(source_idx)
+                cross_component_links[source_idx].add(target_idx)
+
+        component_gap = max(self.config.gap_y, self.config.separator_padding * 2)
+        column_gap = max(self.config.lane_gap, self.config.separator_padding)
+        column_widths: dict[str, float] = {
+            markup_type: max((info.width for info in infos), default=0.0)
+            for markup_type, infos in column_components.items()
+        }
+
+        column_start_x: dict[str, float] = {}
+        x_cursor = 0.0
+        for markup_type in ordered_columns:
+            column_start_x[markup_type] = x_cursor
+            x_cursor += column_widths.get(markup_type, 0.0) + column_gap
+
+        desired_center_by_component: dict[int, float] = {}
+        placed_center_y: dict[int, float] = {}
+        new_bounds_by_component: dict[int, tuple[float, float, float, float]] = {}
+        ordered_component_ids_by_column: dict[str, list[int]] = {}
+        for markup_type in ordered_columns:
+            infos = column_components.get(markup_type, [])
+            if not infos:
+                continue
+            column_idx = column_position.get(markup_type, -1)
+            for info in infos:
+                neighbor_centers = [
+                    placed_center_y[neighbor_idx]
+                    for neighbor_idx in cross_component_links.get(info.component_index, set())
+                    if neighbor_idx in placed_center_y
+                    and component_column_index.get(neighbor_idx, -1) < column_idx
+                ]
+                if neighbor_centers:
+                    desired_center_by_component[info.component_index] = sum(neighbor_centers) / len(
+                        neighbor_centers
+                    )
+
+            base_centers: dict[int, float] = {}
+            cursor = 0.0
+            for info in infos:
+                base_centers[info.component_index] = cursor + info.height / 2
+                cursor += info.height + component_gap
+
+            desired_offsets = [
+                desired_center_by_component[info.component_index]
+                - base_centers.get(info.component_index, info.height / 2)
+                for info in infos
+                if info.component_index in desired_center_by_component
+            ]
+            start_offset = max(0.0, self._median(desired_offsets)) if desired_offsets else 0.0
+            current_y = start_offset
+            column_component_ids: list[int] = []
+            for info in infos:
+                desired_center = desired_center_by_component.get(info.component_index)
+                if desired_center is not None:
+                    desired_top = desired_center - info.height / 2
+                    if desired_top > current_y:
+                        current_y = desired_top
+                new_min_x = column_start_x.get(markup_type, 0.0)
+                new_min_y = current_y
+                new_max_x = new_min_x + info.width
+                new_max_y = new_min_y + info.height
+                new_bounds_by_component[info.component_index] = (
+                    new_min_x,
+                    new_min_y,
+                    new_max_x,
+                    new_max_y,
+                )
+                center_y = new_min_y + info.height / 2
+                placed_center_y[info.component_index] = center_y
+                column_component_ids.append(info.component_index)
+                current_y = new_max_y + component_gap
+            ordered_component_ids_by_column[markup_type] = column_component_ids
+
+        component_shift: dict[int, tuple[float, float]] = {}
+        for component_idx, (new_min_x, new_min_y, _, _) in new_bounds_by_component.items():
+            info = info_by_component[component_idx]
+            component_shift[component_idx] = (
+                new_min_x - info.min_x,
+                new_min_y - info.min_y,
+            )
+
+        shifted_frames: list[FramePlacement] = []
+        for frame in frames:
+            frame_component_idx = component_index_by_proc.get(frame.procedure_id)
+            shift = (
+                component_shift.get(frame_component_idx)
+                if frame_component_idx is not None
+                else None
+            )
+            if shift is None:
+                shifted_frames.append(frame)
+                continue
+            dx, dy = shift
+            shifted_frames.append(
+                FramePlacement(
+                    procedure_id=frame.procedure_id,
+                    origin=Point(frame.origin.x + dx, frame.origin.y + dy),
+                    size=frame.size,
+                )
+            )
+
+        shifted_scenarios = list(scenarios)
+        for component_idx, scenario_idx in scenario_index_by_component.items():
+            shift = component_shift.get(component_idx)
+            if shift is None:
+                continue
+            if not (0 <= scenario_idx < len(shifted_scenarios)):
+                continue
+            shifted_scenarios[scenario_idx] = self._shift_scenario(
+                shifted_scenarios[scenario_idx],
+                shift[0],
+                shift[1],
+            )
+
+        shifted_service_zones = list(service_zones)
+        for component_idx, (start, end) in zone_range_by_component.items():
+            shift = component_shift.get(component_idx)
+            if shift is None:
+                continue
+            dx, dy = shift
+            for zone_idx in range(start, min(end, len(shifted_service_zones))):
+                shifted_service_zones[zone_idx] = self._shift_service_zone(
+                    shifted_service_zones[zone_idx], dx, dy
+                )
+
+        shifted_frame_by_proc = {frame.procedure_id: frame for frame in shifted_frames}
+        separators: list[SeparatorPlacement] = []
+        for markup_type in ordered_columns:
+            ordered_component_ids = ordered_component_ids_by_column.get(markup_type, [])
+            if len(ordered_component_ids) < 2:
+                continue
+            column_frames = [
+                shifted_frame_by_proc[proc_id]
+                for component_idx in ordered_component_ids
+                for proc_id in info_by_component[component_idx].procedure_ids
+                if proc_id in shifted_frame_by_proc
+            ]
+            if not column_frames:
+                continue
+            x_start = (
+                min(frame.origin.x for frame in column_frames) - self.config.separator_margin_x
+            )
+            x_end = (
+                max(frame.origin.x + frame.size.width for frame in column_frames)
+                + self.config.separator_margin_x
+            )
+            for left_idx, right_idx in pairwise(ordered_component_ids):
+                left_bounds = new_bounds_by_component.get(left_idx)
+                right_bounds = new_bounds_by_component.get(right_idx)
+                if left_bounds is None or right_bounds is None:
+                    continue
+                left_bottom = left_bounds[3]
+                right_top = right_bounds[1]
+                if right_top <= left_bottom:
+                    continue
+                y = (left_bottom + right_top) / 2
+                separators.append(
+                    SeparatorPlacement(
+                        start=Point(x_start, y),
+                        end=Point(x_end, y),
+                    )
+                )
+        separators.sort(key=lambda separator: (separator.start.y, separator.start.x))
+
+        markup_type_columns: list[MarkupTypeColumnPlacement] = []
+        header_gap = max(104.0, self.config.scenario_procedures_gap * 4.0)
+        header_height = 96.0
+        header_padding_x = 40.0
+        min_header_width = 420.0
+        global_components_top = min(
+            (bounds[1] for bounds in new_bounds_by_component.values()),
+            default=0.0,
+        )
+        header_origin_y = global_components_top - header_gap - header_height
+        for markup_type in ordered_columns:
+            ordered_component_ids = ordered_component_ids_by_column.get(markup_type, [])
+            if not ordered_component_ids:
+                continue
+            column_bounds = [
+                new_bounds_by_component[component_idx]
+                for component_idx in ordered_component_ids
+                if component_idx in new_bounds_by_component
+            ]
+            if not column_bounds:
+                continue
+            min_x = min(item[0] for item in column_bounds)
+            max_x = max(item[2] for item in column_bounds)
+            base_width = (max_x - min_x) + header_padding_x * 2
+            header_width = max(min_header_width, base_width)
+            extra_width = header_width - base_width
+            origin_x = min_x - header_padding_x - extra_width / 2
+            markup_type_columns.append(
+                MarkupTypeColumnPlacement(
+                    markup_type=markup_type,
+                    origin=Point(origin_x, header_origin_y),
+                    size=Size(header_width, header_height),
+                    is_merged_markup_types=any(
+                        info_by_component[component_idx].is_merged_markup_types
+                        for component_idx in ordered_component_ids
+                        if component_idx in info_by_component
+                    ),
+                )
+            )
+
+        return (
+            shifted_frames,
+            separators,
+            shifted_scenarios,
+            shifted_service_zones,
+            markup_type_columns,
+        )
+
+    def _component_bounds(
+        self,
+        *,
+        procedure_ids: tuple[str, ...],
+        frame_by_proc: Mapping[str, FramePlacement],
+        zones: list[ServiceZonePlacement],
+        scenario: ScenarioPlacement | None,
+    ) -> tuple[float, float, float, float] | None:
+        min_x = float("inf")
+        min_y = float("inf")
+        max_x = float("-inf")
+        max_y = float("-inf")
+        has_data = False
+
+        for proc_id in procedure_ids:
+            frame = frame_by_proc.get(proc_id)
+            if frame is None:
+                continue
+            has_data = True
+            min_x = min(min_x, frame.origin.x)
+            min_y = min(min_y, frame.origin.y)
+            max_x = max(max_x, frame.origin.x + frame.size.width)
+            max_y = max(max_y, frame.origin.y + frame.size.height)
+
+        for zone in zones:
+            has_data = True
+            min_x = min(min_x, zone.origin.x)
+            min_y = min(min_y, zone.origin.y)
+            max_x = max(max_x, zone.origin.x + zone.size.width)
+            max_y = max(max_y, zone.origin.y + zone.size.height)
+
+        if scenario is not None:
+            has_data = True
+            min_x = min(min_x, scenario.origin.x, scenario.procedures_origin.x)
+            min_y = min(min_y, scenario.origin.y, scenario.procedures_origin.y)
+            max_x = max(
+                max_x,
+                scenario.origin.x + scenario.size.width,
+                scenario.procedures_origin.x + scenario.procedures_size.width,
+            )
+            max_y = max(max_y, scenario.procedures_origin.y + scenario.procedures_size.height)
+            if scenario.merge_origin and scenario.merge_size:
+                min_x = min(min_x, scenario.merge_origin.x)
+                min_y = min(min_y, scenario.merge_origin.y)
+                max_x = max(max_x, scenario.merge_origin.x + scenario.merge_size.width)
+                max_y = max(max_y, scenario.merge_origin.y + scenario.merge_size.height)
+
+        if not has_data:
+            return None
+        return min_x, min_y, max_x, max_y
+
+    def _component_column_markup_type(
+        self,
+        *,
+        procedure_ids: tuple[str, ...],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+        default_markup_type: str,
+    ) -> tuple[str, bool]:
+        intersection_markup_types: set[str] = set()
+        for proc_id in procedure_ids:
+            meta = procedure_meta.get(proc_id, {})
+            if not self._is_real_intersection_merge(proc_id, meta):
+                continue
+            for entry in self._procedure_merge_entries(meta, default_markup_type):
+                markup_type = str(entry.get("markup_type") or default_markup_type).strip()
+                intersection_markup_types.add(markup_type or "unknown")
+        if len(intersection_markup_types) > 1:
+            ordered_types = sorted(
+                intersection_markup_types,
+                key=self._markup_type_column_sort_key,
+            )
+            return " + ".join(ordered_types), True
+
+        markup_types: set[str] = set()
+        for proc_id in procedure_ids:
+            meta = procedure_meta.get(proc_id, {})
+            for entry in self._procedure_service_entries(meta, default_markup_type):
+                markup_type = str(entry.get("markup_type") or default_markup_type).strip()
+                markup_types.add(markup_type or "unknown")
+        if not markup_types:
+            return default_markup_type or "unknown", False
+        return min(markup_types, key=self._markup_type_column_sort_key), False
+
+    def _is_real_intersection_merge(
+        self,
+        proc_id: str,
+        meta: Mapping[str, object],
+    ) -> bool:
+        if meta.get("is_intersection") is not True:
+            return False
+        source_proc_id = meta.get("source_procedure_id")
+        if isinstance(source_proc_id, str) and source_proc_id and source_proc_id != proc_id:
+            return False
+        return True
+
+    def _component_sort_key(
+        self,
+        *,
+        procedure_ids: tuple[str, ...],
+        procedure_map: Mapping[str, Procedure],
+        procedure_meta: Mapping[str, Mapping[str, object]],
+        default_markup_type: str,
+    ) -> tuple[object, ...]:
+        service_names: set[str] = set()
+        for proc_id in procedure_ids:
+            meta = procedure_meta.get(proc_id, {})
+            for entry in self._procedure_service_entries(meta, default_markup_type):
+                raw_name = str(entry.get("service_name") or "").strip()
+                if raw_name:
+                    service_names.add(raw_name)
+            if not service_names:
+                fallback_name = str(meta.get("service_name") or "").strip()
+                if fallback_name:
+                    service_names.add(fallback_name)
+        if not service_names:
+            service_names.add("Unknown service")
+        normalized_services = tuple(
+            sorted({service.lower() for service in service_names if service.strip()})
+        )
+        if not normalized_services:
+            normalized_services = ("unknown service",)
+        primary_service = normalized_services[0]
+
+        procedure_tokens: list[str] = []
+        block_tokens: list[str] = []
+        for proc_id in procedure_ids:
+            proc = procedure_map.get(proc_id)
+            if proc is not None:
+                proc_name = str(proc.procedure_name or "").strip().lower()
+                procedure_tokens.append(proc_name or proc_id.lower())
+                if proc.block_id_to_block_name:
+                    block_tokens.extend(
+                        value.strip().lower()
+                        for value in proc.block_id_to_block_name.values()
+                        if isinstance(value, str) and value.strip()
+                    )
+                else:
+                    block_tokens.extend(block_id.lower() for block_id in sorted(proc.block_ids()))
+            else:
+                procedure_tokens.append(proc_id.lower())
+        procedure_tokens.sort()
+        block_tokens.sort()
+        if not block_tokens:
+            block_tokens = [proc_id.lower() for proc_id in procedure_ids]
+        return (
+            primary_service,
+            normalized_services,
+            tuple(procedure_tokens),
+            tuple(block_tokens),
+            tuple(proc_id.lower() for proc_id in procedure_ids),
+        )
+
+    def _markup_type_column_sort_key(self, markup_type: str) -> tuple[int, str]:
+        normalized = str(markup_type or "").strip() or "unknown"
+        return (
+            _MARKUP_TYPE_COLUMN_ORDER_INDEX.get(normalized, len(_MARKUP_TYPE_COLUMN_ORDER)),
+            normalized.lower(),
+        )
+
+    def _median(self, values: list[float]) -> float:
+        if not values:
+            return 0.0
+        ordered = sorted(values)
+        mid = len(ordered) // 2
+        if len(ordered) % 2 == 1:
+            return ordered[mid]
+        return (ordered[mid - 1] + ordered[mid]) / 2
+
+    def _shift_service_zone(
+        self,
+        zone: ServiceZonePlacement,
+        dx: float,
+        dy: float,
+    ) -> ServiceZonePlacement:
+        return ServiceZonePlacement(
+            service_key=zone.service_key,
+            service_name=zone.service_name,
+            markup_type=zone.markup_type,
+            team_name=zone.team_name,
+            team_id=zone.team_id,
+            color=zone.color,
+            origin=Point(zone.origin.x + dx, zone.origin.y + dy),
+            size=zone.size,
+            label_origin=Point(zone.label_origin.x + dx, zone.label_origin.y + dy),
+            label_size=zone.label_size,
+            label_font_size=zone.label_font_size,
+            procedure_ids=zone.procedure_ids,
+        )
+
+    def _shift_scenario(
+        self,
+        scenario: ScenarioPlacement,
+        dx: float,
+        dy: float,
+    ) -> ScenarioPlacement:
+        merge_origin = None
+        if scenario.merge_origin is not None:
+            merge_origin = Point(
+                scenario.merge_origin.x + dx,
+                scenario.merge_origin.y + dy,
+            )
+        return ScenarioPlacement(
+            origin=Point(scenario.origin.x + dx, scenario.origin.y + dy),
+            size=scenario.size,
+            title_text=scenario.title_text,
+            body_text=scenario.body_text,
+            cycle_text=scenario.cycle_text,
+            title_font_size=scenario.title_font_size,
+            body_font_size=scenario.body_font_size,
+            cycle_font_size=scenario.cycle_font_size,
+            padding=scenario.padding,
+            section_gap=scenario.section_gap,
+            procedures_origin=Point(
+                scenario.procedures_origin.x + dx,
+                scenario.procedures_origin.y + dy,
+            ),
+            procedures_size=scenario.procedures_size,
+            procedures_text=scenario.procedures_text,
+            procedures_font_size=scenario.procedures_font_size,
+            procedures_padding=scenario.procedures_padding,
+            procedures_blocks=scenario.procedures_blocks,
+            procedures_block_padding=scenario.procedures_block_padding,
+            merge_origin=merge_origin,
+            merge_size=scenario.merge_size,
+            merge_text=scenario.merge_text,
+            merge_font_size=scenario.merge_font_size,
+            merge_padding=scenario.merge_padding,
+            merge_blocks=scenario.merge_blocks,
+            merge_block_padding=scenario.merge_block_padding,
+            merge_node_numbers=scenario.merge_node_numbers,
+        )
 
     def _zones_have_non_nested_overlap(self, zones: list[ServiceZonePlacement]) -> bool:
         for idx, first in enumerate(zones):

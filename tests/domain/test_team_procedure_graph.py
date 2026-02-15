@@ -239,6 +239,159 @@ def test_service_graph_layout_skips_left_dashboard_panels() -> None:
     assert not any(role.startswith("scenario_") for role in roles)
 
 
+def test_service_graph_layout_sorts_markup_type_columns_and_components() -> None:
+    payload = {
+        "markup_type": "service_graph",
+        "service_name": "Services · Alpha + Beta",
+        "procedures": [
+            {
+                "proc_id": "search_z",
+                "proc_name": "Search Z",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "search_a",
+                "proc_name": "Search A",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "svc_flow_beta",
+                "proc_name": "Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+                "block_id_to_block_name": {"sb_start": "Beta"},
+            },
+            {
+                "proc_id": "svc_flow_alpha",
+                "proc_name": "Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+                "block_id_to_block_name": {"sa_start": "Alpha"},
+            },
+            {
+                "proc_id": "svc_refunds",
+                "proc_name": "Refunds Flow",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "task_proc",
+                "proc_name": "Task Proc",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+            {
+                "proc_id": "default_proc",
+                "proc_name": "Default Proc",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            },
+        ],
+        "procedure_graph": {
+            "search_z": [],
+            "search_a": [],
+            "svc_flow_beta": [],
+            "svc_flow_alpha": [],
+            "svc_refunds": [],
+            "task_proc": [],
+            "default_proc": [],
+        },
+    }
+    procedure_meta = {
+        "search_z": {
+            "team_name": "Alpha",
+            "service_name": "Zeta Search",
+            "markup_type": "system_service_search",
+        },
+        "search_a": {
+            "team_name": "Alpha",
+            "service_name": "Alpha Search",
+            "markup_type": "system_service_search",
+        },
+        "svc_flow_beta": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_flow_alpha": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_refunds": {
+            "team_name": "Beta",
+            "service_name": "Refunds",
+            "markup_type": "service",
+        },
+        "task_proc": {
+            "team_name": "Gamma",
+            "service_name": "Queue",
+            "markup_type": "system_task_processor",
+        },
+        "default_proc": {
+            "team_name": "Gamma",
+            "service_name": "Fallback",
+            "markup_type": "system_default",
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={"procedure_meta": procedure_meta}
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    assert {column.markup_type for column in plan.markup_type_columns} == {
+        "system_service_search",
+        "service",
+        "system_task_processor",
+        "system_default",
+    }
+
+    frame_by_proc = {frame.procedure_id: frame for frame in plan.frames}
+    mean_x_by_markup_type = {
+        markup_type: sum(frame_by_proc[proc_id].origin.x for proc_id in proc_ids) / len(proc_ids)
+        for markup_type, proc_ids in {
+            "system_service_search": ["search_a", "search_z"],
+            "service": ["svc_flow_alpha", "svc_flow_beta", "svc_refunds"],
+            "system_task_processor": ["task_proc"],
+            "system_default": ["default_proc"],
+        }.items()
+    }
+    assert (
+        mean_x_by_markup_type["system_service_search"]
+        < mean_x_by_markup_type["service"]
+        < mean_x_by_markup_type["system_task_processor"]
+        < mean_x_by_markup_type["system_default"]
+    )
+    assert frame_by_proc["search_a"].origin.y < frame_by_proc["search_z"].origin.y
+    assert frame_by_proc["svc_flow_alpha"].origin.y < frame_by_proc["svc_flow_beta"].origin.y
+    assert frame_by_proc["svc_flow_beta"].origin.y < frame_by_proc["svc_refunds"].origin.y
+    assert not plan.scenarios
+    assert not plan.service_zones
+
+    scene = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    header_titles = [
+        element
+        for element in scene.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    ]
+    assert {str(item.get("text", "")).replace("\n", " ").strip() for item in header_titles} == {
+        "Системы поиска услуг",
+        "Услуги",
+        "Обработчики задач",
+        "Системы",
+    }
+
+
 def test_service_graph_splits_multiple_procedures_by_service() -> None:
     document = MarkupDocument.model_validate(
         {
@@ -609,6 +762,7 @@ def test_build_team_procedure_graph_chain_threshold_aligns_chain_horizontally() 
 def test_procedure_graph_layout_normalizes_row_spacing_after_chain_alignment() -> None:
     payload = {
         "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
         "procedures": [
             {
                 "proc_id": "merge_a",
@@ -739,16 +893,29 @@ def test_build_team_procedure_graph_scoped_merge_layout_keeps_separators_between
 
     scenarios = sorted(plan.scenarios, key=lambda scenario: scenario.origin.y)
     assert len(scenarios) > 1
-    assert len(plan.separators) == len(scenarios) - 1
-    for idx, separator in enumerate(plan.separators):
-        scenario = scenarios[idx]
-        scenario_bottom = scenario.procedures_origin.y + scenario.procedures_size.height
-        if scenario.merge_origin and scenario.merge_size:
-            scenario_bottom = max(
-                scenario_bottom, scenario.merge_origin.y + scenario.merge_size.height
-            )
-        assert separator.start.y > scenario_bottom
-        assert separator.start.y < scenarios[idx + 1].origin.y
+    assert plan.separators
+    for separator in plan.separators:
+        scenario_bottoms = []
+        for scenario in plan.scenarios:
+            bottom = scenario.procedures_origin.y + scenario.procedures_size.height
+            if scenario.merge_origin and scenario.merge_size:
+                bottom = max(bottom, scenario.merge_origin.y + scenario.merge_size.height)
+            scenario_bottoms.append(bottom)
+        nearest_above = max(
+            (bottom for bottom in scenario_bottoms if bottom < separator.start.y),
+            default=None,
+        )
+        nearest_below = min(
+            (
+                scenario.origin.y
+                for scenario in plan.scenarios
+                if scenario.origin.y > separator.start.y
+            ),
+            default=None,
+        )
+        assert nearest_above is not None
+        assert nearest_below is not None
+        assert nearest_above < separator.start.y < nearest_below
 
 
 def test_build_team_procedure_graph_marks_singleton_shared_nodes_when_flag_is_off() -> None:
@@ -1764,22 +1931,28 @@ def test_procedure_graph_separator_stays_between_components_with_scenarios() -> 
     assert len(plan.separators) == 2
     assert len(plan.scenarios) == 3
 
-    frames_by_proc = {frame.procedure_id: frame for frame in plan.frames}
-    scenarios_by_top = sorted(plan.scenarios, key=lambda scenario: scenario.origin.y)
-
-    first_separator_y = plan.separators[0].start.y
-    first_scenario_bottom = (
-        scenarios_by_top[0].procedures_origin.y + scenarios_by_top[0].procedures_size.height
-    )
-    assert first_separator_y > first_scenario_bottom
-    assert first_separator_y < frames_by_proc["p2"].origin.y
-
-    second_separator_y = plan.separators[1].start.y
-    second_scenario_bottom = (
-        scenarios_by_top[1].procedures_origin.y + scenarios_by_top[1].procedures_size.height
-    )
-    assert second_separator_y > second_scenario_bottom
-    assert second_separator_y < frames_by_proc["p3"].origin.y
+    for separator in plan.separators:
+        scenario_bottoms = []
+        for scenario in plan.scenarios:
+            bottom = scenario.procedures_origin.y + scenario.procedures_size.height
+            if scenario.merge_origin and scenario.merge_size:
+                bottom = max(bottom, scenario.merge_origin.y + scenario.merge_size.height)
+            scenario_bottoms.append(bottom)
+        nearest_above = max(
+            (bottom for bottom in scenario_bottoms if bottom < separator.start.y),
+            default=None,
+        )
+        nearest_below = min(
+            (
+                scenario.origin.y
+                for scenario in plan.scenarios
+                if scenario.origin.y > separator.start.y
+            ),
+            default=None,
+        )
+        assert nearest_above is not None
+        assert nearest_below is not None
+        assert nearest_above < separator.start.y < nearest_below
 
 
 def test_procedure_graph_converter_adds_stats_and_label() -> None:
@@ -2340,8 +2513,8 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
         for element in excal.elements
         if element.get("customData", {}).get("cjm", {}).get("role") == "scenario_merge_panel"
     )
-    assert merge_panel.get("backgroundColor") == "#ff2d2d"
-    assert merge_panel.get("strokeColor") == "#ff2d2d"
+    assert merge_panel.get("backgroundColor") == "#ff9d9d99"
+    assert merge_panel.get("strokeColor") == "#ff9d9d99"
 
     highlight = next(
         element
@@ -2520,6 +2693,418 @@ def test_procedure_graph_layout_aligns_zone_top_with_scenario() -> None:
     top_zone = min(plan.service_zones, key=lambda zone: zone.origin.y)
     top_scenario = min(plan.scenarios, key=lambda scenario: scenario.origin.y)
     assert abs(top_zone.origin.y - top_scenario.origin.y) <= 1e-6
+
+
+def test_procedure_graph_layout_sorts_markup_type_columns_and_components() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "search_z",
+                "proc_name": "Search Z",
+                "start_block_ids": ["sz_start"],
+                "end_block_ids": ["sz_end::end"],
+                "branches": {"sz_start": ["sz_end"]},
+            },
+            {
+                "proc_id": "search_a",
+                "proc_name": "Search A",
+                "start_block_ids": ["sa_start"],
+                "end_block_ids": ["sa_end::end"],
+                "branches": {"sa_start": ["sa_end"]},
+            },
+            {
+                "proc_id": "svc_flow_beta",
+                "proc_name": "Flow",
+                "start_block_ids": ["sb_start"],
+                "end_block_ids": ["sb_end::end"],
+                "branches": {"sb_start": ["sb_end"]},
+                "block_id_to_block_name": {"sb_start": "Beta"},
+            },
+            {
+                "proc_id": "svc_flow_alpha",
+                "proc_name": "Flow",
+                "start_block_ids": ["sf_start"],
+                "end_block_ids": ["sf_end::end"],
+                "branches": {"sf_start": ["sf_end"]},
+                "block_id_to_block_name": {"sf_start": "Alpha"},
+            },
+            {
+                "proc_id": "svc_another",
+                "proc_name": "Another",
+                "start_block_ids": ["sn_start"],
+                "end_block_ids": ["sn_end::end"],
+                "branches": {"sn_start": ["sn_end"]},
+            },
+            {
+                "proc_id": "svc_refunds",
+                "proc_name": "Refunds Flow",
+                "start_block_ids": ["sr_start"],
+                "end_block_ids": ["sr_end::end"],
+                "branches": {"sr_start": ["sr_end"]},
+            },
+            {
+                "proc_id": "task_proc",
+                "proc_name": "Task Proc",
+                "start_block_ids": ["tp_start"],
+                "end_block_ids": ["tp_end::end"],
+                "branches": {"tp_start": ["tp_end"]},
+            },
+            {
+                "proc_id": "default_proc",
+                "proc_name": "Default Proc",
+                "start_block_ids": ["dp_start"],
+                "end_block_ids": ["dp_end::end"],
+                "branches": {"dp_start": ["dp_end"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    procedure_meta = {
+        "search_z": {
+            "team_name": "Alpha",
+            "service_name": "Zeta Search",
+            "markup_type": "system_service_search",
+        },
+        "search_a": {
+            "team_name": "Alpha",
+            "service_name": "Alpha Search",
+            "markup_type": "system_service_search",
+        },
+        "svc_flow_beta": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_flow_alpha": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_another": {
+            "team_name": "Alpha",
+            "service_name": "Payments",
+            "markup_type": "service",
+        },
+        "svc_refunds": {
+            "team_name": "Beta",
+            "service_name": "Refunds",
+            "markup_type": "service",
+        },
+        "task_proc": {
+            "team_name": "Gamma",
+            "service_name": "Queue",
+            "markup_type": "system_task_processor",
+        },
+        "default_proc": {
+            "team_name": "Gamma",
+            "service_name": "Fallback",
+            "markup_type": "system_default",
+        },
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={"procedure_meta": procedure_meta}
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+    frame_by_proc = {frame.procedure_id: frame for frame in plan.frames}
+    mean_x_by_markup_type = {
+        markup_type: sum(frame_by_proc[proc_id].origin.x for proc_id in proc_ids) / len(proc_ids)
+        for markup_type, proc_ids in {
+            "system_service_search": ["search_z", "search_a"],
+            "service": ["svc_flow_beta", "svc_flow_alpha", "svc_another", "svc_refunds"],
+            "system_task_processor": ["task_proc"],
+            "system_default": ["default_proc"],
+        }.items()
+    }
+    assert (
+        mean_x_by_markup_type["system_service_search"]
+        < mean_x_by_markup_type["service"]
+        < mean_x_by_markup_type["system_task_processor"]
+        < mean_x_by_markup_type["system_default"]
+    )
+
+    service_order = sorted(
+        ["svc_flow_beta", "svc_flow_alpha", "svc_another", "svc_refunds"],
+        key=lambda proc_id: frame_by_proc[proc_id].origin.y,
+    )
+    assert service_order == ["svc_another", "svc_flow_alpha", "svc_flow_beta", "svc_refunds"]
+
+
+def test_procedure_graph_layout_builds_markup_type_column_headers() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
+        "procedures": [
+            {
+                "proc_id": "search_proc",
+                "proc_name": "Search",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "service_proc",
+                "proc_name": "Service",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d::end"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "search_proc": {
+                    "team_name": "Alpha",
+                    "service_name": "Search",
+                    "markup_type": "system_service_search",
+                },
+                "service_proc": {
+                    "team_name": "Alpha",
+                    "service_name": "Service",
+                    "markup_type": "service",
+                },
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    assert {column.markup_type for column in plan.markup_type_columns} == {
+        "system_service_search",
+        "service",
+    }
+
+    frame_by_proc = {frame.procedure_id: frame for frame in plan.frames}
+    for column in plan.markup_type_columns:
+        proc_ids = [
+            proc_id
+            for proc_id, meta in document.procedure_meta.items()
+            if str(meta.get("markup_type") or "").strip() == column.markup_type
+        ]
+        min_x = min(frame_by_proc[proc_id].origin.x for proc_id in proc_ids)
+        max_x = max(
+            frame_by_proc[proc_id].origin.x + frame_by_proc[proc_id].size.width
+            for proc_id in proc_ids
+        )
+        assert column.origin.x <= min_x
+        assert column.origin.x + column.size.width >= max_x
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    header_panels = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_panel"
+    ]
+    header_titles = [
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    ]
+    assert len(header_panels) == 2
+    assert {str(item.get("text", "")).replace("\n", " ").strip() for item in header_titles} == {
+        "Системы поиска услуг",
+        "Услуги",
+    }
+    assert {panel.get("backgroundColor") for panel in header_panels} == {"#d9d9d9"}
+    panel_ys = {round(float(panel.get("y", 0.0)), 1) for panel in header_panels}
+    assert len(panel_ys) == 1
+
+    diagram_title_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "diagram_title_panel"
+    )
+    title_bottom = float(diagram_title_panel.get("y", 0.0)) + float(
+        diagram_title_panel.get("height", 0.0)
+    )
+    headers_top = min(float(panel.get("y", 0.0)) for panel in header_panels)
+    assert headers_top - title_bottom >= 32.0
+
+
+def test_procedure_graph_layout_builds_merged_markup_type_column_for_intersections() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
+        "procedures": [
+            {
+                "proc_id": "p_merge",
+                "proc_name": "Shared",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p_merge": {
+                    "team_name": "Alpha",
+                    "service_name": "Shared",
+                    "markup_type": "service",
+                    "is_intersection": True,
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "service",
+                        }
+                    ],
+                    "merge_services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "service",
+                        },
+                        {
+                            "team_name": "Beta",
+                            "service_name": "Shared",
+                            "markup_type": "system_task_processor",
+                        },
+                    ],
+                }
+            }
+        }
+    )
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(document)
+    assert len(plan.markup_type_columns) == 1
+    column = plan.markup_type_columns[0]
+    assert column.markup_type == "service + system_task_processor"
+    assert column.is_merged_markup_types is True
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(document)
+    header_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_panel"
+    )
+    header_title = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    )
+    assert header_panel.get("backgroundColor") == "#ff9d9d99"
+    assert header_panel.get("customData", {}).get("cjm", {}).get("is_merged_markup_types") is True
+    assert str(header_title.get("text", "")).replace("\n", " ").strip() == (
+        "service + system_task_processor"
+    )
+
+
+def test_procedure_graph_layout_uses_merge_alert_color_for_mixed_markup_type_column() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "service_name": "Team Graph",
+        "procedures": [
+            {
+                "proc_id": "p_mixed",
+                "proc_name": "Mixed Source",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::end"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "p_mixed": {
+                    "team_name": "Alpha",
+                    "service_name": "Shared",
+                    "markup_type": "mixed",
+                    "services": [
+                        {
+                            "team_name": "Alpha",
+                            "service_name": "Shared",
+                            "markup_type": "mixed",
+                        }
+                    ],
+                }
+            }
+        }
+    )
+
+    excal = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(document)
+    header_panel = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_panel"
+    )
+    header_title = next(
+        element
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    )
+    assert header_panel.get("backgroundColor") == "#ff9d9d99"
+    assert header_panel.get("customData", {}).get("cjm", {}).get("is_merged_markup_types") is False
+    assert str(header_title.get("text", "")).replace("\n", " ").strip() == "Mixed"
+
+
+def test_procedure_graph_layout_does_not_aggregate_markup_type_for_potential_merges() -> None:
+    doc_service = MarkupDocument.model_validate(
+        {
+            "markup_type": "service",
+            "service_name": "Payments",
+            "team_name": "Alpha",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["a"],
+                    "end_block_ids": ["b::end"],
+                    "branches": {"a": ["b"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+    doc_processor = MarkupDocument.model_validate(
+        {
+            "markup_type": "system_task_processor",
+            "service_name": "Router",
+            "team_name": "Beta",
+            "procedures": [
+                {
+                    "proc_id": "shared",
+                    "proc_name": "Shared Flow",
+                    "start_block_ids": ["c"],
+                    "end_block_ids": ["d::end"],
+                    "branches": {"c": ["d"]},
+                }
+            ],
+            "procedure_graph": {"shared": []},
+        }
+    )
+
+    merged = BuildTeamProcedureGraph().build(
+        [doc_service, doc_processor],
+        merge_selected_markups=False,
+    )
+    assert any(
+        meta.get("is_intersection") is True for meta in merged.procedure_meta.values()
+    ), "Expected potential merge markers in metadata"
+
+    layout = ProcedureGraphLayoutEngine()
+    plan = layout.build_plan(merged)
+    assert {column.markup_type for column in plan.markup_type_columns} == {
+        "service",
+        "system_task_processor",
+    }
+    assert all(column.is_merged_markup_types is False for column in plan.markup_type_columns)
+
+    excal = ProcedureGraphToExcalidrawConverter(layout).convert(merged)
+    header_titles = {
+        str(element.get("text", "")).replace("\n", " ").strip()
+        for element in excal.elements
+        if element.get("customData", {}).get("cjm", {}).get("role") == "markup_type_column_title"
+    }
+    assert "service + system_task_processor" not in header_titles
 
 
 def test_procedure_graph_layout_expands_outer_service_zone() -> None:

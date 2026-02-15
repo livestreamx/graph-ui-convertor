@@ -24,13 +24,14 @@ from adapters.filesystem.scene_repository import FileSystemSceneRepository
 from adapters.layout.grid import GridLayoutEngine, LayoutConfig
 from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from app.catalog_wiring import build_markup_repository, build_markup_source
-from app.config import AppSettings, load_settings, validate_unidraw_settings
+from app.config import AppSettings, load_settings
 from app.web_i18n import (
     UILocalizer,
     apply_ui_language_cookie,
     build_language_switch_url,
     build_localizer,
     get_active_ui_language,
+    humanize_markup_type_column_label,
     reset_active_ui_language,
     set_active_ui_language,
     translate_humanized_text,
@@ -96,7 +97,6 @@ class CatalogContext:
 
 
 def create_app(settings: AppSettings) -> FastAPI:
-    validate_unidraw_settings(settings)
     templates.env.filters["msk_datetime"] = format_msk_datetime
     templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
 
@@ -390,6 +390,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             merge_node_min_chain_size=merge_node_min_chain_size,
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
+                            ui_language=localizer_for_request(request).language,
                         )
                         procedure_excalidraw_open_url = build_excalidraw_url(
                             diagram_base_url, payload
@@ -413,6 +414,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                             graph_level="service",
                             merge_items=filtered_items if merge_nodes_all_markups else None,
                             document_cache=document_cache,
+                            ui_language=localizer_for_request(request).language,
                         )
                         service_excalidraw_open_url = build_excalidraw_url(
                             diagram_base_url, service_payload
@@ -496,6 +498,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 else:
                     excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
+        service_external_url = resolve_service_external_url(context, item)
+        team_external_url = resolve_team_external_url(context, item)
         return render_catalog_template(
             request,
             "catalog_detail.html",
@@ -511,6 +515,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "excalidraw_scene_available": excalidraw_scene_available,
                 "open_mode": open_mode,
                 "on_demand_enabled": on_demand,
+                "service_external_url": service_external_url,
+                "team_external_url": team_external_url,
             },
         )
 
@@ -591,6 +597,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level=graph_level,
                         merge_items=filtered_items if merge_nodes_all_markups else None,
+                        ui_language=localizer_for_request(request).language,
                     )
         except Exception:
             scene_payload = None
@@ -646,6 +653,7 @@ def create_app(settings: AppSettings) -> FastAPI:
 
     @app.get("/api/teams/graph")
     def api_team_graph(
+        request: Request,
         team_ids: list[str] = Query(default_factory=list),
         excluded_team_ids: list[str] = Query(default_factory=list),
         merge_nodes_all_markups: bool = Query(default=False),
@@ -683,6 +691,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
             merge_items=filtered_items if merge_nodes_all_markups else None,
+            ui_language=localizer_for_request(request).language,
         )
         headers = {}
         if download:
@@ -904,6 +913,24 @@ def find_item(index_data: CatalogIndex | None, scene_id: str) -> CatalogItem | N
     return None
 
 
+def resolve_service_external_url(context: CatalogContext, item: CatalogItem) -> str | None:
+    if not context.link_templates:
+        return None
+    unit_id = item.finedog_unit_id.strip()
+    if not unit_id or unit_id == context.settings.catalog.unknown_value:
+        return None
+    return context.link_templates.service_link(unit_id)
+
+
+def resolve_team_external_url(context: CatalogContext, item: CatalogItem) -> str | None:
+    if not context.link_templates:
+        return None
+    team_id = item.team_id.strip()
+    if not team_id or team_id == context.settings.catalog.unknown_value:
+        return None
+    return context.link_templates.team_link(team_id)
+
+
 def resolve_diagram_extension(diagram_format: SceneFormat) -> str:
     return ".excalidraw" if diagram_format == "excalidraw" else ".unidraw"
 
@@ -961,6 +988,7 @@ def build_team_diagram_payload(
     graph_level: GraphLevel = "procedure",
     merge_items: list[CatalogItem] | None = None,
     document_cache: dict[str, MarkupDocument] | None = None,
+    ui_language: str | None = None,
 ) -> dict[str, Any]:
     cache = document_cache if document_cache is not None else {}
     documents = load_markup_documents(context, items, cache=cache)
@@ -994,8 +1022,32 @@ def build_team_diagram_payload(
     else:
         document = context.to_procedure_graph_unidraw.convert(graph_document)
     payload = cast(dict[str, Any], document.to_dict())
+    language = ui_language or get_active_ui_language()
+    _localize_markup_type_column_titles(payload, language)
     enhance_scene_payload(payload, context, diagram_format)
     return payload
+
+
+def _localize_markup_type_column_titles(payload: dict[str, Any], language: str) -> None:
+    elements = payload.get("elements")
+    if not isinstance(elements, list):
+        return
+    for element in elements:
+        if not isinstance(element, dict):
+            continue
+        metadata = element.get("customData", {}).get("cjm")
+        if not isinstance(metadata, dict):
+            metadata = element.get("cjm")
+        if not isinstance(metadata, dict):
+            continue
+        if metadata.get("role") != "markup_type_column_title":
+            continue
+        markup_type = str(metadata.get("markup_type") or "").strip()
+        if not markup_type:
+            continue
+        localized = humanize_markup_type_column_label(markup_type, language)
+        if localized:
+            element["text"] = localized
 
 
 def load_markup_documents(

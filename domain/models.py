@@ -400,6 +400,14 @@ class ServiceZonePlacement:
 
 
 @dataclass(frozen=True)
+class MarkupTypeColumnPlacement:
+    markup_type: str
+    origin: Point
+    size: Size
+    is_merged_markup_types: bool = False
+
+
+@dataclass(frozen=True)
 class ScenarioPlacement:
     origin: Point
     size: Size
@@ -448,6 +456,7 @@ class LayoutPlan:
     separators: list[SeparatorPlacement] = field(default_factory=list)
     scenarios: list[ScenarioPlacement] = field(default_factory=list)
     service_zones: list[ServiceZonePlacement] = field(default_factory=list)
+    markup_type_columns: list[MarkupTypeColumnPlacement] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

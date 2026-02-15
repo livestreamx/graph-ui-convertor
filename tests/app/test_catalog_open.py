@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -55,9 +56,17 @@ def test_catalog_detail_shows_dual_download_buttons_by_default(
     ) as context:
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
+        assert "Get the diagram" in detail_response.text
         assert "Open Excalidraw" in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text
+        assert (
+            "Open in Excalidraw or download both diagram formats for manual import and editing."
+            not in detail_response.text
+        )
+        assert "Scene is injected via local storage for same-origin Excalidraw." not in (
+            detail_response.text
+        )
         assert (
             f"/api/scenes/{context.scene_id}?format=excalidraw&download=true"
             in detail_response.text
@@ -84,6 +93,13 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         assert "Open Excalidraw" not in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text
+        unidraw_link_match = re.search(
+            r'class="([^"]+)"\s+href="/api/scenes/[^"]+\?format=unidraw&download=true"',
+            detail_response.text,
+        )
+        assert unidraw_link_match is not None
+        assert "primary-button" in unidraw_link_match.group(1)
+        assert "unidraw-button" not in unidraw_link_match.group(1)
 
         index_response = context.client.get("/api/index")
         team_id = index_response.json()["items"][0]["team_id"]
@@ -92,3 +108,28 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         assert "Open Excalidraw" not in graph_response.text
         assert "Download .excalidraw" in graph_response.text
         assert "Download .unidraw" in graph_response.text
+
+
+def test_catalog_detail_shows_external_service_and_team_links_when_templates_configured(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        settings_overrides={
+            "service_link_path": "https://external.example.com/service",
+            "team_link_path": "https://external.example.com/team",
+        },
+    ) as context:
+        detail_response = context.client.get(f"/catalog/{context.scene_id}")
+        assert detail_response.status_code == 200
+        assert "External resources" in detail_response.text
+        assert "Open service resource" in detail_response.text
+        assert "Open team resource" in detail_response.text
+        assert "https://external.example.com/service?unit_id=billing-unit-42" in (
+            detail_response.text
+        )
+        assert "https://external.example.com/team?team_id=team-billing" in detail_response.text

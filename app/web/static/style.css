@@ -368,7 +368,7 @@ main {
   padding: 14px;
   display: none;
   box-shadow: var(--shadow);
-  z-index: 10;
+  z-index: 60;
 }
 
 .team-graph-help-popover-wide {
@@ -988,7 +988,7 @@ main {
 
 .team-graph-dashboard-section-collapsible {
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   background:
     linear-gradient(140deg, rgba(8, 14, 30, 0.94), rgba(13, 20, 39, 0.92)),
     radial-gradient(circle at top right, rgba(127, 169, 255, 0.14), transparent 58%);
@@ -1138,8 +1138,13 @@ main {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-wrap: wrap;
   gap: 8px;
+}
+
+.team-graph-kpi-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
 }
 
 .team-graph-kpi-label,
@@ -1218,9 +1223,9 @@ main {
   font-size: 12px;
   color: var(--text);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, auto) minmax(96px, auto);
   align-items: baseline;
-  gap: 6px;
+  gap: 8px;
   padding: 6px 0;
   border-top: 1px dashed rgba(255, 255, 255, 0.16);
 }
@@ -1236,10 +1241,17 @@ main {
 .team-graph-inline-metric-value {
   font-family: "Space Grotesk", sans-serif;
   font-size: 16px;
+  text-align: right;
+  min-width: 72px;
+  font-variant-numeric: tabular-nums;
 }
 
 .team-graph-inline-metric-note {
   color: var(--muted);
+  text-align: right;
+  white-space: nowrap;
+  min-width: 96px;
+  font-variant-numeric: tabular-nums;
 }
 
 .team-graph-hover-list {
@@ -1452,6 +1464,7 @@ main {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.5;
+  white-space: pre-line;
 }
 
 .team-graph-ranked-table-row {

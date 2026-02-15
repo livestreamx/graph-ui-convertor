@@ -20,6 +20,11 @@ from domain.models import (
     normalize_end_type,
 )
 from domain.ports.layout import LayoutEngine
+from domain.services.block_graph_resolution import (
+    ResolvedBlockGraphEdge,
+    build_block_owner_index,
+    resolve_block_graph_edges,
+)
 from domain.services.graph_metrics import build_directed_graph, compute_graph_metrics
 
 
@@ -767,6 +772,21 @@ class GridLayoutEngine(LayoutEngine):
     def _block_graph_nodes(self, document: MarkupDocument) -> set[str]:
         return build_directed_graph(document.block_graph).vertices
 
+    def _resolved_block_graph_edges(
+        self,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> list[ResolvedBlockGraphEdge]:
+        if not document.block_graph:
+            return []
+        owners_by_block = build_block_owner_index(procedures, owned_blocks_by_proc)
+        return resolve_block_graph_edges(
+            document.block_graph,
+            owners_by_block,
+            document.procedure_graph,
+        )
+
     def _layout_edges_by_proc(
         self,
         document: MarkupDocument,
@@ -776,34 +796,20 @@ class GridLayoutEngine(LayoutEngine):
         if not document.block_graph:
             return {proc.procedure_id: dict(proc.branches) for proc in procedures}
 
-        owner_by_block: dict[str, str] = {}
-        ambiguous: set[str] = set()
-        for proc_id, blocks in owned_blocks_by_proc.items():
-            for block_id in blocks:
-                existing = owner_by_block.get(block_id)
-                if existing and existing != proc_id:
-                    ambiguous.add(block_id)
-                else:
-                    owner_by_block[block_id] = proc_id
-
         edges_by_proc: dict[str, dict[str, list[str]]] = {
             proc.procedure_id: {} for proc in procedures
         }
-        for source, targets in document.block_graph.items():
-            if source in ambiguous:
+        resolved_edges = self._resolved_block_graph_edges(
+            document, procedures, owned_blocks_by_proc
+        )
+        for edge in resolved_edges:
+            if edge.source_procedure_id != edge.target_procedure_id:
                 continue
-            source_proc = owner_by_block.get(source)
-            if not source_proc:
-                continue
-            for target in targets:
-                if target in ambiguous:
-                    continue
-                target_proc = owner_by_block.get(target)
-                if not target_proc or target_proc != source_proc:
-                    continue
-                edges = edges_by_proc.setdefault(source_proc, {}).setdefault(source, [])
-                if target not in edges:
-                    edges.append(target)
+            edges = edges_by_proc.setdefault(edge.source_procedure_id, {}).setdefault(
+                edge.source_block_id, []
+            )
+            if edge.target_block_id not in edges:
+                edges.append(edge.target_block_id)
 
         return edges_by_proc
 
@@ -816,30 +822,14 @@ class GridLayoutEngine(LayoutEngine):
         if not document.block_graph:
             return set()
 
-        owner_by_block: dict[str, str] = {}
-        ambiguous: set[str] = set()
-        for proc_id, blocks in owned_blocks_by_proc.items():
-            for block_id in blocks:
-                existing = owner_by_block.get(block_id)
-                if existing and existing != proc_id:
-                    ambiguous.add(block_id)
-                else:
-                    owner_by_block[block_id] = proc_id
-
         edges: set[tuple[str, str]] = set()
-        for source, targets in document.block_graph.items():
-            if source in ambiguous:
+        resolved_edges = self._resolved_block_graph_edges(
+            document, procedures, owned_blocks_by_proc
+        )
+        for edge in resolved_edges:
+            if edge.source_procedure_id == edge.target_procedure_id:
                 continue
-            source_proc = owner_by_block.get(source)
-            if not source_proc:
-                continue
-            for target in targets:
-                if target in ambiguous:
-                    continue
-                target_proc = owner_by_block.get(target)
-                if not target_proc or target_proc == source_proc:
-                    continue
-                edges.add((source_proc, target_proc))
+            edges.add((edge.source_procedure_id, edge.target_procedure_id))
         return edges
 
     def _component_frame_offsets(
@@ -885,41 +875,26 @@ class GridLayoutEngine(LayoutEngine):
             return {}
 
         end_blocks_by_proc = {proc.procedure_id: set(proc.end_block_ids) for proc in procedures}
-        owner_by_block: dict[str, str] = {}
-        ambiguous: set[str] = set()
-        for proc_id, blocks in owned_blocks_by_proc.items():
-            for block_id in blocks:
-                existing = owner_by_block.get(block_id)
-                if existing and existing != proc_id:
-                    ambiguous.add(block_id)
-                else:
-                    owner_by_block[block_id] = proc_id
-
         offsets: dict[str, dict[str, float]] = {proc.procedure_id: {} for proc in procedures}
-        for source, targets in document.block_graph.items():
-            if source in ambiguous:
-                continue
-            source_proc = owner_by_block.get(source)
-            if not source_proc:
-                continue
-            has_external = False
-            for target in targets:
-                if target in ambiguous:
-                    continue
-                target_proc = owner_by_block.get(target)
-                if target_proc and target_proc != source_proc:
-                    has_external = True
-                    break
+        resolved_edges = self._resolved_block_graph_edges(
+            document, procedures, owned_blocks_by_proc
+        )
+        edges_by_source: dict[tuple[str, str], list[ResolvedBlockGraphEdge]] = {}
+        for edge in resolved_edges:
+            edges_by_source.setdefault((edge.source_procedure_id, edge.source_block_id), []).append(
+                edge
+            )
+
+        for (source_proc, _source_block), source_edges in edges_by_source.items():
+            has_external = any(edge.target_procedure_id != source_proc for edge in source_edges)
             if not has_external:
                 continue
-            for target in targets:
-                if target in ambiguous:
+            for edge in source_edges:
+                if edge.target_procedure_id != source_proc:
                     continue
-                if owner_by_block.get(target) != source_proc:
+                if edge.target_block_id not in end_blocks_by_proc.get(source_proc, set()):
                     continue
-                if target not in end_blocks_by_proc.get(source_proc, set()):
-                    continue
-                offsets[source_proc][target] = 1.0
+                offsets[source_proc][edge.target_block_id] = 1.0
 
         return offsets
 
@@ -1043,23 +1018,32 @@ class GridLayoutEngine(LayoutEngine):
         document: MarkupDocument,
         blocks: Sequence[BlockPlacement],
     ) -> list[tuple[Point, Point]]:
+        block_by_proc_id: dict[tuple[str, str], BlockPlacement] = {
+            (block.procedure_id, block.block_id): block for block in blocks
+        }
         block_by_id: dict[str, list[BlockPlacement]] = {}
         for block in blocks:
             block_by_id.setdefault(block.block_id, []).append(block)
 
         segments: list[tuple[Point, Point]] = []
         if document.block_graph:
-            for source_id, targets in document.block_graph.items():
-                source_candidates = block_by_id.get(source_id, [])
-                if len(source_candidates) != 1:
+            block_graph_nodes = self._block_graph_nodes(document)
+            owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
+            resolved_edges = self._resolved_block_graph_edges(
+                document,
+                document.procedures,
+                owned_blocks_by_proc,
+            )
+            for edge in resolved_edges:
+                source_block = block_by_proc_id.get(
+                    (edge.source_procedure_id, edge.source_block_id)
+                )
+                target_block = block_by_proc_id.get(
+                    (edge.target_procedure_id, edge.target_block_id)
+                )
+                if not source_block or not target_block:
                     continue
-                source_block = source_candidates[0]
-                for target_id in targets:
-                    target_candidates = block_by_id.get(target_id, [])
-                    if len(target_candidates) != 1:
-                        continue
-                    target_block = target_candidates[0]
-                    segments.append(self._block_edge_segment(source_block, target_block))
+                segments.append(self._block_edge_segment(source_block, target_block))
             return segments
 
         for proc in document.procedures:
@@ -1081,24 +1065,33 @@ class GridLayoutEngine(LayoutEngine):
         document: MarkupDocument,
         blocks: Sequence[BlockPlacement],
     ) -> list[tuple[BlockPlacement, BlockPlacement, Point, Point]]:
+        block_by_proc_id: dict[tuple[str, str], BlockPlacement] = {
+            (block.procedure_id, block.block_id): block for block in blocks
+        }
         block_by_id: dict[str, list[BlockPlacement]] = {}
         for block in blocks:
             block_by_id.setdefault(block.block_id, []).append(block)
 
         segments: list[tuple[BlockPlacement, BlockPlacement, Point, Point]] = []
         if document.block_graph:
-            for source_id, targets in document.block_graph.items():
-                source_candidates = block_by_id.get(source_id, [])
-                if len(source_candidates) != 1:
+            block_graph_nodes = self._block_graph_nodes(document)
+            owned_blocks_by_proc = self._resolve_owned_blocks(document, block_graph_nodes)
+            resolved_edges = self._resolved_block_graph_edges(
+                document,
+                document.procedures,
+                owned_blocks_by_proc,
+            )
+            for edge in resolved_edges:
+                source_block = block_by_proc_id.get(
+                    (edge.source_procedure_id, edge.source_block_id)
+                )
+                target_block = block_by_proc_id.get(
+                    (edge.target_procedure_id, edge.target_block_id)
+                )
+                if not source_block or not target_block:
                     continue
-                source_block = source_candidates[0]
-                for target_id in targets:
-                    target_candidates = block_by_id.get(target_id, [])
-                    if len(target_candidates) != 1:
-                        continue
-                    target_block = target_candidates[0]
-                    start, end = self._block_edge_segment(source_block, target_block)
-                    segments.append((source_block, target_block, start, end))
+                start, end = self._block_edge_segment(source_block, target_block)
+                segments.append((source_block, target_block, start, end))
             return segments
 
         for proc in document.procedures:

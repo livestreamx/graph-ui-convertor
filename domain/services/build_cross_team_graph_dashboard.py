@@ -1344,7 +1344,8 @@ class BuildCrossTeamGraphDashboard:
 
 
 def _is_service_markup(document: MarkupDocument) -> bool:
-    return str(document.markup_type or "").strip().lower() == "service"
+    markup_type = str(document.markup_type or "").strip().lower()
+    return markup_type in {"service", "system_service_search"}
 
 
 def _graph_key(document: MarkupDocument) -> tuple[str, str, str, str, str]:

@@ -89,7 +89,6 @@ class CatalogSettings(BaseModel):
     excalidraw_proxy_upstream: str | None = None
     excalidraw_proxy_prefix: str = "/excalidraw"
     excalidraw_max_url_length: int = 8000
-    unidraw_base_url: str = "/unidraw"
     unidraw_proxy_upstream: str | None = None
     unidraw_proxy_prefix: str = "/unidraw"
     unidraw_max_url_length: int = 8000
@@ -217,15 +216,9 @@ def load_settings(config_path: Path | None = None) -> AppSettings:
                 msg = f"Config file not found: {resolved_path}"
                 raise FileNotFoundError(msg)
             AppSettings._yaml_path = resolved_path
-        settings = AppSettings()
-        validate_unidraw_settings(settings)
-        return settings
+        return AppSettings()
     finally:
         AppSettings._yaml_path = previous
-
-
-def validate_unidraw_settings(settings: AppSettings) -> None:
-    _ = settings
 
 
 def is_absolute_url(value: str) -> bool:
