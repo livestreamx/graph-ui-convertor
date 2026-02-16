@@ -86,8 +86,8 @@ catalog:
 - `procedure_link_path`: шаблон URL для ссылок на процедуры в Excalidraw/Unidraw (используйте `{procedure_id}`).
 - `block_link_path`: шаблон URL для ссылок на блоки в Excalidraw/Unidraw (используйте `{block_id}` либо
   `{procedure_id}` + `{block_id}`).
-- `service_link_path`: базовый URL для ссылок на сервисы в Excalidraw/Unidraw; параметр `unit_id`
-  добавляется из `finedog_unit_id`.
+- `service_link_path`: базовый URL для ссылок на сервисы в Excalidraw/Unidraw. Для шаблона пути
+  используйте `{unit_id}` (или plain URL с авто-добавлением query); `unit_id` берется из ID услуги в markup.
 - `team_link_path`: базовый URL для ссылок на команды в Excalidraw/Unidraw; параметр `team_id`
   добавляется из `finedog_unit_meta.team_id`.
 - `excalidraw_base_url`: URL или путь Excalidraw UI (например `/excalidraw`). При same-origin с Catalog
@@ -113,7 +113,8 @@ catalog:
 
 - В деталях диаграммы доступны скачивания `.excalidraw` и `.unidraw`; кнопка `Open Excalidraw`
   управляется `diagram_excalidraw_enabled`. Если настроены `service_link_path` / `team_link_path`,
-  на этой же странице показываются прямые внешние ссылки, собранные из `finedog_unit_id` и `team_id`.
+  значения `ID услуги` и `Команда` в блоке метаданных становятся кликабельными ссылками, собранными
+  из `unit_id` и `team_id`.
 - В хедере рядом с `Index JSON` добавлен переключатель языка (с иконками); выбранная локаль
   сохраняется между страницами каталога и HTMX-обновлениями.
 - На странице каталога есть отдельный раздел для кросс-командных диаграмм: можно выбрать несколько

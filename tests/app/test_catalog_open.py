@@ -110,7 +110,7 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         assert "Download .unidraw" in graph_response.text
 
 
-def test_catalog_detail_shows_external_service_and_team_links_when_templates_configured(
+def test_catalog_detail_renders_service_and_team_metadata_links_when_templates_configured(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
@@ -126,9 +126,12 @@ def test_catalog_detail_shows_external_service_and_team_links_when_templates_con
     ) as context:
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
-        assert "External resources" in detail_response.text
-        assert "Open service resource" in detail_response.text
-        assert "Open team resource" in detail_response.text
+        assert "External resources" not in detail_response.text
+        assert "Markup information" in detail_response.text
+        assert "Service ID" in detail_response.text
+        assert 'class="meta-link"' in detail_response.text
+        assert "Billing Team" in detail_response.text
+        assert "billing-unit-42" in detail_response.text
         assert "https://external.example.com/service?unit_id=billing-unit-42" in (
             detail_response.text
         )

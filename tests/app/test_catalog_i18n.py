@@ -98,3 +98,8 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
     )
     assert translate_ui_text("Merge node #{index}", "ru").format(index=1) == "Узел слияния #1"
     assert translate_ui_text("Merge nodes for this graph", "ru") == "Узлы слияния для этого графа"
+
+
+def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
+    assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
+    assert translate_ui_text("Service ID", "ru") == "ID услуги"

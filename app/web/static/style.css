@@ -2243,6 +2243,31 @@ main {
   font-size: 28px;
 }
 
+.detail-markup-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 179, 71, 0.46);
+  background: linear-gradient(135deg, rgba(255, 179, 71, 0.18), rgba(255, 140, 66, 0.12));
+}
+
+.detail-markup-type-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #ffd9b5;
+}
+
+.detail-markup-type-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff2df;
+}
+
 .detail-meta {
   color: var(--muted);
   display: flex;
@@ -2286,8 +2311,24 @@ main {
   gap: 16px;
 }
 
+.meta-item {
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+  padding: 12px;
+  background: linear-gradient(145deg, rgba(9, 14, 29, 0.92), rgba(14, 22, 41, 0.88));
+  display: grid;
+  gap: 6px;
+}
+
 .meta-extra {
   margin-top: 16px;
+}
+
+.meta-extra > div {
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .meta-label {
@@ -2297,6 +2338,61 @@ main {
 
 .meta-value {
   font-size: 14px;
+}
+
+.meta-mono {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #dce8ff;
+  word-break: break-word;
+}
+
+.meta-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 179, 71, 0.42);
+  background: linear-gradient(135deg, rgba(255, 179, 71, 0.17), rgba(255, 140, 66, 0.13));
+  color: #ffe9d2;
+  text-decoration: none;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+}
+
+.meta-link:hover {
+  border-color: rgba(255, 179, 71, 0.72);
+  background: linear-gradient(135deg, rgba(255, 179, 71, 0.24), rgba(255, 140, 66, 0.2));
+  transform: translateY(-1px);
+}
+
+.meta-link:focus-visible {
+  outline: 2px solid rgba(255, 179, 71, 0.72);
+  outline-offset: 2px;
+}
+
+.meta-link-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta-link-icon {
+  flex: 0 0 auto;
+  font-size: 12px;
+  opacity: 0.85;
 }
 
 .action-result {

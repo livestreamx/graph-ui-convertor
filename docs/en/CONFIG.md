@@ -88,8 +88,8 @@ catalog:
 - `procedure_link_path`: URL template for procedure links in Excalidraw/Unidraw (use `{procedure_id}`).
 - `block_link_path`: URL template for block links in Excalidraw/Unidraw (use `{block_id}` or
   `{procedure_id}` + `{block_id}`).
-- `service_link_path`: Base URL for service links in Excalidraw/Unidraw; `unit_id` is appended using
-  `finedog_unit_id`.
+- `service_link_path`: Base URL for service links in Excalidraw/Unidraw. Use `{unit_id}` in path templates
+  (or plain URL with query auto-append); `unit_id` is resolved from the markup service ID.
 - `team_link_path`: Base URL for team links in Excalidraw/Unidraw; `team_id` is appended using
   `finedog_unit_meta.team_id`.
 - `excalidraw_base_url`: Excalidraw UI URL or path (e.g. `/excalidraw`). When same-origin with the
@@ -114,8 +114,8 @@ catalog:
 ## Catalog UI
 
 - Detail view includes downloads for `.excalidraw` and `.unidraw`; `Open Excalidraw` is controlled by
-  `diagram_excalidraw_enabled`. When `service_link_path` / `team_link_path` are configured, the same
-  page also shows direct external links built from `finedog_unit_id` and `team_id`.
+  `diagram_excalidraw_enabled`. When `service_link_path` / `team_link_path` are configured, metadata
+  values `Service ID` and `Team` become clickable links built from `unit_id` and `team_id`.
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and

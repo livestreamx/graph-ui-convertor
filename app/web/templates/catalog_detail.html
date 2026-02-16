@@ -4,8 +4,11 @@
   <section class="detail-header">
     <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
     <div class="detail-title">{{ item.title }}</div>
+    <div class="detail-markup-type">
+      <span class="detail-markup-type-label">{{ "markup_type" | humanize_text }}</span>
+      <span class="detail-markup-type-value">{{ item.markup_type | humanize_text }}</span>
+    </div>
     <div class="detail-meta">
-      <span>{{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}</span>
       <span>{{ t("Updated") }} {{ item.updated_at | msk_datetime }}</span>
       <span>{{ t("Scene ID") }} {{ item.scene_id }}</span>
     </div>
@@ -49,51 +52,46 @@
         <p class="note">{{ t("If the scene does not load, import the downloaded file manually.") }}</p>
       {% endif %}
     </div>
-    {% if service_external_url or team_external_url %}
-      <div class="detail-card">
-        <h3>{{ t("External resources") }}</h3>
-        <div class="button-row">
+  </section>
+
+  <section class="detail-card markup-info-card">
+    <h3>{{ t("Markup information") }}</h3>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Markup file") }}</div>
+        <div class="meta-value meta-mono">{{ item.markup_rel_path }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Service ID") }}</div>
+        <div class="meta-value">
           {% if service_external_url %}
-            <a class="primary-button" target="_blank" href="{{ service_external_url }}">
-              {{ t("Open service resource") }}
+            <a class="meta-link" target="_blank" href="{{ service_external_url }}">
+              <span class="meta-link-text">{{ item.finedog_unit_id }}</span>
+              <span class="meta-link-icon" aria-hidden="true">↗</span>
             </a>
-          {% endif %}
-          {% if team_external_url %}
-            <a class="ghost-button" target="_blank" href="{{ team_external_url }}">
-              {{ t("Open team resource") }}
-            </a>
+          {% else %}
+            <span class="meta-pill">{{ item.finedog_unit_id }}</span>
           {% endif %}
         </div>
       </div>
-    {% endif %}
-  </section>
-
-  <section class="detail-card">
-    <h3>{{ t("Metadata snapshot") }}</h3>
-    <div class="meta-grid">
-      <div>
-        <div class="meta-label">{{ t("Markup file") }}</div>
-        <div class="meta-value">{{ item.markup_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("Excalidraw file") }}</div>
-        <div class="meta-value">{{ excalidraw_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("Unidraw file") }}</div>
-        <div class="meta-value">{{ unidraw_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("FineDog unit") }}</div>
-        <div class="meta-value">{{ item.finedog_unit_id }}</div>
-      </div>
-      <div>
+      <div class="meta-item">
         <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
-        <div class="meta-value">{{ item.criticality_level | humanize_text }}</div>
+        <div class="meta-value">
+          <span class="meta-pill">{{ item.criticality_level | humanize_text }}</span>
+        </div>
       </div>
-      <div>
-        <div class="meta-label">{{ "team_id" | humanize_text }}</div>
-        <div class="meta-value">{{ item.team_name }}</div>
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Team") }}</div>
+        <div class="meta-value">
+          {% if team_external_url %}
+            <a class="meta-link" target="_blank" href="{{ team_external_url }}">
+              <span class="meta-link-text">{{ item.team_name }}</span>
+              <span class="meta-link-icon" aria-hidden="true">↗</span>
+            </a>
+          {% else %}
+            <span class="meta-pill">{{ item.team_name }}</span>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% if item.markup_meta %}
