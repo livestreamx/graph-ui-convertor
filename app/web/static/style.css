@@ -1736,11 +1736,10 @@ main {
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
-.team-graph-graphs-item:hover,
 .team-graph-graphs-item:focus-within {
-  border-color: rgba(126, 164, 255, 0.34);
-  box-shadow: 0 10px 24px rgba(4, 8, 20, 0.28);
-  background: rgba(110, 148, 242, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .team-graph-graphs-item.is-animating {
@@ -1757,59 +1756,64 @@ main {
 }
 
 .team-graph-graphs-item-details {
-  margin-top: 8px;
+  margin-top: 10px;
   border-top: 1px dashed rgba(255, 255, 255, 0.12);
-  padding-top: 8px;
+  padding-top: 12px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .team-graph-merge-component {
   display: grid;
-  gap: 6px;
+  gap: 10px;
   border: 1px dashed rgba(132, 165, 248, 0.28);
   border-radius: 10px;
-  padding: 8px;
+  padding: 10px;
   background:
     linear-gradient(150deg, rgba(14, 24, 47, 0.76), rgba(12, 21, 40, 0.65)),
     radial-gradient(circle at top right, rgba(115, 147, 233, 0.16), transparent 60%);
 }
 
-.team-graph-merge-component-topline {
+.team-graph-merge-component:hover,
+.team-graph-merge-component:focus-within {
+  border-color: rgba(132, 165, 248, 0.28);
+  box-shadow: none;
+  background:
+    linear-gradient(150deg, rgba(14, 24, 47, 0.76), rgba(12, 21, 40, 0.65)),
+    radial-gradient(circle at top right, rgba(115, 147, 233, 0.16), transparent 60%);
+}
+
+.team-graph-merge-component-title {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: flex-start;
   align-items: center;
   gap: 8px;
+  border-bottom: 1px dashed rgba(142, 173, 248, 0.3);
+  padding-bottom: 8px;
 }
 
 .team-graph-merge-component-index {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(143, 178, 255, 0.42);
+  border: 1px solid var(--graph-badge-border, rgba(143, 178, 255, 0.42));
   border-radius: 999px;
-  padding: 2px 8px;
+  padding: 2px 9px;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #d4e7ff;
-  background: rgba(111, 148, 240, 0.2);
-}
-
-.team-graph-merge-component-hint {
-  font-size: 10px;
-  color: rgba(166, 184, 208, 0.86);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--graph-badge-text, #d4e7ff);
+  background: var(--graph-badge-bg, rgba(111, 148, 240, 0.2));
 }
 
 .team-graph-merge-component-title .team-graph-graph-entities {
   gap: 4px;
+  flex: 1 1 auto;
 }
 
 .team-graph-merge-nodes-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
 }
 
 .team-graph-merge-node-card {
@@ -1829,7 +1833,61 @@ main {
 }
 
 .team-graph-merge-node-id {
-  font-size: 11px;
+  font-size: 12px;
+}
+
+.team-graph-merge-node-id .team-graph-procedure-caption {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+}
+
+.team-graph-merge-node-id .team-graph-procedure-primary {
+  width: 100%;
+  gap: 8px;
+}
+
+.team-graph-merge-node-id .team-graph-procedure-order {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+.team-graph-merge-node-procedure {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-left: auto;
+  max-width: min(100%, 42rem);
+  text-align: right;
+  line-height: 1.35;
+  padding: 3px 10px;
+  border: 1px solid rgba(150, 183, 244, 0.26);
+  border-radius: 10px;
+  background: rgba(98, 134, 216, 0.12);
+}
+
+.team-graph-merge-node-procedure-label {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.team-graph-merge-node-procedure-text,
+.team-graph-merge-node-procedure-id-wrap {
+  color: var(--text);
+}
+
+.team-graph-merge-node-procedure-link {
+  color: #b8d6ff;
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(149, 187, 247, 0.52);
+}
+
+.team-graph-merge-node-procedure-link:hover {
+  color: #e2efff;
+  border-bottom-color: rgba(191, 215, 253, 0.82);
 }
 
 .team-graph-merge-node-entities {

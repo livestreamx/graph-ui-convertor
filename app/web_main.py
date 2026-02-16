@@ -454,6 +454,9 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "merge_selected_markups": merge_selected_markups,
                 "merge_node_min_chain_size": merge_node_min_chain_size,
                 "team_dashboard": team_dashboard,
+                "resolve_procedure_link": (
+                    lambda procedure_id: resolve_procedure_external_url(context, procedure_id)
+                ),
             },
         )
 
@@ -920,6 +923,17 @@ def resolve_service_external_url(context: CatalogContext, item: CatalogItem) -> 
     if not unit_id or unit_id == context.settings.catalog.unknown_value:
         return None
     return context.link_templates.service_link(unit_id)
+
+
+def resolve_procedure_external_url(context: CatalogContext, procedure_id: str | None) -> str | None:
+    if not context.link_templates:
+        return None
+    if not isinstance(procedure_id, str):
+        return None
+    normalized = procedure_id.strip()
+    if not normalized:
+        return None
+    return context.link_templates.procedure_link(normalized)
 
 
 def resolve_team_external_url(context: CatalogContext, item: CatalogItem) -> str | None:

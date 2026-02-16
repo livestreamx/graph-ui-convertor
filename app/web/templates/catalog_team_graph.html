@@ -34,7 +34,7 @@
   </span>
 {% endmacro %}
 
-{% macro render_procedure_caption(procedure_name, procedure_id, order_prefix="", show_procedure_id=true, strip_doc_suffix=false) %}
+{% macro render_procedure_caption(procedure_name, procedure_id, order_prefix="", show_procedure_id=true, strip_doc_suffix=false, link_resolver=None, merge_node_mode=false) %}
   {% set display_procedure_id = procedure_id %}
   {% if strip_doc_suffix and procedure_id and "::doc" in procedure_id %}
     {% set suffix = procedure_id.rsplit("::doc", 1)[1] %}
@@ -47,9 +47,27 @@
       {% if order_prefix %}
         <span class="team-graph-procedure-order">{{ order_prefix }}</span>
       {% endif %}
-      {{ procedure_name or display_procedure_id }}
+      {% set procedure_link = link_resolver(display_procedure_id) if link_resolver else None %}
+      {% if merge_node_mode %}
+        <span class="team-graph-merge-node-procedure">
+          <span class="team-graph-merge-node-procedure-label">{{ t("Procedure") }}</span>
+          {% if procedure_link %}
+            <a class="team-graph-merge-node-procedure-link" href="{{ procedure_link }}" target="_blank" rel="noopener noreferrer">"{{ procedure_name or display_procedure_id }}"</a>
+            <span class="team-graph-merge-node-procedure-id-wrap">
+              (
+              <a class="team-graph-merge-node-procedure-link team-graph-mono" href="{{ procedure_link }}" target="_blank" rel="noopener noreferrer">{{ display_procedure_id }}</a>
+              )
+            </span>
+          {% else %}
+            <span class="team-graph-merge-node-procedure-text">"{{ procedure_name or display_procedure_id }}"</span>
+            <span class="team-graph-merge-node-procedure-id-wrap team-graph-mono">({{ display_procedure_id }})</span>
+          {% endif %}
+        </span>
+      {% else %}
+        {{ procedure_name or display_procedure_id }}
+      {% endif %}
     </span>
-    {% if show_procedure_id and procedure_name %}
+    {% if show_procedure_id and procedure_name and not merge_node_mode %}
       <span class="team-graph-procedure-id team-graph-mono">{{ display_procedure_id }}</span>
     {% endif %}
   </span>
@@ -620,18 +638,25 @@
                                 {% if component.merge_nodes %}
                                   {% set merge_component_ns.index = merge_component_ns.index + 1 %}
                                   <div class="team-graph-merge-component">
-                                    <div class="team-graph-merge-component-topline">
-                                      <span class="team-graph-merge-component-index">{{ t("Graph #{index}", index=merge_component_ns.index) }}</span>
-                                      <span class="team-graph-merge-component-hint">{{ t("Merge nodes for this graph") }}</span>
-                                    </div>
                                     <div class="team-graph-merge-component-title">
-                                      {{ render_graph_label_entities(component.graph_label, force_colorize=true) }}
+                                      <span
+                                        class="team-graph-merge-component-index"
+                                        data-graph-badge
+                                        data-graph-label="{{ component.graph_label }}"
+                                      >
+                                        {{ t("Graph {index}", index=merge_component_ns.index) }}
+                                      </span>
                                     </div>
                                     <div class="team-graph-merge-nodes-grid">
                                       {% for merge_node in component.merge_nodes %}
                                         <article class="team-graph-merge-node-card">
                                           <div class="team-graph-merge-node-id">
-                                            {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id, t("Merge node #{index}", index=loop.index), show_procedure_id=true, strip_doc_suffix=true) }}
+                                            {% if component.merge_nodes|length > 1 %}
+                                              {% set merge_node_prefix = t("Merge node #{index}", index=loop.index) %}
+                                            {% else %}
+                                              {% set merge_node_prefix = t("Merge node") %}
+                                            {% endif %}
+                                            {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id, merge_node_prefix, show_procedure_id=false, strip_doc_suffix=true, link_resolver=resolve_procedure_link, merge_node_mode=true) }}
                                           </div>
                                           <div class="team-graph-merge-node-entities">
                                             {% for entity in merge_node.entities %}
@@ -1965,6 +1990,9 @@
         const graphEntities = Array.from(
           page.querySelectorAll(".team-graph-graph-entity[data-team]"),
         ).filter((node) => node instanceof HTMLElement);
+        const graphBadges = Array.from(page.querySelectorAll("[data-graph-badge]")).filter(
+          (node) => node instanceof HTMLElement,
+        );
         const normalizeTeamName = (value) => value.trim().replace(/\s+/g, " ").toLocaleLowerCase();
         const hueForTeam = (teamName) => {
           let hash = 0;
@@ -1993,6 +2021,15 @@
           node.style.setProperty("--team-chip-bg", `hsla(${hue}, 80%, 44%, 0.12)`);
           node.style.setProperty("--team-chip-team-bg", `hsla(${hue}, 88%, 62%, 0.24)`);
           node.style.setProperty("--team-chip-team-text", `hsl(${hue} 100% 85%)`);
+        });
+        graphBadges.forEach((node) => {
+          const label = node.getAttribute("data-graph-label") || "";
+          const firstEntity = label.split(" + ")[0] || "";
+          const teamName = normalizeTeamName(firstEntity.split(" / ")[0] || "");
+          const hue = hueForTeam(teamName || label);
+          node.style.setProperty("--graph-badge-border", `hsla(${hue}, 82%, 66%, 0.55)`);
+          node.style.setProperty("--graph-badge-bg", `hsla(${hue}, 80%, 44%, 0.16)`);
+          node.style.setProperty("--graph-badge-text", `hsl(${hue} 100% 88%)`);
         });
 
         page.dataset.initialized = "true";

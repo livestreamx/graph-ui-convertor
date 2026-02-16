@@ -62,6 +62,12 @@
         <div class="meta-value meta-mono">{{ item.markup_rel_path }}</div>
       </div>
       <div class="meta-item">
+        <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
+        <div class="meta-value">
+          <span class="meta-pill">{{ item.criticality_level | humanize_text }}</span>
+        </div>
+      </div>
+      <div class="meta-item">
         <div class="meta-label">{{ t("Service ID") }}</div>
         <div class="meta-value">
           {% if service_external_url %}
@@ -72,12 +78,6 @@
           {% else %}
             <span class="meta-pill">{{ item.finedog_unit_id }}</span>
           {% endif %}
-        </div>
-      </div>
-      <div class="meta-item">
-        <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
-        <div class="meta-value">
-          <span class="meta-pill">{{ item.criticality_level | humanize_text }}</span>
         </div>
       </div>
       <div class="meta-item">

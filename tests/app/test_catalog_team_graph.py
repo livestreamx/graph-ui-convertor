@@ -117,6 +117,7 @@ def test_catalog_team_graph_api(
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             excalidraw_base_url="http://example.com",
+            procedure_link_path="https://example.com/procedures/{procedure_id}",
         )
         client_api = TestClient(create_app(settings))
 
@@ -392,6 +393,7 @@ def test_api_team_graph_localizes_markup_type_column_titles_by_ui_language(
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             excalidraw_base_url="http://example.com",
+            procedure_link_path="https://example.com/procedures/{procedure_id}",
         )
         client_api = TestClient(create_app(settings))
 
@@ -722,6 +724,7 @@ def test_catalog_team_graph_excluded_team_ids_query_bracket_value(
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             excalidraw_base_url="http://example.com",
+            procedure_link_path="https://example.com/procedures/{procedure_id}",
         )
         client_api = TestClient(create_app(settings))
 
@@ -1523,7 +1526,8 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-sort-button" in styles
     assert ".team-graph-actions-split" in styles
     assert '.team-graph-actions-group[data-graph-level="service"]' in styles
-    assert ".team-graph-merge-component-topline" in styles
+    assert ".team-graph-merge-component-title" in styles
+    assert ".team-graph-merge-node-procedure-link" in styles
     assert ".team-graph-graph-entity:hover" in styles
     assert ".team-graph-graphs-item.is-animating" in styles
 
@@ -2050,6 +2054,7 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
             roundtrip_dir=roundtrip_dir,
             index_path=index_path,
             excalidraw_base_url="http://example.com",
+            procedure_link_path="https://example.com/procedures/{procedure_id}",
         )
         client_api = TestClient(create_app(settings))
 
@@ -2086,8 +2091,12 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
         assert "Intersection node breakdown" in html_response.text
         assert "team-graph-merge-node-card" in html_response.text
         assert "Merge node #1" in html_response.text
-        assert "Graph #1" in html_response.text
-        assert "team-graph-procedure-id" in html_response.text
+        assert "Merge nodes for this graph" not in html_response.text
+        assert "Graph #1" not in html_response.text
+        assert "Graph 1" in html_response.text
+        assert "team-graph-merge-node-procedure-link" in html_response.text
+        assert 'href="https://example.com/procedures/proc_shared_intake"' in html_response.text
+        assert 'href="https://example.com/procedures/proc_shared_routing"' in html_response.text
         assert "proc_shared_intake" in html_response.text
         assert "proc_shared_routing" in html_response.text
         assert "::doc1" not in html_response.text
