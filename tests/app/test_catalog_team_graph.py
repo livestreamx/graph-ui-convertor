@@ -212,6 +212,10 @@ def test_catalog_team_graph_api(
         assert "data-sort-trigger" in html_response.text
         assert 'data-sort-key="link-count"' not in html_response.text
         assert "Potential merges" in html_response.text
+        assert (
+            "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled."
+            not in html_response.text
+        )
         assert "Merges" in html_response.text
         assert "Links" in html_response.text
         assert "team-graph-procedure-block-type" in html_response.text
@@ -1519,6 +1523,9 @@ def test_catalog_team_graph_styles_for_merge_and_flags() -> None:
     assert ".team-graph-sort-button" in styles
     assert ".team-graph-actions-split" in styles
     assert '.team-graph-actions-group[data-graph-level="service"]' in styles
+    assert ".team-graph-merge-component-topline" in styles
+    assert ".team-graph-graph-entity:hover" in styles
+    assert ".team-graph-graphs-item.is-animating" in styles
 
 
 def test_catalog_team_graph_default_does_not_merge_selected_markups(
@@ -2078,9 +2085,13 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
         assert html_response.status_code == 200
         assert "Intersection node breakdown" in html_response.text
         assert "team-graph-merge-node-card" in html_response.text
+        assert "Merge node #1" in html_response.text
+        assert "Graph #1" in html_response.text
         assert "team-graph-procedure-id" in html_response.text
         assert "proc_shared_intake" in html_response.text
         assert "proc_shared_routing" in html_response.text
+        assert "::doc1" not in html_response.text
+        assert "::doc2" not in html_response.text
     finally:
         stubber.deactivate()
 
@@ -2347,5 +2358,9 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
         assert "Potential intersection node breakdown" in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "Potential merges" in html_response.text
+        assert (
+            "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled."
+            not in html_response.text
+        )
     finally:
         stubber.deactivate()

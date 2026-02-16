@@ -34,16 +34,23 @@
   </span>
 {% endmacro %}
 
-{% macro render_procedure_caption(procedure_name, procedure_id, order_prefix="") %}
+{% macro render_procedure_caption(procedure_name, procedure_id, order_prefix="", show_procedure_id=true, strip_doc_suffix=false) %}
+  {% set display_procedure_id = procedure_id %}
+  {% if strip_doc_suffix and procedure_id and "::doc" in procedure_id %}
+    {% set suffix = procedure_id.rsplit("::doc", 1)[1] %}
+    {% if suffix and suffix.isdigit() %}
+      {% set display_procedure_id = procedure_id.rsplit("::doc", 1)[0] %}
+    {% endif %}
+  {% endif %}
   <span class="team-graph-procedure-caption">
     <span class="team-graph-procedure-primary">
       {% if order_prefix %}
         <span class="team-graph-procedure-order">{{ order_prefix }}</span>
       {% endif %}
-      {{ procedure_name or procedure_id }}
+      {{ procedure_name or display_procedure_id }}
     </span>
-    {% if procedure_name %}
-      <span class="team-graph-procedure-id team-graph-mono">{{ procedure_id }}</span>
+    {% if show_procedure_id and procedure_name %}
+      <span class="team-graph-procedure-id team-graph-mono">{{ display_procedure_id }}</span>
     {% endif %}
   </span>
 {% endmacro %}
@@ -425,7 +432,7 @@
             <span class="team-graph-result-status team-graph-result-ready">{{ t("Merge ready") }}</span>
             {% if selected_team_count %}
               <span class="team-graph-result-meta">
-                {{ selected_team_count }} teams · {{ selected_markups_count }} markups merged
+                {{ selected_team_count }} {{ t("teams") }} · {{ selected_markups_count }} {{ t("markups merged") }}
               </span>
             {% endif %}
           </div>
@@ -608,14 +615,15 @@
                                   {{ t("Potential intersection node breakdown") }}
                                 {% endif %}
                               </div>
-                              {% if not merge_selected_markups %}
-                                <div class="team-graph-potential-note">
-                                  {{ t("Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled.") }}
-                                </div>
-                              {% endif %}
+                              {% set merge_component_ns = namespace(index=0) %}
                               {% for component in item.components %}
                                 {% if component.merge_nodes %}
+                                  {% set merge_component_ns.index = merge_component_ns.index + 1 %}
                                   <div class="team-graph-merge-component">
+                                    <div class="team-graph-merge-component-topline">
+                                      <span class="team-graph-merge-component-index">{{ t("Graph #{index}", index=merge_component_ns.index) }}</span>
+                                      <span class="team-graph-merge-component-hint">{{ t("Merge nodes for this graph") }}</span>
+                                    </div>
                                     <div class="team-graph-merge-component-title">
                                       {{ render_graph_label_entities(component.graph_label, force_colorize=true) }}
                                     </div>
@@ -623,11 +631,14 @@
                                       {% for merge_node in component.merge_nodes %}
                                         <article class="team-graph-merge-node-card">
                                           <div class="team-graph-merge-node-id">
-                                            {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id) }}
+                                            {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id, t("Merge node #{index}", index=loop.index), show_procedure_id=true, strip_doc_suffix=true) }}
                                           </div>
                                           <div class="team-graph-merge-node-entities">
                                             {% for entity in merge_node.entities %}
                                               {{ render_team_service_entity(entity, "team-graph-graph-entity-sm", true) }}
+                                              {% if not loop.last %}
+                                                <span class="team-graph-graph-separator" aria-hidden="true">x</span>
+                                              {% endif %}
                                             {% endfor %}
                                           </div>
                                         </article>
@@ -1760,6 +1771,79 @@
           updateTeamsVisibility();
         };
 
+        const prefersReducedMotion =
+          typeof window.matchMedia === "function" &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        const setupGraphGroupDetails = () => {
+          const sections = Array.from(page.querySelectorAll(".team-graph-graphs-item")).filter(
+            (node) => node instanceof HTMLDetailsElement,
+          );
+          sections.forEach((section) => {
+            if (!(section instanceof HTMLDetailsElement) || section.dataset.animInit === "true") {
+              return;
+            }
+            const summary = section.querySelector(":scope > summary");
+            const content = section.querySelector(":scope > .team-graph-graphs-item-details");
+            if (!(summary instanceof HTMLElement) || !(content instanceof HTMLElement)) {
+              section.dataset.animInit = "true";
+              return;
+            }
+
+            let isAnimating = false;
+            summary.addEventListener("click", (event) => {
+              event.preventDefault();
+              if (isAnimating) {
+                return;
+              }
+
+              const expand = !section.open;
+              if (prefersReducedMotion || typeof section.animate !== "function") {
+                section.open = expand;
+                return;
+              }
+
+              const startHeight = section.offsetHeight;
+              if (expand) {
+                section.open = true;
+              }
+              const endHeight = expand ? summary.offsetHeight + content.offsetHeight : summary.offsetHeight;
+
+              isAnimating = true;
+              const animation = section.animate(
+                [{ height: `${startHeight}px` }, { height: `${endHeight}px` }],
+                {
+                  duration: 230,
+                  easing: "cubic-bezier(0.2, 0.72, 0.2, 1)",
+                },
+              );
+
+              section.style.height = `${startHeight}px`;
+              section.style.overflow = "hidden";
+              section.classList.add("is-animating");
+
+              animation.onfinish = () => {
+                if (!expand) {
+                  section.open = false;
+                }
+                section.style.height = "";
+                section.style.overflow = "";
+                section.classList.remove("is-animating");
+                isAnimating = false;
+              };
+
+              animation.oncancel = () => {
+                section.style.height = "";
+                section.style.overflow = "";
+                section.classList.remove("is-animating");
+                isAnimating = false;
+              };
+            });
+
+            section.dataset.animInit = "true";
+          });
+        };
+
         const setupDashboardSections = () => {
           const sections = Array.from(
             page.querySelectorAll(".team-graph-dashboard-section-collapsible"),
@@ -1768,10 +1852,6 @@
             return;
           }
           const dashboardSectionStorageKey = "team-graph:step4:dashboard-sections";
-
-          const prefersReducedMotion =
-            typeof window.matchMedia === "function" &&
-            window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
           const readSectionState = () => {
             try {
@@ -1879,6 +1959,7 @@
 
         setupSortableTables();
         setupOverlapVisibility();
+        setupGraphGroupDetails();
         setupDashboardSections();
 
         const graphEntities = Array.from(
