@@ -351,7 +351,18 @@ def test_block_graph_skips_ambiguous_nodes_in_cycle_detection() -> None:
         and element.get("customData", {}).get("cjm", {}).get("edge_type") == "block_graph"
     ]
     assert not cycle_edges
-    assert len(flow_edges) == 1
-    meta = flow_edges[0].get("customData", {}).get("cjm", {})
-    assert meta.get("source_block_id") == "b"
-    assert meta.get("target_block_id") == "c"
+    assert len(flow_edges) == 3
+    edge_pairs = {
+        (
+            edge.get("customData", {}).get("cjm", {}).get("procedure_id"),
+            edge.get("customData", {}).get("cjm", {}).get("source_block_id"),
+            edge.get("customData", {}).get("cjm", {}).get("target_procedure_id"),
+            edge.get("customData", {}).get("cjm", {}).get("target_block_id"),
+        )
+        for edge in flow_edges
+    }
+    assert edge_pairs == {
+        ("p1", "a", "p1", "b"),
+        ("p1", "b", "p2", "c"),
+        ("p2", "c", "p2", "a"),
+    }

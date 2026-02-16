@@ -124,7 +124,9 @@ class ExcalidrawToMarkupConverter:
 
         block_graph = self._collect_block_graph(elements, blocks)
         if block_graph and turn_out_sources:
-            inferred_branches = self._branches_from_block_graph(block_graph, blocks)
+            inferred_branches = self._branches_from_block_graph_arrows(elements, blocks, markers)
+            if not inferred_branches:
+                inferred_branches = self._branches_from_block_graph(block_graph, blocks)
             for proc_id, sources in turn_out_sources.items():
                 for source in sources:
                     if branch_map[proc_id].get(source):
@@ -388,6 +390,42 @@ class ExcalidrawToMarkupConverter:
         edges = [(source, target) for source, targets in block_graph.items() for target in targets]
         return self._branches_from_block_edges(edges, blocks, require_same_proc=False)
 
+    def _branches_from_block_graph_arrows(
+        self,
+        elements: Iterable[Element],
+        blocks: Mapping[str, BlockCandidate],
+        markers: Mapping[str, MarkerCandidate],
+    ) -> dict[str, dict[str, set[str]]]:
+        branches: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
+        for element in elements:
+            if not self._is_arrow(element):
+                continue
+            meta = self._metadata(element)
+            if meta.get("edge_type") not in {"block_graph", "block_graph_cycle"}:
+                continue
+
+            source_block = meta.get("source_block_id")
+            target_block = meta.get("target_block_id")
+            if not isinstance(source_block, str) or not isinstance(target_block, str):
+                raw_start_binding = element.get("startBinding")
+                raw_end_binding = element.get("endBinding")
+                start_binding = raw_start_binding if isinstance(raw_start_binding, dict) else {}
+                end_binding = raw_end_binding if isinstance(raw_end_binding, dict) else {}
+                if not isinstance(source_block, str):
+                    source_block = self._block_from_binding(start_binding, blocks)
+                if not isinstance(target_block, str):
+                    target_block = self._block_from_binding(end_binding, blocks)
+            if not source_block or not target_block:
+                continue
+
+            source_proc = meta.get("procedure_id")
+            if not isinstance(source_proc, str) or not source_proc:
+                source_proc = self._infer_procedure_id(meta, dict(blocks), dict(markers), element)
+            if not source_proc:
+                continue
+            branches[source_proc][source_block].add(target_block)
+        return branches
+
     def _branches_from_block_edges(
         self,
         edges: Iterable[tuple[str, str]],
@@ -468,7 +506,7 @@ class ExcalidrawToMarkupConverter:
         return element.get("type") == "arrow"
 
     def _block_from_binding(
-        self, binding: Mapping[str, Any], blocks: dict[str, BlockCandidate]
+        self, binding: Mapping[str, Any], blocks: Mapping[str, BlockCandidate]
     ) -> str | None:
         element_id = binding.get("elementId")
         if not isinstance(element_id, str):

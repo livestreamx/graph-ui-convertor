@@ -50,22 +50,22 @@ def resolve_block_graph_edges(
             target_candidates = owners_by_block.get(target_block_id, set())
             if not target_candidates:
                 continue
-            pair = _select_procedure_pair(source_candidates, target_candidates, adjacency)
-            if not pair:
+            pairs = _select_procedure_pairs(source_candidates, target_candidates, adjacency)
+            if not pairs:
                 continue
-            source_proc, target_proc = pair
-            key = (source_block_id, target_block_id, source_proc, target_proc)
-            if key in seen:
-                continue
-            seen.add(key)
-            resolved.append(
-                ResolvedBlockGraphEdge(
-                    source_block_id=source_block_id,
-                    target_block_id=target_block_id,
-                    source_procedure_id=source_proc,
-                    target_procedure_id=target_proc,
+            for source_proc, target_proc in pairs:
+                key = (source_block_id, target_block_id, source_proc, target_proc)
+                if key in seen:
+                    continue
+                seen.add(key)
+                resolved.append(
+                    ResolvedBlockGraphEdge(
+                        source_block_id=source_block_id,
+                        target_block_id=target_block_id,
+                        source_procedure_id=source_proc,
+                        target_procedure_id=target_proc,
+                    )
                 )
-            )
     return resolved
 
 
@@ -84,13 +84,13 @@ def _normalize_procedure_graph(
     return adjacency
 
 
-def _select_procedure_pair(
+def _select_procedure_pairs(
     source_candidates: set[str],
     target_candidates: set[str],
     adjacency: Mapping[str, set[str]],
-) -> tuple[str, str] | None:
+) -> list[tuple[str, str]]:
     if len(source_candidates) == 1 and len(target_candidates) == 1:
-        return (next(iter(source_candidates)), next(iter(target_candidates)))
+        return [(next(iter(source_candidates)), next(iter(target_candidates)))]
 
     pairs = [
         (source_proc, target_proc)
@@ -98,16 +98,19 @@ def _select_procedure_pair(
         for target_proc in sorted(target_candidates)
     ]
     if not pairs:
-        return None
+        return []
 
     direct = [pair for pair in pairs if pair[1] in adjacency.get(pair[0], set())]
-    if len(direct) == 1:
-        return direct[0]
-    if len(direct) > 1:
-        return None
+    if direct:
+        return direct
+
+    # If block ids are reused across procedures, preserve per-procedure local edges.
+    local = [(proc_id, proc_id) for proc_id in sorted(source_candidates & target_candidates)]
+    if local:
+        return local
 
     reverse = [pair for pair in pairs if pair[0] in adjacency.get(pair[1], set())]
-    if len(reverse) == 1:
-        return reverse[0]
+    if reverse:
+        return reverse
 
-    return None
+    return []

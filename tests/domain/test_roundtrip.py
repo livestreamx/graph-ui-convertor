@@ -198,6 +198,20 @@ def test_complex_graph_has_epsilon_variant_to_proc_c() -> None:
     assert proc_c.branches.get("c_hub") == ["c_postpone"]
 
 
+def test_roundtrip_preserves_duplicate_block_ids_across_non_adjacent_procedures() -> None:
+    markup = load_markup_fixture("complex_graph.json")
+    layout = GridLayoutEngine()
+    forward = MarkupToExcalidrawConverter(layout)
+    backward = ExcalidrawToMarkupConverter()
+
+    excal = forward.convert(markup)
+    reconstructed = backward.convert(excal.to_dict())
+
+    procedures = {proc.procedure_id: proc for proc in reconstructed.procedures}
+    assert "beta_process" in procedures["proc_beta"].branches
+    assert "beta_process" in procedures["proc_epsilon"].branches
+
+
 def test_graphs_set_contains_proc_c_merge_node() -> None:
     markup = load_markup_fixture("graphs_set.json")
     proc_c = next(proc for proc in markup.procedures if proc.procedure_id == "proc_c")

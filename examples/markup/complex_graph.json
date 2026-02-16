@@ -121,7 +121,7 @@
         "epsilon_intermediate::intermediate"
       ],
       "branches": {
-        "epsilon_review": [
+        "beta_process": [
           "epsilon_pack"
         ],
         "epsilon_pack": [
@@ -129,7 +129,7 @@
         ]
       },
       "block_id_to_block_name": {
-        "epsilon_review": "Epsilon review",
+        "beta_process": "Epsilon review",
         "epsilon_intermediate": "Epsilon checkpoint",
         "epsilon_pack": "Epsilon pack"
       }
@@ -235,7 +235,8 @@
       "beta_process"
     ],
     "beta_process": [
-      "beta_check"
+      "beta_check",
+      "epsilon_pack"
     ],
     "beta_check": [
       "beta_branch"
@@ -271,11 +272,8 @@
     ],
     "delta_merge": [
       "delta_all",
-      "epsilon_review",
+      "beta_process",
       "delta_router"
-    ],
-    "epsilon_review": [
-      "epsilon_pack"
     ],
     "epsilon_pack": [
       "epsilon_intermediate",

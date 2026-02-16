@@ -32,4 +32,4 @@ def test_complex_graph_cycle_count() -> None:
     metrics = compute_graph_metrics(document.block_graph)
 
     assert metrics.is_acyclic is False
-    assert metrics.cycle_count == 2
+    assert metrics.cycle_count == 1
