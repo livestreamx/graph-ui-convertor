@@ -62,6 +62,7 @@ from domain.services.excalidraw_links import (
 )
 from domain.services.excalidraw_title import apply_title_focus, ensure_service_title
 from domain.services.extract_block_graph_view import extract_block_graph_view
+from domain.services.extract_procedure_graph_view import extract_procedure_graph_view
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -471,10 +472,14 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
+        assert index_data is not None
         diagram_base_url = context.settings.catalog.excalidraw_base_url
         excalidraw_open_url = diagram_base_url
+        procedure_excalidraw_open_url = diagram_base_url
         excalidraw_scene_available = False
+        procedure_graph_enabled = True
         open_mode = "direct"
+        procedure_open_mode = "manual"
         on_demand = context.settings.catalog.generate_excalidraw_on_demand
         scene_path = context.settings.catalog.excalidraw_in_dir / item.excalidraw_rel_path
         try:
@@ -502,6 +507,35 @@ def create_app(settings: AppSettings) -> FastAPI:
                 else:
                     excalidraw_open_url = diagram_base_url
                     open_mode = "manual"
+        procedure_graph_api_url = f"/api/scenes/{scene_id}/procedure-graph-view"
+        if is_same_origin(request, diagram_base_url):
+            procedure_excalidraw_open_url = f"/catalog/{scene_id}/procedure-graph/open"
+            procedure_open_mode = "local_storage"
+        else:
+            try:
+                procedure_payload = build_scene_procedure_diagram_payload(
+                    context,
+                    index_data,
+                    item,
+                    "excalidraw",
+                    ui_language=localizer_for_request(request).language,
+                )
+            except HTTPException:
+                procedure_graph_enabled = False
+                procedure_open_mode = "manual"
+            else:
+                procedure_excalidraw_open_url = build_excalidraw_url(
+                    diagram_base_url,
+                    procedure_payload,
+                )
+                if (
+                    len(procedure_excalidraw_open_url)
+                    > context.settings.catalog.excalidraw_max_url_length
+                ):
+                    procedure_excalidraw_open_url = diagram_base_url
+                    procedure_open_mode = "manual"
+                else:
+                    procedure_open_mode = "direct"
         service_external_url = resolve_service_external_url(context, item)
         team_external_url = resolve_team_external_url(context, item)
         return render_catalog_template(
@@ -523,6 +557,10 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_external_url": team_external_url,
                 "block_graph_api_url": f"/api/scenes/{scene_id}/block-graph",
                 "block_graph_enabled": excalidraw_scene_available,
+                "procedure_graph_api_url": procedure_graph_api_url,
+                "procedure_graph_enabled": procedure_graph_enabled,
+                "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
+                "procedure_open_mode": procedure_open_mode,
             },
         )
 
@@ -536,6 +574,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
+        assert index_data is not None
         diagram_url = context.settings.catalog.excalidraw_base_url
         if not is_same_origin(request, diagram_url):
             return RedirectResponse(url=diagram_url)
@@ -551,6 +590,47 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "diagram_storage_key": "excalidraw",
                 "diagram_state_key": "excalidraw-state",
                 "diagram_version_key": "version-dataState",
+            },
+        )
+
+    @app.get("/catalog/{scene_id}/procedure-graph/open", response_class=HTMLResponse)
+    def catalog_open_scene_procedure_graph(
+        request: Request,
+        scene_id: str,
+        context: CatalogContext = Depends(get_context),
+    ) -> Response:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        assert index_data is not None
+        diagram_url = context.settings.catalog.excalidraw_base_url
+        if not is_same_origin(request, diagram_url):
+            return RedirectResponse(url=diagram_url)
+        scene_payload: dict[str, Any] | None = None
+        try:
+            scene_payload = build_scene_procedure_diagram_payload(
+                context,
+                index_data,
+                item,
+                "excalidraw",
+                ui_language=localizer_for_request(request).language,
+            )
+        except HTTPException:
+            scene_payload = None
+        return render_catalog_template(
+            request,
+            "catalog_open.html",
+            {
+                "settings": context.settings,
+                "scene_id": f"{scene_id}-procedure-graph",
+                "scene_api_url": f"/api/scenes/{scene_id}/procedure-graph?format=excalidraw",
+                "diagram_url": diagram_url,
+                "diagram_label": "Excalidraw",
+                "diagram_storage_key": "excalidraw",
+                "diagram_state_key": "excalidraw-state",
+                "diagram_version_key": "version-dataState",
+                "scene_payload": scene_payload,
             },
         )
 
@@ -658,6 +738,48 @@ def create_app(settings: AppSettings) -> FastAPI:
             raise HTTPException(status_code=404, detail="Scene not found")
         scene_payload, _ = load_scene_payload(context, item, "excalidraw")
         graph_payload = extract_block_graph_view(scene_payload)
+        return ORJSONResponse(graph_payload)
+
+    @app.get("/api/scenes/{scene_id}/procedure-graph")
+    def api_scene_procedure_graph(
+        request: Request,
+        scene_id: str,
+        format: SceneFormat = Query(default="excalidraw"),
+        download: bool = Query(default=False),
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        assert index_data is not None
+        payload = build_scene_procedure_diagram_payload(
+            context,
+            index_data,
+            item,
+            format,
+            ui_language=localizer_for_request(request).language,
+        )
+        headers = {}
+        if download:
+            extension = resolve_diagram_extension(format)
+            headers["Content-Disposition"] = (
+                f'attachment; filename="{scene_id}_procedure_graph{extension}"'
+            )
+        return ORJSONResponse(payload, headers=headers)
+
+    @app.get("/api/scenes/{scene_id}/procedure-graph-view")
+    def api_scene_procedure_graph_view(
+        scene_id: str,
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        assert index_data is not None
+        graph_document = build_scene_procedure_graph_document(context, index_data, item)
+        graph_payload = extract_procedure_graph_view(graph_document)
         return ORJSONResponse(graph_payload)
 
     @app.get("/api/teams/graph")
@@ -1017,6 +1139,102 @@ def build_diagram_payload(
     return cast(dict[str, Any], document.to_dict())
 
 
+def resolve_scene_team_items(index_data: CatalogIndex, item: CatalogItem) -> list[CatalogItem]:
+    team_id = item.team_id
+    same_team_items = [candidate for candidate in index_data.items if candidate.team_id == team_id]
+    if not same_team_items:
+        return [item]
+    has_item = any(candidate.scene_id == item.scene_id for candidate in same_team_items)
+    if has_item:
+        return same_team_items
+    return [item, *same_team_items]
+
+
+def build_scene_procedure_graph_document(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+    item: CatalogItem,
+    *,
+    document_cache: dict[str, MarkupDocument] | None = None,
+) -> MarkupDocument:
+    team_items = resolve_scene_team_items(index_data, item)
+    return build_team_graph_document(
+        context,
+        [item],
+        merge_nodes_all_markups=True,
+        merge_selected_markups=False,
+        merge_node_min_chain_size=1,
+        graph_level="procedure",
+        merge_items=team_items,
+        document_cache=document_cache,
+        force_merge_scope=True,
+    )
+
+
+def build_scene_procedure_diagram_payload(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+    item: CatalogItem,
+    diagram_format: SceneFormat,
+    *,
+    ui_language: str | None = None,
+    document_cache: dict[str, MarkupDocument] | None = None,
+) -> dict[str, Any]:
+    team_items = resolve_scene_team_items(index_data, item)
+    return build_team_diagram_payload(
+        context,
+        [item],
+        diagram_format,
+        merge_nodes_all_markups=True,
+        merge_selected_markups=False,
+        merge_node_min_chain_size=1,
+        graph_level="procedure",
+        merge_items=team_items,
+        document_cache=document_cache,
+        ui_language=ui_language,
+        force_merge_scope=True,
+    )
+
+
+def build_team_graph_document(
+    context: CatalogContext,
+    items: list[CatalogItem],
+    merge_nodes_all_markups: bool = False,
+    merge_selected_markups: bool = False,
+    merge_node_min_chain_size: int = 1,
+    graph_level: GraphLevel = "procedure",
+    merge_items: list[CatalogItem] | None = None,
+    document_cache: dict[str, MarkupDocument] | None = None,
+    force_merge_scope: bool = False,
+) -> MarkupDocument:
+    cache = document_cache if document_cache is not None else {}
+    documents = load_markup_documents(context, items, cache=cache)
+    merge_documents: list[MarkupDocument] | None = None
+    if merge_nodes_all_markups:
+        merge_source = merge_items
+        if merge_source is None:
+            index_data = load_index(context)
+            if index_data is not None:
+                merge_source = index_data.items
+        elif not force_merge_scope:
+            index_data = load_index(context)
+            if index_data is not None and len(merge_source) < len(index_data.items):
+                merge_source = index_data.items
+        if merge_source is None:
+            merge_source = items
+        merge_documents = load_markup_documents(context, merge_source, cache=cache)
+    try:
+        return BuildTeamProcedureGraph().build(
+            documents,
+            merge_documents=merge_documents,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            graph_level=graph_level,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 def build_team_diagram_payload(
     context: CatalogContext,
     items: list[CatalogItem],
@@ -1028,33 +1246,19 @@ def build_team_diagram_payload(
     merge_items: list[CatalogItem] | None = None,
     document_cache: dict[str, MarkupDocument] | None = None,
     ui_language: str | None = None,
+    force_merge_scope: bool = False,
 ) -> dict[str, Any]:
-    cache = document_cache if document_cache is not None else {}
-    documents = load_markup_documents(context, items, cache=cache)
-    merge_documents: list[MarkupDocument] | None = None
-    if merge_nodes_all_markups:
-        merge_source = merge_items
-        if merge_source is None:
-            index_data = load_index(context)
-            if index_data is not None:
-                merge_source = index_data.items
-        else:
-            index_data = load_index(context)
-            if index_data is not None and len(merge_source) < len(index_data.items):
-                merge_source = index_data.items
-        if merge_source is None:
-            merge_source = items
-        merge_documents = load_markup_documents(context, merge_source, cache=cache)
-    try:
-        graph_document = BuildTeamProcedureGraph().build(
-            documents,
-            merge_documents=merge_documents,
-            merge_selected_markups=merge_selected_markups,
-            merge_node_min_chain_size=merge_node_min_chain_size,
-            graph_level=graph_level,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    graph_document = build_team_graph_document(
+        context,
+        items,
+        merge_nodes_all_markups=merge_nodes_all_markups,
+        merge_selected_markups=merge_selected_markups,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+        graph_level=graph_level,
+        merge_items=merge_items,
+        document_cache=document_cache,
+        force_merge_scope=force_merge_scope,
+    )
     document: ExcalidrawDocument | UnidrawDocument
     if diagram_format == "excalidraw":
         document = context.to_procedure_graph_excalidraw.convert(graph_document)

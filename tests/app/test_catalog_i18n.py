@@ -111,7 +111,16 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
     assert translate_ui_text("Service ID", "ru") == "ID услуги"
+    assert translate_ui_text("Block-level diagram", "ru") == "Диаграмма уровня блоков"
     assert translate_ui_text("Show graph", "ru") == "Показать граф"
     assert translate_ui_text("Show reverse links", "ru") == "Показывать обратные связи"
+    assert (
+        translate_ui_text("Press Show graph to load procedure graph.", "ru")
+        == "Нажмите «Показать граф», чтобы загрузить граф процедур."
+    )
+    assert (
+        translate_ui_text("No procedure graph data available for this service.", "ru")
+        == "Для этой услуги нет данных procedure_graph."
+    )
     assert translate_ui_text("Block type", "ru") == "Тип блока"
     assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"

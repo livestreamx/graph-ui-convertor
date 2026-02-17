@@ -7,7 +7,10 @@ from pathlib import Path
 import pytest
 
 from app.config import AppSettings
+from domain.models import MarkupDocument
+from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph
 from domain.services.extract_block_graph_view import extract_block_graph_view
+from domain.services.extract_procedure_graph_view import extract_procedure_graph_view
 from tests.app.catalog_test_setup import build_catalog_test_context
 
 
@@ -155,6 +158,51 @@ def test_catalog_scene_block_graph_api_reuses_scene_payload_graph_extraction(
         graph_response = context.client.get(f"/api/scenes/{context.scene_id}/block-graph")
         assert graph_response.status_code == 200
         assert graph_response.json() == expected
+
+
+def test_catalog_scene_procedure_graph_api_reuses_team_builder_defaults(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        markup_document = MarkupDocument.model_validate(context.payload)
+        procedure_graph_document = BuildTeamProcedureGraph().build(
+            [markup_document],
+            merge_documents=[markup_document],
+            merge_selected_markups=False,
+            merge_node_min_chain_size=1,
+            graph_level="procedure",
+        )
+        expected_graph = extract_procedure_graph_view(procedure_graph_document)
+
+        graph_response = context.client.get(f"/api/scenes/{context.scene_id}/procedure-graph-view")
+        assert graph_response.status_code == 200
+        assert graph_response.json() == expected_graph
+
+
+def test_catalog_scene_procedure_graph_download_unidraw(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        download_response = context.client.get(
+            f"/api/scenes/{context.scene_id}/procedure-graph?format=unidraw&download=true"
+        )
+        assert download_response.status_code == 200
+        assert download_response.json().get("type") == "unidraw"
+        assert "procedure_graph.unidraw" in download_response.headers.get("content-disposition", "")
 
 
 def test_catalog_ui_text_overrides(

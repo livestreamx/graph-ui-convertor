@@ -23,7 +23,7 @@
 
   <section class="detail-grid">
     <div class="detail-card">
-      <h3>{{ t("Get the diagram") }}</h3>
+      <h3>{{ t("Block-level diagram") }}</h3>
       <div class="button-row">
         {% if block_graph_enabled %}
           <button class="ghost-button render-graph-button" type="button" id="render-service-graph">
@@ -53,8 +53,36 @@
         {% endif %}
       {% elif open_mode == "manual" %}
         <p class="note">{{ t("Scene is too large for URL sharing. Use Download + Import.") }}</p>
-      {% else %}
-        <p class="note">{{ t("If the scene does not load, import the downloaded file manually.") }}</p>
+      {% endif %}
+    </div>
+
+    <div class="detail-card">
+      <h3>{{ t("Procedure-level diagram") }}</h3>
+      <div class="button-row">
+        {% if procedure_graph_enabled %}
+          <button class="ghost-button render-graph-button" type="button" id="render-procedure-graph">
+            {{ t("Show graph") }}
+          </button>
+        {% endif %}
+        {% if diagram_excalidraw_enabled %}
+          <a class="primary-button" target="_blank" href="{{ procedure_excalidraw_open_url }}">
+            {{ t("Open Excalidraw") }}
+          </a>
+        {% endif %}
+        <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}/procedure-graph?format=excalidraw&download=true">
+          {{ t("Download .excalidraw") }}
+        </a>
+        <a
+          class="{% if diagram_excalidraw_enabled %}ghost-button unidraw-button{% else %}primary-button{% endif %}"
+          href="/api/scenes/{{ item.scene_id }}/procedure-graph?format=unidraw&download=true"
+        >
+          {{ t("Download .unidraw") }}
+        </a>
+      </div>
+      {% if not procedure_graph_enabled %}
+        <p class="note">{{ t("No procedure graph data available for this service.") }}</p>
+      {% elif procedure_open_mode == "manual" %}
+        <p class="note">{{ t("Scene is too large for URL sharing. Use Download + Import.") }}</p>
       {% endif %}
     </div>
   </section>
@@ -355,6 +383,276 @@
             });
           }
           window.__serviceGraphLastRender = {
+            nodes: nodes.length,
+            edges: edges.length,
+          };
+          setStatus(formatRendered(nodes.length, edges.length), false);
+        };
+
+        const loadAndRenderGraph = async () => {
+          if (cachedGraph) {
+            renderGraph(cachedGraph);
+            return;
+          }
+          setStatus(textLoading, false);
+          openButton.disabled = true;
+          try {
+            const response = await fetch(graphApiUrl, {
+              credentials: "same-origin",
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache",
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            cachedGraph = await response.json();
+            renderGraph(cachedGraph);
+          } catch (error) {
+            const details = error instanceof Error ? error.message : String(error);
+            setStatus(`${textLoadFailed} ${textErrorPrefix}: ${details}`, true);
+          } finally {
+            openButton.disabled = false;
+          }
+        };
+
+        openButton.addEventListener("click", () => {
+          openModal();
+          loadAndRenderGraph();
+        });
+        showReverseToggle.addEventListener("change", () => {
+          if (cachedGraph) {
+            renderGraph(cachedGraph);
+          }
+        });
+        closeButton?.addEventListener("click", closeModal);
+        fitButton?.addEventListener("click", () => {
+          if (network && typeof network.fit === "function") {
+            network.fit({ animation: true });
+          }
+        });
+        backdrop?.addEventListener("click", closeModal);
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !modal.hidden) {
+            closeModal();
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+  {% if procedure_graph_enabled %}
+    <div class="service-graph-modal" id="procedure-graph-modal" hidden>
+      <div class="service-graph-backdrop" id="procedure-graph-backdrop"></div>
+      <section
+        class="service-graph-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="{{ t("Procedure-level diagram") }}"
+      >
+        <header class="service-graph-toolbar">
+          <h3 class="service-graph-title">{{ t("Procedure-level diagram") }}</h3>
+          <div class="button-row service-graph-actions">
+            <button class="ghost-button" type="button" id="procedure-graph-fit">{{ t("Fit graph") }}</button>
+            <button class="ghost-button" type="button" id="procedure-graph-close">{{ t("Close") }}</button>
+          </div>
+        </header>
+        <div class="service-graph-status-row">
+          <p class="note service-graph-status" id="procedure-graph-status">
+            {{ t("Press Show graph to load procedure graph.") }}
+          </p>
+          <label class="service-graph-toggle" for="procedure-graph-show-reverse">
+            <input id="procedure-graph-show-reverse" type="checkbox" checked />
+            <span>{{ t("Show reverse links") }}</span>
+          </label>
+        </div>
+        <div class="service-graph-canvas" id="procedure-graph-canvas"></div>
+      </section>
+    </div>
+    {% if not block_graph_enabled %}
+      <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    {% endif %}
+    <script>
+      (() => {
+        const openButton = document.getElementById("render-procedure-graph");
+        const modal = document.getElementById("procedure-graph-modal");
+        const closeButton = document.getElementById("procedure-graph-close");
+        const fitButton = document.getElementById("procedure-graph-fit");
+        const backdrop = document.getElementById("procedure-graph-backdrop");
+        const canvas = document.getElementById("procedure-graph-canvas");
+        const status = document.getElementById("procedure-graph-status");
+        const showReverseToggle = document.getElementById("procedure-graph-show-reverse");
+        const graphApiUrl = {{ procedure_graph_api_url | tojson }};
+        const textLoading = {{ t("Loading graph...") | tojson }};
+        const textLoadFailed = {{ t("Failed to load graph data.") | tojson }};
+        const textLibraryFailed = {{ t("Graph library did not load. Refresh the page and retry.") | tojson }};
+        const textEmpty = {{ t("No procedure graph data available for this service.") | tojson }};
+        const textRendered = {{ t("Rendered {nodes} nodes and {edges} edges.") | tojson }};
+        const textErrorPrefix = {{ t("Reason") | tojson }};
+        const textProcedure = {{ t("Procedure") | tojson }};
+        const textPotentialMergeNode = {{ t("Potential merge node") | tojson }};
+        const textYes = {{ t("yes") | tojson }};
+        const textNo = {{ t("no") | tojson }};
+
+        if (!openButton || !modal || !canvas || !status || !showReverseToggle) {
+          return;
+        }
+
+        const teamPalette = [
+          "#1b4965",
+          "#2a6f97",
+          "#5fa8d3",
+          "#62b6cb",
+          "#90be6d",
+          "#f4a261",
+          "#e76f51",
+          "#a06cd5",
+        ];
+
+        let network = null;
+        let cachedGraph = null;
+
+        const setStatus = (message, isError = false) => {
+          status.textContent = message;
+          status.classList.toggle("is-error", isError);
+        };
+
+        const formatRendered = (nodesCount, edgesCount) =>
+          textRendered
+            .replace("{nodes}", String(nodesCount))
+            .replace("{edges}", String(edgesCount));
+
+        const hashText = (value) => {
+          let hash = 0;
+          for (let idx = 0; idx < value.length; idx += 1) {
+            hash = (hash * 33 + value.charCodeAt(idx)) >>> 0;
+          }
+          return hash % teamPalette.length;
+        };
+
+        const nodeColor = (teamName, serviceName) => {
+          const key = `${teamName}::${serviceName}`;
+          return teamPalette[hashText(key)];
+        };
+
+        const closeModal = () => {
+          modal.hidden = true;
+          document.body.classList.remove("service-graph-open");
+        };
+
+        const openModal = () => {
+          modal.hidden = false;
+          document.body.classList.add("service-graph-open");
+        };
+
+        const isReverseEdge = (edge) => String(edge.edge_type || "").endsWith("_cycle");
+
+        const renderGraph = (graphPayload) => {
+          const visLib = window.vis;
+          if (
+            !visLib ||
+            typeof visLib.Network !== "function" ||
+            typeof visLib.DataSet !== "function"
+          ) {
+            setStatus(textLibraryFailed, true);
+            return;
+          }
+          const rawNodes = Array.isArray(graphPayload?.nodes) ? graphPayload.nodes : [];
+          const rawEdges = Array.isArray(graphPayload?.edges) ? graphPayload.edges : [];
+          if (!rawNodes.length) {
+            canvas.innerHTML = "";
+            setStatus(textEmpty, false);
+            return;
+          }
+          const decoratedEdges = rawEdges.map((edge) => ({
+            ...edge,
+            __isReverse: isReverseEdge(edge),
+          }));
+          const visibleEdges = showReverseToggle.checked
+            ? decoratedEdges
+            : decoratedEdges.filter((edge) => edge.__isReverse !== true);
+
+          const nodes = rawNodes.map((node) => {
+            const procedureId = String(node.procedure_id || node.id || "");
+            const teamName = String(node.team_name || "");
+            const serviceName = String(node.service_name || "");
+            const isMergeNode = node.is_merge_node === true;
+            const background = isMergeNode ? "#ffd6d6" : nodeColor(teamName, serviceName);
+            return {
+              id: String(node.id),
+              label: String(node.label || procedureId),
+              title:
+                `${textProcedure}: ${procedureId}\n` +
+                `${textPotentialMergeNode}: ${isMergeNode ? textYes : textNo}`,
+              shape: "box",
+              margin: 8,
+              borderWidth: isMergeNode ? 2 : 1,
+              font: {
+                color: isMergeNode ? "#1e293b" : "#f8fafc",
+                face: "IBM Plex Sans",
+                size: 14,
+              },
+              color: {
+                background,
+                border: isMergeNode ? "#ffdede" : "#d7e2f3",
+                highlight: {
+                  background,
+                  border: "#ffffff",
+                },
+              },
+            };
+          });
+
+          const edges = visibleEdges.map((edge) => {
+            const isCycle = edge.is_cycle === true;
+            return {
+              id: String(edge.id || `${edge.source}-${edge.target}`),
+              from: String(edge.source),
+              to: String(edge.target),
+              arrows: "to",
+              dashes: isCycle,
+              width: isCycle ? 2 : 1.5,
+              smooth: {
+                enabled: true,
+                type: "dynamic",
+              },
+              color: {
+                color: isCycle ? "#ff7b7b" : "#9fc5ff",
+                highlight: isCycle ? "#ff9e9e" : "#cfe0ff",
+              },
+            };
+          });
+
+          if (network && typeof network.destroy === "function") {
+            network.destroy();
+          }
+          canvas.innerHTML = "";
+          network = new visLib.Network(
+            canvas,
+            { nodes: new visLib.DataSet(nodes), edges: new visLib.DataSet(edges) },
+            {
+              autoResize: true,
+              layout: { improvedLayout: true },
+              interaction: {
+                dragNodes: true,
+                dragView: true,
+                zoomView: true,
+                hover: true,
+              },
+              physics: {
+                enabled: true,
+                stabilization: { iterations: 150 },
+              },
+            },
+          );
+          if (typeof network.once === "function") {
+            network.once("stabilizationIterationsDone", () => {
+              if (typeof network.fit === "function") {
+                network.fit({ animation: false });
+              }
+            });
+          }
+          window.__procedureGraphLastRender = {
             nodes: nodes.length,
             edges: edges.length,
           };
