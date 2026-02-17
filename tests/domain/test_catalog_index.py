@@ -85,6 +85,9 @@ def test_build_catalog_index_extracts_fields(
         assert item.excalidraw_rel_path == "billing.excalidraw"
         assert item.unidraw_rel_path == "billing.unidraw"
         assert item.markup_rel_path == "billing.json"
+        assert item.procedure_ids == ["p1"]
+        assert item.block_ids == ["a", "b"]
+        assert item.procedure_blocks == {"p1": ["a", "b"]}
         expected_timestamp = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
         assert item.updated_at == expected_timestamp
 

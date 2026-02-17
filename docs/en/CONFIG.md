@@ -128,6 +128,10 @@ catalog:
   `/api/scenes/{scene_id}/procedure-graph-view` (interactive graph nodes/edges for the modal).
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
+- Catalog search uses token filters in the main search input.
+  Type a value and press `Enter` to add it as a token; each next `Enter` adds one more token.
+  Tokens are combined with `AND`, and each token is matched across title/tags/markup metadata
+  plus `procedure_id` and `block_id`.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` supports comma-separated values). The builder also accepts

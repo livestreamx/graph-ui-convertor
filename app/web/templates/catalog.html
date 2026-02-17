@@ -14,17 +14,40 @@
   <section class="controls">
     <form
       class="search-bar"
+      data-token-search="true"
       hx-get="/catalog"
       hx-target="#catalog-list"
       hx-push-url="true"
-      hx-trigger="keyup changed delay:350ms, search, change"
+      hx-trigger="submit, change from:select"
     >
       <input
         type="search"
         name="q"
         value="{{ query }}"
-        placeholder="{{ t('Search by title, tag, markup type') }}"
+        placeholder="{{ t('Type a filter and press Enter') }}"
+        autocomplete="off"
       />
+      <div class="search-help" role="note">
+        {{ t("Press Enter to add a filter token. Tokens are combined with AND and search by title, tags, markup type, procedure_id, and block_id.") }}
+      </div>
+      <div class="search-token-row" data-search-token-list>
+        {% for token in search_tokens %}
+          <button
+            type="button"
+            class="search-token"
+            data-remove-token="{{ token | lower }}"
+            aria-label="{{ t('Remove filter') }}"
+          >
+            <span>{{ token }}</span>
+            <span class="search-token-remove" aria-hidden="true">×</span>
+          </button>
+        {% endfor %}
+      </div>
+      <div data-search-token-hidden>
+        {% for token in search_tokens %}
+          <input type="hidden" name="search" value="{{ token }}" data-search-token="{{ token | lower }}" />
+        {% endfor %}
+      </div>
       <input type="hidden" name="lang" value="{{ lang }}" />
       <div class="filter-controls">
         <label class="filter-control">
@@ -63,10 +86,8 @@
               {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
             </span>
           {% endfor %}
-          <a class="ghost-button" href="/catalog?lang={{ lang }}{% if query %}&q={{ query|urlencode }}{% endif %}">{{ t("Clear filters") }}</a>
+          <a class="ghost-button" href="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}">{{ t("Clear filters") }}</a>
         </div>
-      {% else %}
-        <div class="filter-hint">{{ t("Filter by group values inside each section.") }}</div>
       {% endif %}
     </div>
 
@@ -75,4 +96,82 @@
   <div id="catalog-list">
     {% include "catalog_list.html" %}
   </div>
+
+  <script>
+    (() => {
+      const form = document.querySelector("[data-token-search='true']");
+      if (!form) return;
+      const input = form.querySelector("input[name='q']");
+      const tokenList = form.querySelector("[data-search-token-list]");
+      const hiddenContainer = form.querySelector("[data-search-token-hidden]");
+      if (!input || !tokenList || !hiddenContainer) return;
+
+      const normalize = (value) => value.trim().replace(/\s+/g, " ");
+      const buildKey = (value) => normalize(value).toLowerCase();
+
+      const tokenExists = (tokenKey) =>
+        hiddenContainer.querySelector(`[data-search-token="${CSS.escape(tokenKey)}"]`) !== null;
+
+      const appendToken = (value) => {
+        const normalized = normalize(value);
+        if (!normalized) return;
+        const tokenKey = buildKey(normalized);
+        if (!tokenKey || tokenExists(tokenKey)) return;
+
+        const tokenButton = document.createElement("button");
+        tokenButton.type = "button";
+        tokenButton.className = "search-token";
+        tokenButton.dataset.removeToken = tokenKey;
+        tokenButton.setAttribute("aria-label", "{{ t('Remove filter') }}");
+
+        const tokenText = document.createElement("span");
+        tokenText.textContent = normalized;
+        tokenButton.appendChild(tokenText);
+
+        const tokenRemove = document.createElement("span");
+        tokenRemove.className = "search-token-remove";
+        tokenRemove.setAttribute("aria-hidden", "true");
+        tokenRemove.textContent = "×";
+        tokenButton.appendChild(tokenRemove);
+        tokenList.appendChild(tokenButton);
+
+        const hiddenInput = document.createElement("input");
+        hiddenInput.type = "hidden";
+        hiddenInput.name = "search";
+        hiddenInput.value = normalized;
+        hiddenInput.dataset.searchToken = tokenKey;
+        hiddenContainer.appendChild(hiddenInput);
+      };
+
+      const removeToken = (tokenKey) => {
+        const hiddenInput = hiddenContainer.querySelector(
+          `[data-search-token="${CSS.escape(tokenKey)}"]`
+        );
+        if (hiddenInput) hiddenInput.remove();
+        const tokenButton = tokenList.querySelector(
+          `[data-remove-token="${CSS.escape(tokenKey)}"]`
+        );
+        if (tokenButton) tokenButton.remove();
+      };
+
+      input.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        const value = normalize(input.value);
+        if (value) appendToken(value);
+        input.value = "";
+        form.requestSubmit();
+      });
+
+      tokenList.addEventListener("click", (event) => {
+        const target = event.target instanceof Element ? event.target : null;
+        const tokenButton = target ? target.closest("[data-remove-token]") : null;
+        if (!tokenButton) return;
+        const tokenKey = tokenButton.getAttribute("data-remove-token");
+        if (!tokenKey) return;
+        removeToken(tokenKey);
+        form.requestSubmit();
+      });
+    })();
+  </script>
 {% endblock %}

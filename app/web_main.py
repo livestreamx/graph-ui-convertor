@@ -208,6 +208,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_view(
         request: Request,
         q: str | None = Query(default=None),
+        search: list[str] = Query(default_factory=list),
         group: list[str] = Query(default_factory=list),
         criticality_level: str | None = Query(default=None),
         team_id: str | None = Query(default=None),
@@ -227,14 +228,15 @@ def create_app(settings: AppSettings) -> FastAPI:
             filters["criticality_level"] = criticality_level
         if team_id:
             filters["team_id"] = team_id
-        filtered_items = filter_items(index_data.items, q, filters)
+        search_tokens = normalize_search_tokens(search, q)
+        filtered_items = filter_items(index_data.items, search_tokens, filters)
         groups = build_group_tree(filtered_items, index_data.group_by)
         criticality_levels, team_options = build_filter_options(
             index_data.items, index_data.unknown_value
         )
         team_lookup = dict(team_options)
         active_filters = build_active_filters(filters, team_lookup)
-        group_query_base = build_group_query_base(q, criticality_level, team_id)
+        group_query_base = build_group_query_base(search_tokens, criticality_level, team_id)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
         return render_catalog_template(
             request,
@@ -244,7 +246,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "index": index_data,
                 "groups": groups,
                 "items": filtered_items,
-                "query": q or "",
+                "query": "",
+                "search_tokens": search_tokens,
                 "group_filters": parse_group_filters(group),
                 "active_filters": active_filters,
                 "criticality_level": criticality_level or "",
@@ -1384,13 +1387,14 @@ def filter_items_by_team_ids(items: list[CatalogItem], team_ids: list[str]) -> l
 
 def filter_items(
     items: list[CatalogItem],
-    query: str | None,
+    search_tokens: Sequence[str],
     filters: dict[str, str],
 ) -> list[CatalogItem]:
-    normalized_query = (query or "").strip().lower()
+    normalized_tokens = tuple(normalize_search_filter_value(token) for token in search_tokens)
+    normalized_tokens = tuple(token for token in normalized_tokens if token)
     results: list[CatalogItem] = []
     for item in items:
-        if normalized_query and not matches_query(item, normalized_query):
+        if normalized_tokens and not matches_search_tokens(item, normalized_tokens):
             continue
         if not matches_filters(item, filters):
             continue
@@ -1398,21 +1402,71 @@ def filter_items(
     return results
 
 
-def matches_query(item: CatalogItem, query: str) -> bool:
-    if query in item.title.lower():
+def matches_search_tokens(item: CatalogItem, search_tokens: Sequence[str]) -> bool:
+    searchable_values = [
+        item.title.lower(),
+        item.scene_id.lower(),
+        item.markup_type.lower(),
+        item.team_name.lower(),
+        item.team_id.lower(),
+        item.criticality_level.lower(),
+    ]
+    searchable_values.extend(tag.lower() for tag in item.tags)
+    procedure_ids = [procedure_id.lower() for procedure_id in item.procedure_ids]
+    block_ids = [block_id.lower() for block_id in item.block_ids]
+    procedure_blocks = {
+        procedure_id.lower(): [block_id.lower() for block_id in block_ids]
+        for procedure_id, block_ids in item.procedure_blocks.items()
+    }
+    exclusive_procedure_tokens: list[str] = []
+    exclusive_block_tokens: list[str] = []
+    for token in search_tokens:
+        token_matches_text = any(token in value for value in searchable_values)
+        token_matches_procedure = [
+            procedure_id for procedure_id in procedure_ids if token in procedure_id
+        ]
+        token_matches_block = [block_id for block_id in block_ids if token in block_id]
+        if not token_matches_text and not token_matches_procedure and not token_matches_block:
+            return False
+        if token_matches_procedure and not token_matches_block:
+            exclusive_procedure_tokens.append(token)
+        elif token_matches_block and not token_matches_procedure:
+            exclusive_block_tokens.append(token)
+    if not procedure_blocks or not exclusive_procedure_tokens or not exclusive_block_tokens:
         return True
-    for tag in item.tags:
-        if query in tag.lower():
-            return True
-    if query in item.scene_id.lower():
-        return True
-    if query in item.markup_type.lower():
-        return True
-    if query in item.team_name.lower():
-        return True
-    if query in item.criticality_level.lower():
-        return True
-    return False
+    candidate_procedures = [
+        procedure_id
+        for procedure_id in procedure_blocks
+        if any(token in procedure_id for token in exclusive_procedure_tokens)
+    ]
+    if not candidate_procedures:
+        return False
+    for token in exclusive_block_tokens:
+        if not any(
+            any(token in block_id for block_id in procedure_blocks[procedure_id])
+            for procedure_id in candidate_procedures
+        ):
+            return False
+    return True
+
+
+def normalize_search_tokens(search_tokens: Sequence[str], query: str | None = None) -> list[str]:
+    normalized_tokens: list[str] = []
+    seen: set[str] = set()
+    for raw_token in [*search_tokens, query or ""]:
+        collapsed = " ".join(str(raw_token).split()).strip()
+        if not collapsed:
+            continue
+        token_key = collapsed.lower()
+        if token_key in seen:
+            continue
+        seen.add(token_key)
+        normalized_tokens.append(collapsed)
+    return normalized_tokens
+
+
+def normalize_search_filter_value(value: str) -> str:
+    return value.strip().lower()
 
 
 def matches_filters(item: CatalogItem, filters: dict[str, str]) -> bool:
@@ -1581,18 +1635,18 @@ def build_active_filters(
 
 
 def build_group_query_base(
-    query: str | None,
+    search_tokens: Sequence[str],
     criticality_level: str | None,
     team_id: str | None,
 ) -> str:
-    params: dict[str, str] = {}
-    if query:
-        params["q"] = query
+    params: dict[str, str | list[str]] = {}
+    if search_tokens:
+        params["search"] = list(search_tokens)
     if criticality_level:
         params["criticality_level"] = criticality_level
     if team_id:
         params["team_id"] = team_id
-    return urlencode(params)
+    return urlencode(params, doseq=True)
 
 
 def group_value_for_field(item: CatalogItem, field: str) -> str:
