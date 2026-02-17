@@ -96,3 +96,13 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
         )
         == "Верхнеуровневая карта услуг и их взаимосвязей"
     )
+    assert translate_ui_text("Graph {index}", "ru").format(index=1) == "Граф 1"
+    assert translate_ui_text("Merge node", "ru") == "Узел слияния"
+    assert translate_ui_text("Merge node #{index}", "ru").format(index=1) == "Узел слияния #1"
+
+
+def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
+    assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
+    assert translate_ui_text("Service ID", "ru") == "ID услуги"
+    assert translate_ui_text("Render graph", "ru") == "Отрисовать граф"
+    assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"

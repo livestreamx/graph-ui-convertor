@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from app.config import AppSettings
+from domain.services.extract_block_graph_view import extract_block_graph_view
 from tests.app.catalog_test_setup import build_catalog_test_context
 
 
@@ -135,6 +136,25 @@ def test_catalog_scene_links_applied(
         )
         assert frame.get("link") == "https://example.com/procedures/p1"
         assert block.get("link") == "https://example.com/procedures/p1/blocks/a"
+
+
+def test_catalog_scene_block_graph_api_reuses_scene_payload_graph_extraction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+    ) as context:
+        scene_response = context.client.get(f"/api/scenes/{context.scene_id}")
+        assert scene_response.status_code == 200
+        expected = extract_block_graph_view(scene_response.json())
+
+        graph_response = context.client.get(f"/api/scenes/{context.scene_id}/block-graph")
+        assert graph_response.status_code == 200
+        assert graph_response.json() == expected
 
 
 def test_catalog_ui_text_overrides(

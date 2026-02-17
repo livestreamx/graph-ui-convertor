@@ -4,8 +4,11 @@
   <section class="detail-header">
     <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
     <div class="detail-title">{{ item.title }}</div>
+    <div class="detail-markup-type">
+      <span class="detail-markup-type-label">{{ "markup_type" | humanize_text }}</span>
+      <span class="detail-markup-type-value">{{ item.markup_type | humanize_text }}</span>
+    </div>
     <div class="detail-meta">
-      <span>{{ "markup_type" | humanize_text }}: {{ item.markup_type | humanize_text }}</span>
       <span>{{ t("Updated") }} {{ item.updated_at | msk_datetime }}</span>
       <span>{{ t("Scene ID") }} {{ item.scene_id }}</span>
     </div>
@@ -22,6 +25,11 @@
     <div class="detail-card">
       <h3>{{ t("Get the diagram") }}</h3>
       <div class="button-row">
+        {% if block_graph_enabled %}
+          <button class="ghost-button" type="button" id="render-service-graph">
+            {{ t("Render graph") }}
+          </button>
+        {% endif %}
         {% if diagram_excalidraw_enabled %}
           <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">{{ t("Open Excalidraw") }}</a>
         {% endif %}
@@ -49,51 +57,283 @@
         <p class="note">{{ t("If the scene does not load, import the downloaded file manually.") }}</p>
       {% endif %}
     </div>
-    {% if service_external_url or team_external_url %}
-      <div class="detail-card">
-        <h3>{{ t("External resources") }}</h3>
-        <div class="button-row">
+  </section>
+
+  {% if block_graph_enabled %}
+    <div class="service-graph-modal" id="service-graph-modal" hidden>
+      <div class="service-graph-backdrop" id="service-graph-backdrop"></div>
+      <section
+        class="service-graph-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="{{ t("Service block graph") }}"
+      >
+        <header class="service-graph-toolbar">
+          <h3 class="service-graph-title">{{ t("Service block graph") }}</h3>
+          <div class="button-row service-graph-actions">
+            <button class="ghost-button" type="button" id="service-graph-fit">{{ t("Fit graph") }}</button>
+            <button class="ghost-button" type="button" id="service-graph-close">{{ t("Close") }}</button>
+          </div>
+        </header>
+        <p class="note service-graph-status" id="service-graph-status">
+          {{ t("Press Render graph to load service graph.") }}
+        </p>
+        <div class="service-graph-canvas" id="service-graph-canvas"></div>
+      </section>
+    </div>
+    <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <script>
+      (() => {
+        const openButton = document.getElementById("render-service-graph");
+        const modal = document.getElementById("service-graph-modal");
+        const closeButton = document.getElementById("service-graph-close");
+        const fitButton = document.getElementById("service-graph-fit");
+        const backdrop = document.getElementById("service-graph-backdrop");
+        const canvas = document.getElementById("service-graph-canvas");
+        const status = document.getElementById("service-graph-status");
+        const graphApiUrl = {{ block_graph_api_url | tojson }};
+        const textLoading = {{ t("Loading graph...") | tojson }};
+        const textLoadFailed = {{ t("Failed to load graph data.") | tojson }};
+        const textLibraryFailed = {{ t("Graph library did not load. Refresh the page and retry.") | tojson }};
+        const textEmpty = {{ t("No block graph data available for this service.") | tojson }};
+        const textRendered = {{ t("Rendered {nodes} nodes and {edges} edges.") | tojson }};
+        const textErrorPrefix = {{ t("Reason") | tojson }};
+
+        if (!openButton || !modal || !canvas || !status) {
+          return;
+        }
+
+        const procedurePalette = [
+          "#1b4965",
+          "#2a6f97",
+          "#5fa8d3",
+          "#62b6cb",
+          "#90be6d",
+          "#f4a261",
+          "#e76f51",
+          "#a06cd5",
+        ];
+
+        let network = null;
+        let cachedGraph = null;
+
+        const setStatus = (message, isError = false) => {
+          status.textContent = message;
+          status.classList.toggle("is-error", isError);
+        };
+
+        const formatRendered = (nodesCount, edgesCount) =>
+          textRendered
+            .replace("{nodes}", String(nodesCount))
+            .replace("{edges}", String(edgesCount));
+
+        const hashProcedure = (procedureId) => {
+          let hash = 0;
+          for (let idx = 0; idx < procedureId.length; idx += 1) {
+            hash = (hash * 33 + procedureId.charCodeAt(idx)) >>> 0;
+          }
+          return hash % procedurePalette.length;
+        };
+
+        const nodeColor = (procedureId) => procedurePalette[hashProcedure(procedureId)];
+
+        const closeModal = () => {
+          modal.hidden = true;
+          document.body.classList.remove("service-graph-open");
+        };
+
+        const openModal = () => {
+          modal.hidden = false;
+          document.body.classList.add("service-graph-open");
+        };
+
+        const renderGraph = (graphPayload) => {
+          const visLib = window.vis;
+          if (
+            !visLib ||
+            typeof visLib.Network !== "function" ||
+            typeof visLib.DataSet !== "function"
+          ) {
+            setStatus(textLibraryFailed, true);
+            return;
+          }
+
+          const rawNodes = Array.isArray(graphPayload?.nodes) ? graphPayload.nodes : [];
+          const rawEdges = Array.isArray(graphPayload?.edges) ? graphPayload.edges : [];
+          if (!rawNodes.length) {
+            canvas.innerHTML = "";
+            setStatus(textEmpty, false);
+            return;
+          }
+
+          const nodes = rawNodes.map((node) => {
+            const procedureId = String(node.procedure_id || "");
+            const isInitial = node.is_initial === true;
+            return {
+              id: String(node.id),
+              label: String(node.label || node.block_id || node.id),
+              title: `${procedureId} / ${String(node.block_id || "")}`,
+              shape: "box",
+              margin: 8,
+              borderWidth: isInitial ? 2 : 1,
+              font: {
+                color: "#f8fafc",
+                face: "IBM Plex Sans",
+                size: 14,
+              },
+              color: {
+                background: nodeColor(procedureId),
+                border: isInitial ? "#ffd166" : "#d7e2f3",
+                highlight: {
+                  background: nodeColor(procedureId),
+                  border: "#ffffff",
+                },
+              },
+            };
+          });
+          const edges = rawEdges.map((edge) => {
+            const edgeType = String(edge.edge_type || "");
+            const isCycle = edge.is_cycle === true || edgeType.endsWith("_cycle");
+            return {
+              id: String(edge.id || `${edge.source}-${edge.target}-${edgeType}`),
+              from: String(edge.source),
+              to: String(edge.target),
+              arrows: "to",
+              dashes: isCycle,
+              width: isCycle ? 2 : 1.5,
+              smooth: {
+                enabled: true,
+                type: "dynamic",
+              },
+              color: {
+                color: isCycle ? "#ff6b6b" : "#9fc5ff",
+                highlight: isCycle ? "#ff8a8a" : "#cfe0ff",
+              },
+            };
+          });
+
+          if (network && typeof network.destroy === "function") {
+            network.destroy();
+          }
+          canvas.innerHTML = "";
+          network = new visLib.Network(
+            canvas,
+            { nodes: new visLib.DataSet(nodes), edges: new visLib.DataSet(edges) },
+            {
+              autoResize: true,
+              layout: { improvedLayout: true },
+              interaction: {
+                dragNodes: true,
+                dragView: true,
+                zoomView: true,
+                hover: true,
+              },
+              physics: {
+                enabled: true,
+                stabilization: { iterations: 150 },
+              },
+            },
+          );
+          if (typeof network.once === "function") {
+            network.once("stabilizationIterationsDone", () => {
+              if (typeof network.fit === "function") {
+                network.fit({ animation: false });
+              }
+            });
+          }
+          window.__serviceGraphLastRender = {
+            nodes: nodes.length,
+            edges: edges.length,
+          };
+          setStatus(formatRendered(nodes.length, edges.length), false);
+        };
+
+        const loadAndRenderGraph = async () => {
+          if (cachedGraph) {
+            renderGraph(cachedGraph);
+            return;
+          }
+          setStatus(textLoading, false);
+          openButton.disabled = true;
+          try {
+            const response = await fetch(graphApiUrl, {
+              credentials: "same-origin",
+              cache: "no-store",
+              headers: {
+                "Cache-Control": "no-cache",
+              },
+            });
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            cachedGraph = await response.json();
+            renderGraph(cachedGraph);
+          } catch (error) {
+            const details = error instanceof Error ? error.message : String(error);
+            setStatus(`${textLoadFailed} ${textErrorPrefix}: ${details}`, true);
+          } finally {
+            openButton.disabled = false;
+          }
+        };
+
+        openButton.addEventListener("click", () => {
+          openModal();
+          loadAndRenderGraph();
+        });
+        closeButton?.addEventListener("click", closeModal);
+        fitButton?.addEventListener("click", () => {
+          if (network && typeof network.fit === "function") {
+            network.fit({ animation: true });
+          }
+        });
+        backdrop?.addEventListener("click", closeModal);
+        document.addEventListener("keydown", (event) => {
+          if (event.key === "Escape" && !modal.hidden) {
+            closeModal();
+          }
+        });
+      })();
+    </script>
+  {% endif %}
+
+  <section class="detail-card markup-info-card">
+    <h3>{{ t("Markup information") }}</h3>
+    <div class="meta-grid">
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Markup file") }}</div>
+        <div class="meta-value meta-mono">{{ item.markup_rel_path }}</div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
+        <div class="meta-value">
+          <span class="meta-pill">{{ item.criticality_level | humanize_text }}</span>
+        </div>
+      </div>
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Service ID") }}</div>
+        <div class="meta-value">
           {% if service_external_url %}
-            <a class="primary-button" target="_blank" href="{{ service_external_url }}">
-              {{ t("Open service resource") }}
+            <a class="meta-link" target="_blank" href="{{ service_external_url }}">
+              <span class="meta-link-text">{{ item.finedog_unit_id }}</span>
+              <span class="meta-link-icon" aria-hidden="true">↗</span>
             </a>
-          {% endif %}
-          {% if team_external_url %}
-            <a class="ghost-button" target="_blank" href="{{ team_external_url }}">
-              {{ t("Open team resource") }}
-            </a>
+          {% else %}
+            <span class="meta-pill">{{ item.finedog_unit_id }}</span>
           {% endif %}
         </div>
       </div>
-    {% endif %}
-  </section>
-
-  <section class="detail-card">
-    <h3>{{ t("Metadata snapshot") }}</h3>
-    <div class="meta-grid">
-      <div>
-        <div class="meta-label">{{ t("Markup file") }}</div>
-        <div class="meta-value">{{ item.markup_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("Excalidraw file") }}</div>
-        <div class="meta-value">{{ excalidraw_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("Unidraw file") }}</div>
-        <div class="meta-value">{{ unidraw_rel_path }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ t("FineDog unit") }}</div>
-        <div class="meta-value">{{ item.finedog_unit_id }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ "criticality_level" | humanize_text }}</div>
-        <div class="meta-value">{{ item.criticality_level | humanize_text }}</div>
-      </div>
-      <div>
-        <div class="meta-label">{{ "team_id" | humanize_text }}</div>
-        <div class="meta-value">{{ item.team_name }}</div>
+      <div class="meta-item">
+        <div class="meta-label">{{ t("Team") }}</div>
+        <div class="meta-value">
+          {% if team_external_url %}
+            <a class="meta-link" target="_blank" href="{{ team_external_url }}">
+              <span class="meta-link-text">{{ item.team_name }}</span>
+              <span class="meta-link-icon" aria-hidden="true">↗</span>
+            </a>
+          {% else %}
+            <span class="meta-pill">{{ item.team_name }}</span>
+          {% endif %}
+        </div>
       </div>
     </div>
     {% if item.markup_meta %}
