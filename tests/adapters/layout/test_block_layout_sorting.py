@@ -79,7 +79,7 @@ def test_end_markers_follow_block_order() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["s"],
-                "end_block_ids": ["a::end", "b::end", "c::end"],
+                "end_block_ids": ["a::exit", "b::exit", "c::exit"],
                 "branches": {"s": ["a", "b", "c"]},
             }
         ],

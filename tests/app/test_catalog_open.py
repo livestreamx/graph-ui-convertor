@@ -57,7 +57,9 @@ def test_catalog_detail_shows_dual_download_buttons_by_default(
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
         assert "Get the diagram" in detail_response.text
-        assert "Render graph" in detail_response.text
+        assert "Show graph" in detail_response.text
+        assert "Show reverse links" in detail_response.text
+        assert 'id="service-graph-show-reverse"' in detail_response.text
         assert f"/api/scenes/{context.scene_id}/block-graph" in detail_response.text
         assert "service-graph-modal" in detail_response.text
         assert "Open Excalidraw" in detail_response.text
@@ -94,7 +96,7 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
         assert "Open Excalidraw" not in detail_response.text
-        assert "Render graph" in detail_response.text
+        assert "Show graph" in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text
         unidraw_link_match = re.search(

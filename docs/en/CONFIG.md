@@ -163,7 +163,7 @@ catalog:
   Graph/intersection drilldowns share one `team / service` output format with team color chips,
   including `Multi graphs` and tabular `Top linking procedures` details per graph
   (`cross-entity`, `inbound deps`, `outbound deps`).
-  `Top overloaded entities` detail shows the same columns per procedure in graph order and adds
+  `Top overloaded entities` detail (Russian UI label: `Топ перегруженных разметок`) shows the same columns per procedure in graph order and adds
   per-procedure block-type breakdown (start/end types) using the same colors as in the diagram.
   Procedure order and links in this detail are calculated from the same merged procedure graph
   payload that is rendered in the team diagram.

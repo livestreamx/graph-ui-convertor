@@ -15,13 +15,13 @@ def test_block_graph_edges_render_between_blocks() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a_start"],
-                "end_block_ids": ["a_end::end"],
+                "end_block_ids": ["a_end::exit"],
                 "branches": {"a_start": ["a_end"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["b_start"],
-                "end_block_ids": ["b_end::end"],
+                "end_block_ids": ["b_end::exit"],
                 "branches": {"b_start": ["b_end"]},
             },
         ],
@@ -72,13 +72,13 @@ def test_block_graph_edges_ignore_markup_type() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a_start"],
-                "end_block_ids": ["a_end::end"],
+                "end_block_ids": ["a_end::exit"],
                 "branches": {"a_start": ["a_end"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["b_start"],
-                "end_block_ids": ["b_end::end"],
+                "end_block_ids": ["b_end::exit"],
                 "branches": {"b_start": ["b_end"]},
             },
         ],
@@ -121,7 +121,7 @@ def test_block_graph_edges_disambiguate_duplicate_block_ids_by_procedure_graph()
             {
                 "proc_id": "p1",
                 "start_block_ids": ["entry"],
-                "end_block_ids": ["local_end::end"],
+                "end_block_ids": ["local_end::exit"],
                 "branches": {
                     "entry": ["handoff", "shared"],
                     "handoff": ["local_end"],
@@ -131,7 +131,7 @@ def test_block_graph_edges_disambiguate_duplicate_block_ids_by_procedure_graph()
             {
                 "proc_id": "p2",
                 "start_block_ids": ["shared"],
-                "end_block_ids": ["done::end"],
+                "end_block_ids": ["done::exit"],
                 "branches": {"shared": ["done"]},
             },
         ],
@@ -183,13 +183,13 @@ def test_block_graph_cycle_edges_are_marked() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["c"],
-                "end_block_ids": ["d::end"],
+                "end_block_ids": ["d::exit"],
                 "branches": {"c": ["d"]},
             },
         ],
@@ -268,7 +268,7 @@ def test_block_graph_initial_suffix_roundtrip() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["root"],
-                "end_block_ids": ["leaf::end"],
+                "end_block_ids": ["leaf::exit"],
                 "branches": {"root": ["leaf"]},
             }
         ],
@@ -290,7 +290,7 @@ def test_initial_block_styling_in_excalidraw() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["root"],
-                "end_block_ids": ["child::end"],
+                "end_block_ids": ["child::exit"],
                 "branches": {"root": ["child"]},
                 "block_id_to_block_name": {
                     "root": "Root block",
@@ -323,13 +323,13 @@ def test_block_graph_skips_ambiguous_nodes_in_cycle_detection() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["c::end"],
+                "end_block_ids": ["c::exit"],
                 "branches": {"a": ["c"]},
             },
         ],

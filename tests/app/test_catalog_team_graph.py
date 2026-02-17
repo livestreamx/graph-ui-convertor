@@ -2365,6 +2365,8 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
         )
         assert html_response.status_code == 200
         assert "Potential intersection node breakdown" in html_response.text
+        assert "Potential merge node" in html_response.text
+        assert "Merge node #1" not in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "Potential merges" in html_response.text
         assert (

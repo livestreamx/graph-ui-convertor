@@ -25,12 +25,12 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 - `proc_id` – swimlane.
 - `start_block_ids` – blocks with incoming START marker.
 - `end_block_ids` – blocks with outgoing arrow to END marker. Suffixes:
-  - `::end` (or no suffix): return to parent procedure.
   - `::exit`: terminate the whole process.
   - `::all`: end + exit.
   - `::intermediate`: same as `all`, but the block can still branch further.
   - `::postpone`: issue is postponed (handoff between bot/agents/support lines).
   - `::turn_out`: unplanned exit (normally implicit from `branches` sources).
+  - no suffix: return to parent procedure.
 - `branches` – adjacency: key = source block, values = target blocks.
 - `finedog_unit_meta.service_name` – markup display name.
 - `finedog_unit_id` – external unit identifier for service links (string or integer; integers are coerced to strings).
@@ -71,8 +71,8 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 Colors are consistent across Excalidraw and Unidraw outputs. Human-friendly cues are listed first,
 hex values are shown for exact matching.
 
-- Tags (end types): tags like `#end`, `#exit`, `#all`, `#intermediate`, `#postpone`, `#turn_out`
-  (also accepted as `::end`, `::exit`, etc.) map to END marker fills and are used for best-effort
+- Tags (end types): tags like `#exit`, `#all`, `#intermediate`, `#postpone`, `#turn_out`
+  (also accepted as `::exit`, `::all`, etc.) map to END marker fills and are used for best-effort
   import.
   - `end` -> red `#ff6b6b`
   - `exit` -> yellow `#ffe08a`

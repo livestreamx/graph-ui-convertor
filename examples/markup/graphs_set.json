@@ -15,7 +15,7 @@
         "intake_start"
       ],
       "end_block_ids": [
-        "intake_end::end"
+        "intake_end::exit"
       ],
       "branches": {
         "intake_start": [
@@ -46,7 +46,7 @@
         "route_review"
       ],
       "end_block_ids": [
-        "route_done::end"
+        "route_done::exit"
       ],
       "branches": {
         "route_review": [
@@ -75,7 +75,7 @@
       "proc_name": "Intake to routing handoff",
       "start_block_ids": [],
       "end_block_ids": [
-        "handoff_end::end"
+        "handoff_end::exit"
       ],
       "branches": {
         "handoff_start": [
@@ -193,7 +193,7 @@
         "merge_start"
       ],
       "end_block_ids": [
-        "merge_join::end"
+        "merge_join::exit"
       ],
       "branches": {
         "merge_start": [

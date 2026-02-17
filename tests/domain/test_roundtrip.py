@@ -67,7 +67,7 @@ def test_branch_edges_match_markup() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["d::end"],
+                "end_block_ids": ["d::exit"],
                 "branches": {"a": ["b", "c"], "b": ["d"], "c": ["a"]},
             }
         ],
@@ -228,7 +228,7 @@ def test_extra_block_names_not_rendered() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
                 "block_id_to_block_name": {"a": "Alpha", "ghost": "Ghost"},
             }
@@ -253,7 +253,7 @@ def test_first_frame_centered_on_origin() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],
@@ -280,7 +280,7 @@ def test_arrow_bindings_attach_to_elements() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],
@@ -310,7 +310,7 @@ def test_excalidraw_edges_render_behind_shapes() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],

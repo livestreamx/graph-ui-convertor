@@ -760,6 +760,52 @@ def test_graph_groups_include_component_merge_node_breakdown() -> None:
     assert merge_node.entities == ("Alpha / service / Payments", "Beta / service / Routing")
 
 
+def test_graph_groups_are_sorted_by_merge_nodes_then_graph_count_desc() -> None:
+    selected_documents = [
+        _doc(
+            markup_type="service",
+            team_id="team-alpha",
+            team_name="Alpha",
+            service_name="Payments",
+            unit_id="svc-pay",
+            procedures=[
+                Procedure(procedure_id="alpha_isolated_1", branches={"a1": ["a2"]}),
+                Procedure(procedure_id="alpha_isolated_2", branches={"b1": ["b2"]}),
+                Procedure(procedure_id="alpha_isolated_3", branches={"c1": ["c2"]}),
+                Procedure(procedure_id="shared", branches={"d1": ["d2"]}),
+            ],
+            procedure_graph={
+                "alpha_isolated_1": [],
+                "alpha_isolated_2": [],
+                "alpha_isolated_3": [],
+                "shared": [],
+            },
+        ),
+        _doc(
+            markup_type="service",
+            team_id="team-beta",
+            team_name="Beta",
+            service_name="Routing",
+            unit_id="svc-routing",
+            procedures=[Procedure(procedure_id="shared", branches={"x1": ["x2"]})],
+            procedure_graph={"shared": []},
+        ),
+    ]
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=selected_documents,
+        selected_team_ids=["team-alpha", "team-beta"],
+        merge_selected_markups=True,
+    )
+
+    assert [item.label for item in dashboard.graph_groups] == [
+        "Alpha / service / Payments + Beta / service / Routing",
+        "Alpha / service / Payments",
+    ]
+    assert [item.graph_count for item in dashboard.graph_groups] == [1, 3]
+
+
 def test_graph_groups_merge_threshold_keeps_single_chain_representative() -> None:
     selected_documents = [
         _doc(
@@ -894,7 +940,7 @@ def test_overloaded_entities_include_block_type_breakdown() -> None:
                 Procedure(
                     procedure_id="entry",
                     start_block_ids=["s1", "s2"],
-                    end_block_ids=["e1::end", "e2::postpone", "e3::exit"],
+                    end_block_ids=["e1::exit", "e2::postpone", "e3::exit"],
                     branches={"s1": ["e1"], "s2": ["e2"]},
                 )
             ],
@@ -914,7 +960,6 @@ def test_overloaded_entities_include_block_type_breakdown() -> None:
     assert usage.end_block_count == 3
     assert [(item.type_id, item.count) for item in usage.block_type_stats] == [
         ("start", 2),
-        ("end:end", 1),
-        ("end:exit", 1),
+        ("end:exit", 2),
         ("end:postpone", 1),
     ]

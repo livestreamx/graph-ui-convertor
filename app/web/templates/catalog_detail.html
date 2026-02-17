@@ -26,8 +26,8 @@
       <h3>{{ t("Get the diagram") }}</h3>
       <div class="button-row">
         {% if block_graph_enabled %}
-          <button class="ghost-button" type="button" id="render-service-graph">
-            {{ t("Render graph") }}
+          <button class="ghost-button render-graph-button" type="button" id="render-service-graph">
+            {{ t("Show graph") }}
           </button>
         {% endif %}
         {% if diagram_excalidraw_enabled %}
@@ -75,9 +75,15 @@
             <button class="ghost-button" type="button" id="service-graph-close">{{ t("Close") }}</button>
           </div>
         </header>
-        <p class="note service-graph-status" id="service-graph-status">
-          {{ t("Press Render graph to load service graph.") }}
-        </p>
+        <div class="service-graph-status-row">
+          <p class="note service-graph-status" id="service-graph-status">
+            {{ t("Press Show graph to load service graph.") }}
+          </p>
+          <label class="service-graph-toggle" for="service-graph-show-reverse">
+            <input id="service-graph-show-reverse" type="checkbox" checked />
+            <span>{{ t("Show reverse links") }}</span>
+          </label>
+        </div>
         <div class="service-graph-canvas" id="service-graph-canvas"></div>
       </section>
     </div>
@@ -91,6 +97,7 @@
         const backdrop = document.getElementById("service-graph-backdrop");
         const canvas = document.getElementById("service-graph-canvas");
         const status = document.getElementById("service-graph-status");
+        const showReverseToggle = document.getElementById("service-graph-show-reverse");
         const graphApiUrl = {{ block_graph_api_url | tojson }};
         const textLoading = {{ t("Loading graph...") | tojson }};
         const textLoadFailed = {{ t("Failed to load graph data.") | tojson }};
@@ -98,8 +105,15 @@
         const textEmpty = {{ t("No block graph data available for this service.") | tojson }};
         const textRendered = {{ t("Rendered {nodes} nodes and {edges} edges.") | tojson }};
         const textErrorPrefix = {{ t("Reason") | tojson }};
+        const textProcedure = {{ t("Procedure") | tojson }};
+        const textBlock = {{ t("Block") | tojson }};
+        const textNestingLevel = {{ t("Nesting level") | tojson }};
+        const textUnreachable = {{ t("not reachable from start") | tojson }};
+        const textBlockType = {{ t("Block type") | tojson }};
+        const textBlockTypeStart = {{ t("start") | tojson }};
+        const textBlockTypeRegular = {{ t("regular") | tojson }};
 
-        if (!openButton || !modal || !canvas || !status) {
+        if (!openButton || !modal || !canvas || !status || !showReverseToggle) {
           return;
         }
 
@@ -136,6 +150,84 @@
         };
 
         const nodeColor = (procedureId) => procedurePalette[hashProcedure(procedureId)];
+        const endTypeColors = {
+          end: "#8fdc8f",
+          exit: "#ffe08a",
+          all: "#ffb347",
+          intermediate: "#ffb347",
+          postpone: "#d9d9d9",
+          turn_out: "#cfe3ff",
+        };
+
+        const buildDepthMap = (rawNodes, rawEdges) => {
+          const adjacency = new Map();
+          const inDegree = new Map();
+          const initialByNode = new Map();
+          rawNodes.forEach((node) => {
+            const nodeId = String(node.id);
+            adjacency.set(nodeId, []);
+            inDegree.set(nodeId, 0);
+            initialByNode.set(nodeId, node.is_initial === true);
+          });
+          rawEdges.forEach((edge) => {
+            const source = String(edge.source);
+            const target = String(edge.target);
+            if (!adjacency.has(source) || !adjacency.has(target)) {
+              return;
+            }
+            adjacency.get(source).push(target);
+            inDegree.set(target, (inDegree.get(target) || 0) + 1);
+          });
+
+          const startNodes = [];
+          inDegree.forEach((value, key) => {
+            if (value === 0 && initialByNode.get(key) === true) {
+              startNodes.push(key);
+            }
+          });
+          if (!startNodes.length) {
+            inDegree.forEach((value, key) => {
+              if (value === 0) {
+                startNodes.push(key);
+              }
+            });
+          }
+          if (!startNodes.length) {
+            initialByNode.forEach((isInitial, key) => {
+              if (isInitial) {
+                startNodes.push(key);
+              }
+            });
+          }
+
+          const depthByNode = new Map();
+          const queue = [];
+          startNodes.forEach((nodeId) => {
+            depthByNode.set(nodeId, 0);
+            queue.push(nodeId);
+          });
+
+          while (queue.length) {
+            const current = queue.shift();
+            const baseDepth = depthByNode.get(current);
+            if (typeof baseDepth !== "number") {
+              continue;
+            }
+            const nextNodes = adjacency.get(current) || [];
+            nextNodes.forEach((nextId) => {
+              const nextDepth = baseDepth + 1;
+              const seenDepth = depthByNode.get(nextId);
+              if (typeof seenDepth !== "number" || nextDepth < seenDepth) {
+                depthByNode.set(nextId, nextDepth);
+                queue.push(nextId);
+              }
+            });
+          }
+          return depthByNode;
+        };
+
+        const isReverseEdge = (edge) => String(edge.edge_type || "").endsWith("_cycle");
+        const isCycleEdge = (edge) => edge.is_cycle === true || isReverseEdge(edge);
 
         const closeModal = () => {
           modal.hidden = true;
@@ -166,48 +258,69 @@
             return;
           }
 
+          const decoratedEdges = rawEdges.map((edge) => ({
+            ...edge,
+            __isReverse: isReverseEdge(edge),
+          }));
+          const visibleEdges = showReverseToggle.checked
+            ? decoratedEdges
+            : decoratedEdges.filter((edge) => edge.__isReverse !== true);
+          const depthByNode = buildDepthMap(
+            rawNodes,
+            visibleEdges,
+          );
+
           const nodes = rawNodes.map((node) => {
             const procedureId = String(node.procedure_id || "");
             const isInitial = node.is_initial === true;
+            const endType = String(node.end_block_type || "");
+            const roleColor = endTypeColors[endType];
+            const background = isInitial ? "#d1ffd6" : roleColor || nodeColor(procedureId);
+            const border = isInitial ? "#55a66b" : roleColor ? "#fff7d1" : "#d7e2f3";
+            const nodeDepth = depthByNode.get(String(node.id));
+            const depthLabel =
+              typeof nodeDepth === "number" ? String(nodeDepth) : textUnreachable;
+            const blockType = isInitial ? textBlockTypeStart : endType || textBlockTypeRegular;
             return {
               id: String(node.id),
               label: String(node.label || node.block_id || node.id),
-              title: `${procedureId} / ${String(node.block_id || "")}`,
+              title: `${textProcedure}: ${procedureId}\n${textBlock}: ${String(node.block_id || "")}\n${textBlockType}: ${blockType}\n${textNestingLevel}: ${depthLabel}`,
               shape: "box",
               margin: 8,
               borderWidth: isInitial ? 2 : 1,
               font: {
-                color: "#f8fafc",
+                color: roleColor || isInitial ? "#1e293b" : "#f8fafc",
                 face: "IBM Plex Sans",
                 size: 14,
               },
               color: {
-                background: nodeColor(procedureId),
-                border: isInitial ? "#ffd166" : "#d7e2f3",
+                background,
+                border,
                 highlight: {
-                  background: nodeColor(procedureId),
+                  background,
                   border: "#ffffff",
                 },
               },
             };
           });
-          const edges = rawEdges.map((edge) => {
+          const edges = visibleEdges.map((edge) => {
             const edgeType = String(edge.edge_type || "");
-            const isCycle = edge.is_cycle === true || edgeType.endsWith("_cycle");
+            const isCycle = isCycleEdge(edge);
+            const isReverse = edge.__isReverse === true;
             return {
               id: String(edge.id || `${edge.source}-${edge.target}-${edgeType}`),
               from: String(edge.source),
               to: String(edge.target),
               arrows: "to",
-              dashes: isCycle,
-              width: isCycle ? 2 : 1.5,
+              dashes: isCycle || isReverse,
+              width: isCycle || isReverse ? 2 : 1.5,
               smooth: {
                 enabled: true,
                 type: "dynamic",
               },
               color: {
-                color: isCycle ? "#ff6b6b" : "#9fc5ff",
-                highlight: isCycle ? "#ff8a8a" : "#cfe0ff",
+                color: isCycle || isReverse ? "#ff7b7b" : "#9fc5ff",
+                highlight: isCycle || isReverse ? "#ff9e9e" : "#cfe0ff",
               },
             };
           });
@@ -280,6 +393,11 @@
           openModal();
           loadAndRenderGraph();
         });
+        showReverseToggle.addEventListener("change", () => {
+          if (cachedGraph) {
+            renderGraph(cachedGraph);
+          }
+        });
         closeButton?.addEventListener("click", closeModal);
         fitButton?.addEventListener("click", () => {
           if (network && typeof network.fit === "function") {
@@ -327,11 +445,11 @@
         <div class="meta-value">
           {% if team_external_url %}
             <a class="meta-link" target="_blank" href="{{ team_external_url }}">
-              <span class="meta-link-text">{{ item.team_name }}</span>
+              <span class="meta-link-text meta-team-text">{{ item.team_name }}</span>
               <span class="meta-link-icon" aria-hidden="true">↗</span>
             </a>
           {% else %}
-            <span class="meta-pill">{{ item.team_name }}</span>
+            <span class="meta-pill meta-team-pill">{{ item.team_name }}</span>
           {% endif %}
         </div>
       </div>

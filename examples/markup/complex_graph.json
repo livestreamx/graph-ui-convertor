@@ -34,7 +34,7 @@
       "proc_name": "Beta Flow",
       "start_block_ids": [],
       "end_block_ids": [
-        "beta_end::end"
+        "beta_end::exit"
       ],
       "branches": {
         "beta_process": [

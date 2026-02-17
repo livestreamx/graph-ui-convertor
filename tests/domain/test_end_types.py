@@ -75,7 +75,7 @@ def test_skip_empty_procedures_in_excalidraw() -> None:
             {
                 "proc_id": "with_blocks",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             },
         ],
@@ -127,7 +127,7 @@ def test_marker_text_is_bound_to_ellipse() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],
@@ -164,7 +164,7 @@ def test_turn_out_markers_skip_terminal_end_blocks() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"], "b": ["c"]},
             }
         ],
@@ -214,7 +214,7 @@ def test_default_end_marker_color_is_applied() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],
@@ -227,7 +227,7 @@ def test_default_end_marker_color_is_applied() -> None:
         for element in excal.elements
         if element.get("type") == "ellipse"
         and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
-        and element.get("customData", {}).get("cjm", {}).get("end_type") == "end"
+        and element.get("customData", {}).get("cjm", {}).get("end_type") == "exit"
     ]
     assert end_markers
-    assert all(element.get("backgroundColor") == END_TYPE_COLORS["end"] for element in end_markers)
+    assert all(element.get("backgroundColor") == END_TYPE_COLORS["exit"] for element in end_markers)

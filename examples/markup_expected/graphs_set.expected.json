@@ -20,8 +20,8 @@
     "cycle_pairs": []
   },
   "end_types": {
-    "end": 9,
-    "exit": 0,
+    "end": 5,
+    "exit": 4,
     "all": 0,
     "intermediate": 0,
     "postpone": 0,

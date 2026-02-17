@@ -47,6 +47,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
             "block_id": block_id,
             "label": label,
             "is_initial": metadata.get("block_graph_initial") is True,
+            "end_block_type": _as_text(metadata.get("end_block_type")),
         }
 
     edges: list[dict[str, Any]] = []
@@ -82,6 +83,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
                 "block_id": source_block_id,
                 "label": source_block_id,
                 "is_initial": False,
+                "end_block_type": "",
             },
         )
         nodes_by_id.setdefault(
@@ -92,6 +94,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
                 "block_id": target_block_id,
                 "label": target_block_id,
                 "is_initial": False,
+                "end_block_type": "",
             },
         )
 

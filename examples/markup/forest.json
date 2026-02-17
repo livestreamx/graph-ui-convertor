@@ -73,7 +73,7 @@
       "proc_id": "proc_b_a",
       "proc_name": "Leaf B A",
       "start_block_ids": ["ba_start"],
-      "end_block_ids": ["ba_exit::end"],
+      "end_block_ids": ["ba_exit::exit"],
       "branches": {
         "ba_start": ["ba_work"],
         "ba_work": ["ba_exit"]
