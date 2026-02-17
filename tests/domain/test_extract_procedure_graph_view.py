@@ -11,9 +11,12 @@ def test_extract_procedure_graph_view_marks_merge_nodes_and_cycles() -> None:
             {
                 "proc_id": "p1",
                 "proc_name": "Collect",
-                "start_block_ids": [],
-                "end_block_ids": [],
-                "branches": {},
+                "start_block_ids": ["start_1", "start_2"],
+                "end_block_ids": ["end_1", "end_2::exit", "end_3::postpone"],
+                "branches": {
+                    "start_1": ["next_1", "next_2"],
+                    "start_2": ["next_3"],
+                },
             },
             {
                 "proc_id": "p2",
@@ -59,7 +62,13 @@ def test_extract_procedure_graph_view_marks_merge_nodes_and_cycles() -> None:
     assert nodes["p1"]["merge_entity_count"] == 2
     assert nodes["p1"]["team_name"] == "Alpha"
     assert nodes["p1"]["service_name"] == "Billing"
+    assert nodes["p1"]["start_count"] == 2
+    assert nodes["p1"]["branch_count"] == 3
+    assert nodes["p1"]["end_type_counts"] == {"end": 1, "exit": 1, "postpone": 1}
     assert nodes["p2"]["is_merge_node"] is False
+    assert nodes["p2"]["start_count"] == 0
+    assert nodes["p2"]["branch_count"] == 0
+    assert nodes["p2"]["end_type_counts"] == {}
 
     edges = {edge["id"]: edge for edge in graph_payload["edges"]}
     assert edges["p1->p2"]["is_cycle"] is True
@@ -90,6 +99,9 @@ def test_extract_procedure_graph_view_adds_nodes_from_adjacency() -> None:
     nodes = {node["id"]: node for node in graph_payload["nodes"]}
     assert set(nodes) == {"p1", "p2"}
     assert nodes["p2"]["label"] == "p2"
+    assert nodes["p2"]["start_count"] == 0
+    assert nodes["p2"]["branch_count"] == 0
+    assert nodes["p2"]["end_type_counts"] == {}
     edges = graph_payload["edges"]
     assert len(edges) == 1
     assert edges[0]["source"] == "p1"

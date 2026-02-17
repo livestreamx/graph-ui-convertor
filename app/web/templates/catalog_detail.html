@@ -491,6 +491,10 @@
         const textErrorPrefix = {{ t("Reason") | tojson }};
         const textProcedure = {{ t("Procedure") | tojson }};
         const textPotentialMergeNode = {{ t("Potential merge node") | tojson }};
+        const textStarts = {{ t("Starts") | tojson }};
+        const textBranches = {{ t("Branches") | tojson }};
+        const textEndBlocks = {{ t("End blocks") | tojson }};
+        const textNone = {{ t("none") | tojson }};
         const textYes = {{ t("yes") | tojson }};
         const textNo = {{ t("no") | tojson }};
 
@@ -547,6 +551,17 @@
 
         const isReverseEdge = (edge) => String(edge.edge_type || "").endsWith("_cycle");
 
+        const formatEndTypeCounts = (counts) => {
+          if (!counts || typeof counts !== "object") {
+            return textNone;
+          }
+          const parts = Object.entries(counts)
+            .filter(([, count]) => Number.isFinite(Number(count)) && Number(count) > 0)
+            .sort(([left], [right]) => String(left).localeCompare(String(right)))
+            .map(([endType, count]) => `${String(endType)}=${Number(count)}`);
+          return parts.length ? parts.join(", ") : textNone;
+        };
+
         const renderGraph = (graphPayload) => {
           const visLib = window.vis;
           if (
@@ -577,13 +592,18 @@
             const teamName = String(node.team_name || "");
             const serviceName = String(node.service_name || "");
             const isMergeNode = node.is_merge_node === true;
+            const starts = Number(node.start_count || 0);
+            const branches = Number(node.branch_count || 0);
             const background = isMergeNode ? "#ffd6d6" : nodeColor(teamName, serviceName);
             return {
               id: String(node.id),
               label: String(node.label || procedureId),
               title:
                 `${textProcedure}: ${procedureId}\n` +
-                `${textPotentialMergeNode}: ${isMergeNode ? textYes : textNo}`,
+                `${textPotentialMergeNode}: ${isMergeNode ? textYes : textNo}\n` +
+                `${textStarts}: ${starts}\n` +
+                `${textBranches}: ${branches}\n` +
+                `${textEndBlocks}: ${formatEndTypeCounts(node.end_type_counts)}`,
               shape: "box",
               margin: 8,
               borderWidth: isMergeNode ? 2 : 1,

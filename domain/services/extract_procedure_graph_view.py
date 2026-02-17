@@ -3,10 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from domain.models import MarkupDocument
+from domain.models import END_TYPE_DEFAULT, MarkupDocument
 
 
 def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
+    procedure_stats_by_id = _build_procedure_stats(document)
     procedure_name_by_id = {
         procedure.procedure_id: (procedure.procedure_name or procedure.procedure_id)
         for procedure in document.procedures
@@ -15,6 +16,7 @@ def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
 
     nodes: list[dict[str, Any]] = []
     for procedure_id in sorted(adjacency):
+        stats = procedure_stats_by_id.get(procedure_id, {})
         procedure_meta = document.procedure_meta.get(procedure_id, {})
         services = procedure_meta.get("services")
         merge_entity_count = len(services) if isinstance(services, list) else 0
@@ -29,6 +31,9 @@ def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
                 or procedure_id,
                 "is_merge_node": procedure_meta.get("is_intersection") is True,
                 "merge_entity_count": merge_entity_count,
+                "start_count": _as_int(stats.get("start_count")),
+                "branch_count": _as_int(stats.get("branch_count")),
+                "end_type_counts": _as_end_type_counts(stats.get("end_type_counts")),
             }
         )
 
@@ -64,6 +69,23 @@ def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
             "merge_node_count": merge_node_count,
         },
     }
+
+
+def _build_procedure_stats(document: MarkupDocument) -> dict[str, dict[str, object]]:
+    stats: dict[str, dict[str, object]] = {}
+    for procedure in document.procedures:
+        start_count = len({str(block_id) for block_id in procedure.start_block_ids})
+        branch_count = sum(len(set(targets)) for targets in procedure.branches.values())
+        end_type_counts: dict[str, int] = {}
+        for block_id in procedure.end_block_ids:
+            end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
+            end_type_counts[end_type] = end_type_counts.get(end_type, 0) + 1
+        stats[procedure.procedure_id] = {
+            "start_count": start_count,
+            "branch_count": branch_count,
+            "end_type_counts": dict(sorted(end_type_counts.items())),
+        }
+    return stats
 
 
 def _normalize_adjacency(
@@ -136,3 +158,29 @@ def _as_text(value: object) -> str:
     if value is None:
         return ""
     return str(value).strip()
+
+
+def _as_int(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if value is None:
+        return 0
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _as_end_type_counts(value: object) -> dict[str, int]:
+    if not isinstance(value, Mapping):
+        return {}
+    result: dict[str, int] = {}
+    for raw_type, raw_count in value.items():
+        end_type = _as_text(raw_type)
+        if not end_type:
+            continue
+        count = _as_int(raw_count)
+        if count <= 0:
+            continue
+        result[end_type] = count
+    return dict(sorted(result.items()))

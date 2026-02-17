@@ -123,4 +123,8 @@ def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
         == "Для этой услуги нет данных procedure_graph."
     )
     assert translate_ui_text("Block type", "ru") == "Тип блока"
+    assert translate_ui_text("Starts", "ru") == "Старты"
+    assert translate_ui_text("Branches", "ru") == "Ветвления"
+    assert translate_ui_text("End blocks", "ru") == "End-блоки"
+    assert translate_ui_text("none", "ru") == "нет"
     assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"
