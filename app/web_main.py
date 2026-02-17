@@ -61,6 +61,7 @@ from domain.services.excalidraw_links import (
     ensure_unidraw_links,
 )
 from domain.services.excalidraw_title import apply_title_focus, ensure_service_title
+from domain.services.extract_block_graph_view import extract_block_graph_view
 
 TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
@@ -520,6 +521,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "on_demand_enabled": on_demand,
                 "service_external_url": service_external_url,
                 "team_external_url": team_external_url,
+                "block_graph_api_url": f"/api/scenes/{scene_id}/block-graph",
+                "block_graph_enabled": excalidraw_scene_available,
             },
         )
 
@@ -638,21 +641,24 @@ def create_app(settings: AppSettings) -> FastAPI:
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
-        diagram_rel_path = resolve_scene_rel_path(item, format)
-        path = resolve_diagram_in_dir(context.settings, format) / diagram_rel_path
-        try:
-            payload = context.scene_repo.load(path)
-        except FileNotFoundError as exc:
-            if not context.settings.catalog.generate_excalidraw_on_demand:
-                raise HTTPException(status_code=404, detail="Scene file missing") from exc
-            payload = build_diagram_payload(context, item, format)
-            if context.settings.catalog.cache_excalidraw_on_demand:
-                context.scene_repo.save(payload, path)
-        enhance_scene_payload(payload, context, format)
+        payload, diagram_rel_path = load_scene_payload(context, item, format)
         headers = {}
         if download:
             headers["Content-Disposition"] = f'attachment; filename="{diagram_rel_path}"'
         return ORJSONResponse(payload, headers=headers)
+
+    @app.get("/api/scenes/{scene_id}/block-graph")
+    def api_scene_block_graph(
+        scene_id: str,
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        index_data = load_index(context)
+        item = find_item(index_data, scene_id) if index_data else None
+        if not item:
+            raise HTTPException(status_code=404, detail="Scene not found")
+        scene_payload, _ = load_scene_payload(context, item, "excalidraw")
+        graph_payload = extract_block_graph_view(scene_payload)
+        return ORJSONResponse(graph_payload)
 
     @app.get("/api/teams/graph")
     def api_team_graph(
@@ -961,6 +967,25 @@ def resolve_diagram_in_dir(settings: AppSettings, diagram_format: SceneFormat) -
     if diagram_format == "unidraw":
         return settings.catalog.unidraw_in_dir
     return settings.catalog.excalidraw_in_dir
+
+
+def load_scene_payload(
+    context: CatalogContext,
+    item: CatalogItem,
+    diagram_format: SceneFormat,
+) -> tuple[dict[str, Any], str]:
+    diagram_rel_path = resolve_scene_rel_path(item, diagram_format)
+    scene_path = resolve_diagram_in_dir(context.settings, diagram_format) / diagram_rel_path
+    try:
+        payload = context.scene_repo.load(scene_path)
+    except FileNotFoundError as exc:
+        if not context.settings.catalog.generate_excalidraw_on_demand:
+            raise HTTPException(status_code=404, detail="Scene file missing") from exc
+        payload = build_diagram_payload(context, item, diagram_format)
+        if context.settings.catalog.cache_excalidraw_on_demand:
+            context.scene_repo.save(payload, scene_path)
+    enhance_scene_payload(payload, context, diagram_format)
+    return payload, diagram_rel_path
 
 
 def infer_unidraw_rel_path(item: CatalogItem) -> str:

@@ -2353,6 +2353,81 @@ main {
   margin-top: 0;
 }
 
+body.service-graph-open {
+  overflow: hidden;
+}
+
+.service-graph-modal[hidden] {
+  display: none !important;
+}
+
+.service-graph-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: stretch;
+}
+
+.service-graph-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(1, 7, 20, 0.78);
+  backdrop-filter: blur(3px);
+}
+
+.service-graph-sheet {
+  position: relative;
+  margin: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(186, 214, 255, 0.28);
+  background: linear-gradient(170deg, rgba(8, 14, 33, 0.97), rgba(11, 22, 48, 0.96));
+  box-shadow: 0 22px 46px rgba(2, 8, 20, 0.54);
+  padding: 14px;
+  display: grid;
+  grid-template-rows: auto auto 1fr;
+  gap: 10px;
+  min-height: calc(100vh - 32px);
+}
+
+.service-graph-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.service-graph-title {
+  margin: 0;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 20px;
+}
+
+.service-graph-actions {
+  justify-content: flex-end;
+}
+
+.service-graph-status {
+  margin: 0;
+}
+
+.service-graph-status.is-error {
+  color: #ffb9b9;
+}
+
+.service-graph-canvas {
+  min-height: 320px;
+  height: 100%;
+  border-radius: 14px;
+  border: 1px solid rgba(158, 194, 247, 0.28);
+  background: radial-gradient(circle at 20% 20%, rgba(57, 89, 136, 0.26), rgba(9, 16, 36, 0.9));
+}
+
+.service-graph-canvas canvas {
+  border-radius: 14px;
+}
+
 .upload-form {
   display: grid;
   gap: 12px;
@@ -2497,6 +2572,20 @@ main {
   }
   .team-graph-form {
     grid-template-columns: 1fr;
+  }
+  .service-graph-sheet {
+    margin: 8px;
+    min-height: calc(100vh - 16px);
+  }
+  .service-graph-title {
+    font-size: 18px;
+  }
+  .service-graph-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .service-graph-actions .ghost-button {
+    width: 100%;
   }
   .team-graph-select-grid {
     grid-template-columns: 1fr;

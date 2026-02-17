@@ -116,6 +116,9 @@ catalog:
 - Detail view includes downloads for `.excalidraw` and `.unidraw`; `Open Excalidraw` is controlled by
   `diagram_excalidraw_enabled`. When `service_link_path` / `team_link_path` are configured, metadata
   values `Service ID` and `Team` become clickable links built from `unit_id` and `team_id`.
+- Detail view also includes `Render graph`, which opens a full-screen interactive block graph (zoom/pan/drag).
+  Graph data is extracted from the same Excalidraw scene payload used for diagram rendering (`/api/scenes/{scene_id}`)
+  and is available via `/api/scenes/{scene_id}/block-graph`.
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
