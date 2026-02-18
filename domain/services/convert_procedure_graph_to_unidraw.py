@@ -8,12 +8,16 @@ from domain.services.convert_markup_base import ElementRegistry, Metadata
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
 from domain.services.convert_procedure_graph_base import ProcedureGraphConverterMixin
 
+_MERGE_INFO_TEXT_COLOR = "#fc6f57"
+_MERGE_INFO_PANEL_SIDE_PADDING = 18.0
+
 
 class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUnidrawConverter):
     def _post_process_elements(self, elements: list[dict[str, Any]]) -> None:
         super()._post_process_elements(elements)
 
         marker_centers: dict[tuple[str, int], Point] = {}
+        merge_panel_layout: dict[str, tuple[float, float]] = {}
         dashed_code = self._stroke_style_code("dashed")
         for element in elements:
             cjm = element.get("cjm", {})
@@ -34,9 +38,34 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
                 center = self._element_center(element)
                 if key is not None and center is not None:
                     marker_centers[key] = center
+            if role == "scenario_merge_panel":
+                group_id = self._first_group_id(element)
+                position = element.get("position")
+                size = element.get("size")
+                if group_id is not None and isinstance(position, dict) and isinstance(size, dict):
+                    panel_left = float(position.get("x", 0.0))
+                    panel_width = float(size.get("width", 0.0))
+                    merge_panel_layout[group_id] = (panel_left, panel_width)
 
         for element in elements:
             cjm = element.get("cjm", {})
+            if isinstance(cjm, dict) and cjm.get("role") == "scenario_merge":
+                style = element.get("style")
+                if isinstance(style, dict):
+                    style["tc"] = _MERGE_INFO_TEXT_COLOR
+                    style["tw"] = True
+                group_id = self._first_group_id(element)
+                panel = merge_panel_layout.get(group_id) if group_id is not None else None
+                size = element.get("size")
+                position = element.get("position")
+                if panel and isinstance(size, dict):
+                    panel_left, panel_width = panel
+                    target_width = max(1.0, panel_width - _MERGE_INFO_PANEL_SIDE_PADDING * 2)
+                    size["width"] = max(float(size.get("width", 0.0)), target_width)
+                    if isinstance(position, dict):
+                        min_text_x = panel_left + _MERGE_INFO_PANEL_SIDE_PADDING
+                        position["x"] = max(float(position.get("x", min_text_x)), min_text_x)
+
             if not isinstance(cjm, dict) or cjm.get("role") != "intersection_index_label":
                 continue
             style = element.get("style")
@@ -208,6 +237,15 @@ class ProcedureGraphToUnidrawConverter(ProcedureGraphConverterMixin, MarkupToUni
             return ""
         text = re.sub(r"<[^>]+>", "", value)
         return text.replace("\n", "").strip()
+
+    def _first_group_id(self, element: dict[str, Any]) -> str | None:
+        group_ids = element.get("groupIds")
+        if not isinstance(group_ids, list):
+            return None
+        for value in group_ids:
+            if isinstance(value, str) and value:
+                return value
+        return None
 
     def _prioritize_zone_background_layers(self, elements: list[dict[str, Any]]) -> None:
         edge_elements: list[dict[str, Any]] = []

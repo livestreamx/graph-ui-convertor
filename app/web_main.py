@@ -727,7 +727,14 @@ def create_app(settings: AppSettings) -> FastAPI:
         payload, diagram_rel_path = load_scene_payload(context, item, format)
         headers = {}
         if download:
-            headers["Content-Disposition"] = f'attachment; filename="{diagram_rel_path}"'
+            extension = resolve_diagram_extension(format)
+            base_name = Path(diagram_rel_path).stem or scene_id
+            filename = build_generated_diagram_filename(
+                base_name=base_name,
+                extension=extension,
+                level="blocks",
+            )
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
 
     @app.get("/api/scenes/{scene_id}/block-graph")
@@ -766,9 +773,12 @@ def create_app(settings: AppSettings) -> FastAPI:
         headers = {}
         if download:
             extension = resolve_diagram_extension(format)
-            headers["Content-Disposition"] = (
-                f'attachment; filename="{scene_id}_procedure_graph{extension}"'
+            filename = build_generated_diagram_filename(
+                base_name=f"{scene_id}_procedure_graph",
+                extension=extension,
+                level="procedures",
             )
+            headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
 
     @app.get("/api/scenes/{scene_id}/procedure-graph-view")
@@ -832,7 +842,12 @@ def create_app(settings: AppSettings) -> FastAPI:
             extension = resolve_diagram_extension(format)
             suffix = "_".join(team_ids)
             graph_name = "team-service-graph" if graph_level == "service" else "team-graph"
-            filename = f"{graph_name}_{suffix}{extension}" if suffix else f"{graph_name}{extension}"
+            base_name = f"{graph_name}_{suffix}" if suffix else graph_name
+            filename = build_generated_diagram_filename(
+                base_name=base_name,
+                extension=extension,
+                level=resolve_diagram_level(graph_level),
+            )
             headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
 
@@ -1078,6 +1093,22 @@ def resolve_team_external_url(context: CatalogContext, item: CatalogItem) -> str
 
 def resolve_diagram_extension(diagram_format: SceneFormat) -> str:
     return ".excalidraw" if diagram_format == "excalidraw" else ".unidraw"
+
+
+def resolve_diagram_level(graph_level: GraphLevel) -> str:
+    return "services" if graph_level == "service" else "procedures"
+
+
+def build_generated_diagram_filename(
+    *,
+    base_name: str,
+    extension: str,
+    level: str,
+    generated_at: datetime | None = None,
+) -> str:
+    normalized_base = base_name.strip().replace("/", "_") or "diagram"
+    date_value = (generated_at or datetime.now(UTC)).date().isoformat()
+    return f"{normalized_base}_{level}_{date_value}{extension}"
 
 
 def resolve_scene_rel_path(item: CatalogItem, diagram_format: SceneFormat) -> str:

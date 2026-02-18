@@ -2578,6 +2578,25 @@ def test_procedure_graph_converter_highlights_merge_nodes_in_red() -> None:
     label_center_y = unidraw_label["position"]["y"] + unidraw_label["size"]["height"] / 2
     assert abs(label_center_x - marker_center_x) < 0.5
     assert abs(label_center_y - marker_center_y) < 0.5
+    merge_panel = next(
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "scenario_merge_panel"
+    )
+    merge_text_items = [
+        element
+        for element in unidraw_scene.elements
+        if element.get("cjm", {}).get("role") == "scenario_merge"
+    ]
+    assert merge_text_items
+    panel_width = float(merge_panel.get("size", {}).get("width", 0.0))
+    expected_min_width = panel_width - 36.0
+    assert all(item.get("style", {}).get("tc") == "#fc6f57" for item in merge_text_items)
+    assert all(item.get("style", {}).get("tw") is True for item in merge_text_items)
+    assert all(
+        float(item.get("size", {}).get("width", 0.0)) >= expected_min_width
+        for item in merge_text_items
+    )
 
 
 def test_procedure_graph_layout_zones_include_shared_procedures() -> None:
