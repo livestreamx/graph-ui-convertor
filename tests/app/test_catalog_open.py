@@ -19,6 +19,7 @@ def test_catalog_detail_uses_open_route_same_origin(
         tmp_path=tmp_path,
         monkeypatch=monkeypatch,
         app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
     ) as context:
         index_response = context.client.get("/api/index")
         scene_id = index_response.json()["items"][0]["scene_id"]
@@ -26,6 +27,7 @@ def test_catalog_detail_uses_open_route_same_origin(
         detail_response = context.client.get(f"/catalog/{scene_id}")
         assert detail_response.status_code == 200
         assert f"/catalog/{scene_id}/open" in detail_response.text
+        assert f"/catalog/{scene_id}/procedure-graph/open" in detail_response.text
 
         open_response = context.client.get(f"/catalog/{scene_id}/open")
         assert open_response.status_code == 200
@@ -43,6 +45,12 @@ def test_catalog_detail_uses_open_route_same_origin(
         assert 'id="retry-open"' in open_response.text
         assert "showRetry" in open_response.text
 
+        procedure_open_response = context.client.get(f"/catalog/{scene_id}/procedure-graph/open")
+        assert procedure_open_response.status_code == 200
+        assert f"/api/scenes/{scene_id}/procedure-graph?format=excalidraw" in (
+            procedure_open_response.text
+        )
+
 
 def test_catalog_detail_shows_dual_download_buttons_by_default(
     tmp_path: Path,
@@ -56,16 +64,26 @@ def test_catalog_detail_shows_dual_download_buttons_by_default(
     ) as context:
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
-        assert "Get the diagram" in detail_response.text
-        assert "Render graph" in detail_response.text
+        assert "Block-level diagram" in detail_response.text
+        assert "Procedure-level diagram" in detail_response.text
+        assert "Show graph" in detail_response.text
+        assert "Show reverse links" in detail_response.text
+        assert 'id="service-graph-show-reverse"' in detail_response.text
+        assert 'id="procedure-graph-show-reverse"' in detail_response.text
+        assert 'id="render-procedure-graph"' in detail_response.text
         assert f"/api/scenes/{context.scene_id}/block-graph" in detail_response.text
+        assert f"/api/scenes/{context.scene_id}/procedure-graph-view" in detail_response.text
         assert "service-graph-modal" in detail_response.text
+        assert "procedure-graph-modal" in detail_response.text
         assert "Open Excalidraw" in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text
         assert (
             "Open in Excalidraw or download both diagram formats for manual import and editing."
             not in detail_response.text
+        )
+        assert "If the scene does not load, import the downloaded file manually." not in (
+            detail_response.text
         )
         assert "Scene is injected via local storage for same-origin Excalidraw." not in (
             detail_response.text
@@ -76,6 +94,14 @@ def test_catalog_detail_shows_dual_download_buttons_by_default(
         )
         assert (
             f"/api/scenes/{context.scene_id}?format=unidraw&download=true" in detail_response.text
+        )
+        assert (
+            f"/api/scenes/{context.scene_id}/procedure-graph?format=excalidraw&download=true"
+            in detail_response.text
+        )
+        assert (
+            f"/api/scenes/{context.scene_id}/procedure-graph?format=unidraw&download=true"
+            in detail_response.text
         )
 
 
@@ -94,7 +120,7 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         detail_response = context.client.get(f"/catalog/{context.scene_id}")
         assert detail_response.status_code == 200
         assert "Open Excalidraw" not in detail_response.text
-        assert "Render graph" in detail_response.text
+        assert "Show graph" in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text
         unidraw_link_match = re.search(

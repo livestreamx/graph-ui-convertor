@@ -164,7 +164,7 @@ main {
   gap: 12px;
 }
 
-.search-bar input {
+.search-bar input[type="search"] {
   width: 100%;
   padding: 14px 16px;
   border-radius: 12px;
@@ -172,6 +172,43 @@ main {
   background: #0b1430;
   color: var(--text);
   font-size: 15px;
+}
+
+.search-help {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.search-token {
+  appearance: none;
+  -webkit-appearance: none;
+  font-family: inherit;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: rgba(255, 179, 71, 0.18);
+  border: 1px solid rgba(255, 179, 71, 0.45);
+  color: #ffe2bd;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.search-token:hover {
+  background: rgba(255, 179, 71, 0.28);
+}
+
+.search-token-remove {
+  font-size: 14px;
+  line-height: 1;
 }
 
 .filter-controls {
@@ -1501,6 +1538,23 @@ main {
   font-size: 11px;
 }
 
+.team-graph-ranked-table-linking .team-graph-ranked-table-row {
+  grid-template-columns: minmax(230px, 3.6fr) repeat(4, minmax(54px, 0.6fr));
+}
+
+.team-graph-ranked-table-linking
+  .team-graph-ranked-table-header
+  > span:not(:first-child)
+  .team-graph-sort-button {
+  font-size: 9px;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  text-align: right;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
 .team-graph-procedure-group-header {
   margin-top: 8px;
   padding-top: 8px;
@@ -1652,6 +1706,34 @@ main {
   color: var(--muted);
 }
 
+.team-graph-overloaded-entity-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.team-graph-overloaded-entity-cell .team-graph-procedure-order {
+  flex: 0 0 auto;
+  margin-right: 0;
+}
+
+.team-graph-overloaded-entity-cell .team-graph-graph-entity {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.team-graph-overloaded-entity-cell .team-graph-graph-entity-service {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .team-graph-potential-note {
   font-size: 11px;
   color: var(--muted);
@@ -1680,6 +1762,18 @@ main {
 
   .team-graph-ranked-table-header {
     font-size: 10px;
+  }
+
+  .team-graph-ranked-table-linking .team-graph-ranked-table-row {
+    grid-template-columns: minmax(136px, 1fr) repeat(4, minmax(44px, 0.56fr));
+  }
+
+  .team-graph-ranked-table-linking
+    .team-graph-ranked-table-header
+    > span:not(:first-child)
+    .team-graph-sort-button {
+    font-size: 8px;
+    letter-spacing: 0.01em;
   }
 }
 
@@ -2277,6 +2371,18 @@ main {
   transform: translateY(-1px);
 }
 
+.render-graph-button {
+  border-color: rgba(255, 132, 132, 0.55);
+  color: #ffdcdc;
+  background: linear-gradient(135deg, rgba(162, 50, 50, 0.35), rgba(120, 28, 46, 0.3));
+}
+
+.render-graph-button:hover {
+  border-color: rgba(255, 154, 154, 0.8);
+  color: #fff1f1;
+  background: linear-gradient(135deg, rgba(191, 66, 66, 0.45), rgba(146, 40, 58, 0.4));
+}
+
 .unidraw-button {
   background: linear-gradient(135deg, rgba(41, 196, 167, 0.18), rgba(76, 162, 255, 0.16));
   border-color: rgba(97, 216, 190, 0.56);
@@ -2416,6 +2522,29 @@ body.service-graph-open {
   color: #ffb9b9;
 }
 
+.service-graph-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.service-graph-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #dbe8ff;
+  user-select: none;
+}
+
+.service-graph-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #ef7c7c;
+}
+
 .service-graph-canvas {
   min-height: 320px;
   height: 100%;
@@ -2492,7 +2621,7 @@ body.service-graph-open {
 
 .meta-link {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
   max-width: 100%;
   padding: 6px 10px;
@@ -2520,6 +2649,17 @@ body.service-graph-open {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.meta-team-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.meta-team-pill {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .meta-link-icon {

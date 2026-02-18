@@ -92,7 +92,7 @@ def test_links_applied_to_procedure_graph_service_and_team_panels() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],
@@ -147,7 +147,7 @@ def test_procedure_graph_frame_link_uses_source_procedure_id() -> None:
             {
                 "proc_id": "shared::doca1b2",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             }
         ],

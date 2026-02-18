@@ -33,6 +33,9 @@ class CatalogItem:
     markup_rel_path: str
     excalidraw_rel_path: str
     unidraw_rel_path: str
+    procedure_ids: list[str] = field(default_factory=list)
+    block_ids: list[str] = field(default_factory=list)
+    procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -51,10 +54,20 @@ class CatalogItem:
             "markup_rel_path": self.markup_rel_path,
             "excalidraw_rel_path": self.excalidraw_rel_path,
             "unidraw_rel_path": self.unidraw_rel_path,
+            "procedure_ids": list(self.procedure_ids),
+            "block_ids": list(self.block_ids),
+            "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
+        procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_ids = _load_string_list(payload.get("procedure_ids"))
+        block_ids = _load_string_list(payload.get("block_ids"))
+        if not procedure_ids:
+            procedure_ids = list(procedure_blocks.keys())
+        if not block_ids:
+            block_ids = _collect_block_ids(procedure_blocks)
         return cls(
             scene_id=str(payload.get("scene_id", "")),
             title=str(payload.get("title", "")),
@@ -71,7 +84,49 @@ class CatalogItem:
             markup_rel_path=str(payload.get("markup_rel_path", "")),
             excalidraw_rel_path=str(payload.get("excalidraw_rel_path", "")),
             unidraw_rel_path=str(payload.get("unidraw_rel_path", "")),
+            procedure_ids=procedure_ids,
+            block_ids=block_ids,
+            procedure_blocks=procedure_blocks,
         )
+
+
+def _load_string_list(raw: Any) -> list[str]:
+    if not isinstance(raw, list | tuple | set):
+        return []
+    result: list[str] = []
+    seen: set[str] = set()
+    for value in raw:
+        text = str(value).strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        result.append(text)
+    return result
+
+
+def _load_procedure_blocks(raw: Any) -> dict[str, list[str]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, list[str]] = {}
+    for procedure_id, block_values in raw.items():
+        procedure_text = str(procedure_id).strip()
+        if not procedure_text:
+            continue
+        normalized_blocks = _load_string_list(block_values)
+        normalized[procedure_text] = normalized_blocks
+    return normalized
+
+
+def _collect_block_ids(procedure_blocks: dict[str, list[str]]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for block_ids in procedure_blocks.values():
+        for block_id in block_ids:
+            if block_id in seen:
+                continue
+            seen.add(block_id)
+            result.append(block_id)
+    return result
 
 
 @dataclass(frozen=True)

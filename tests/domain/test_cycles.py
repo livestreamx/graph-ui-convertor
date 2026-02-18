@@ -36,7 +36,7 @@ def test_branch_cycle_edges_are_marked_and_roundtrip() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"], "b": ["a"]},
             }
         ],
@@ -97,13 +97,13 @@ def test_procedure_cycle_edges_are_marked_and_roundtrip() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["b::end"],
+                "end_block_ids": ["b::exit"],
                 "branches": {"a": ["b"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["c"],
-                "end_block_ids": ["d::end"],
+                "end_block_ids": ["d::exit"],
                 "branches": {"c": ["d"]},
             },
         ],

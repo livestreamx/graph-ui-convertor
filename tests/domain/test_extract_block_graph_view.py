@@ -13,13 +13,13 @@ def test_extract_block_graph_view_uses_block_graph_edges_only() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a_start"],
-                "end_block_ids": ["a_end::end"],
+                "end_block_ids": ["a_end::exit"],
                 "branches": {"a_start": ["a_end"]},
             },
             {
                 "proc_id": "p2",
                 "start_block_ids": ["b_start"],
-                "end_block_ids": ["b_end::end"],
+                "end_block_ids": ["b_end::exit"],
                 "branches": {"b_start": ["b_end"]},
             },
         ],
@@ -30,6 +30,10 @@ def test_extract_block_graph_view_uses_block_graph_edges_only() -> None:
     scene_payload = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup).to_dict()
 
     graph_payload = extract_block_graph_view(scene_payload)
+
+    nodes = {node["id"]: node for node in graph_payload["nodes"]}
+    assert nodes["p1::a_end"]["end_block_type"] == "exit"
+    assert nodes["p2::b_start"]["end_block_type"] == ""
 
     edges = graph_payload["edges"]
     assert len(edges) == 1
@@ -48,7 +52,7 @@ def test_extract_block_graph_view_uses_branch_edges_when_block_graph_is_absent()
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["c::end"],
+                "end_block_ids": ["c::exit"],
                 "branches": {"a": ["b"], "b": ["c"]},
             }
         ],

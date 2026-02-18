@@ -652,9 +652,17 @@
                                         <article class="team-graph-merge-node-card">
                                           <div class="team-graph-merge-node-id">
                                             {% if component.merge_nodes|length > 1 %}
-                                              {% set merge_node_prefix = t("Merge node #{index}", index=loop.index) %}
+                                              {% if merge_selected_markups %}
+                                                {% set merge_node_prefix = t("Merge node #{index}", index=loop.index) %}
+                                              {% else %}
+                                                {% set merge_node_prefix = t("Potential merge node #{index}", index=loop.index) %}
+                                              {% endif %}
                                             {% else %}
-                                              {% set merge_node_prefix = t("Merge node") %}
+                                              {% if merge_selected_markups %}
+                                                {% set merge_node_prefix = t("Merge node") %}
+                                              {% else %}
+                                                {% set merge_node_prefix = t("Potential merge node") %}
+                                              {% endif %}
                                             {% endif %}
                                             {{ render_procedure_caption(merge_node.procedure_name, merge_node.procedure_id, merge_node_prefix, show_procedure_id=false, strip_doc_suffix=true, link_resolver=resolve_procedure_link, merge_node_mode=true) }}
                                           </div>
@@ -1038,9 +1046,9 @@
                       </div>
                     </div>
                   </div>
-                  <div class="team-graph-data-context">{{ t("Ranking priority: cross-entity reuse -> total dependencies (incoming + outgoing) -> incoming -> outgoing. Based only on selected markups, deterministic for the same input.") }}</div>
+                  <div class="team-graph-data-context">{{ t("Ranking priority: cross-entity reuse -> total dependencies (incoming + outgoing) -> incoming -> outgoing.") }}</div>
                   {% if team_dashboard.linking_procedures %}
-                    <div class="team-graph-ranked-table" data-sortable-table>
+                    <div class="team-graph-ranked-table team-graph-ranked-table-linking" data-sortable-table>
                       <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                         <span>{{ t("Procedure") }}</span>
                         <span>
@@ -1218,7 +1226,7 @@
                           data-sort-block-count="{{ item.block_count }}"
                         >
                           <summary class="team-graph-ranked-table-row">
-                            <span>
+                            <span class="team-graph-overloaded-entity-cell">
                               <span class="team-graph-procedure-order" data-sort-rank>{{ loop.index }}</span>
                               {{ render_team_service_entity(item.team_name ~ ' / ' ~ item.markup_type ~ ' / ' ~ item.service_name, "team-graph-graph-entity-sm", true) }}
                             </span>
@@ -1235,11 +1243,6 @@
                                 {{ t("Procedure-level breakdown (graph order, potential merges)") }}
                               {% endif %}
                             </div>
-                            {% if not merge_selected_markups %}
-                              <div class="team-graph-potential-note">
-                                {{ t("Potential merges only: graph rendering keeps procedures separated while still surfacing shared-node overlap risk.") }}
-                              </div>
-                            {% endif %}
                             <div class="team-graph-ranked-table">
                               <div class="team-graph-ranked-table-row team-graph-ranked-table-header">
                                 <span>{{ t("Procedure") }}</span>

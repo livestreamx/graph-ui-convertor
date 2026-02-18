@@ -4,6 +4,7 @@ import json
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from playwright.sync_api import Error as PlaywrightError
@@ -112,7 +113,73 @@ def test_catalog_detail_render_graph_modal_e2e(
         app_settings_factory=app_settings_factory,
     ) as context:
         detail_html = context.client.get(f"/catalog/{context.scene_id}").text
-        graph_json = context.client.get(f"/api/scenes/{context.scene_id}/block-graph").json()
+        graph_json: dict[str, Any] = {
+            "nodes": [
+                {
+                    "id": "proc_a::start_a",
+                    "procedure_id": "proc_a",
+                    "block_id": "start_a",
+                    "label": "start_a",
+                    "is_initial": True,
+                    "end_block_type": "",
+                },
+                {
+                    "id": "proc_shared_routing::route_recheck",
+                    "procedure_id": "proc_shared_routing",
+                    "block_id": "route_recheck",
+                    "label": "route_recheck",
+                    "is_initial": True,
+                    "end_block_type": "",
+                },
+                {
+                    "id": "proc_shared_routing::finish",
+                    "procedure_id": "proc_shared_routing",
+                    "block_id": "finish",
+                    "label": "finish",
+                    "is_initial": False,
+                    "end_block_type": "postpone",
+                },
+            ],
+            "edges": [
+                {
+                    "id": "edge-forward-1",
+                    "source": "proc_a::start_a",
+                    "target": "proc_shared_routing::route_recheck",
+                    "source_procedure_id": "proc_a",
+                    "target_procedure_id": "proc_shared_routing",
+                    "source_block_id": "start_a",
+                    "target_block_id": "route_recheck",
+                    "edge_type": "block_graph",
+                    "is_cycle": False,
+                },
+                {
+                    "id": "edge-forward-2",
+                    "source": "proc_shared_routing::route_recheck",
+                    "target": "proc_shared_routing::finish",
+                    "source_procedure_id": "proc_shared_routing",
+                    "target_procedure_id": "proc_shared_routing",
+                    "source_block_id": "route_recheck",
+                    "target_block_id": "finish",
+                    "edge_type": "branch",
+                    "is_cycle": True,
+                },
+                {
+                    "id": "edge-reverse-cycle",
+                    "source": "proc_shared_routing::finish",
+                    "target": "proc_shared_routing::route_recheck",
+                    "source_procedure_id": "proc_shared_routing",
+                    "target_procedure_id": "proc_shared_routing",
+                    "source_block_id": "finish",
+                    "target_block_id": "route_recheck",
+                    "edge_type": "branch_cycle",
+                    "is_cycle": True,
+                },
+            ],
+            "meta": {
+                "node_count": 3,
+                "edge_count": 3,
+            },
+        }
         vis_stub_js = """
 window.vis = {
   DataSet: class {
@@ -123,6 +190,7 @@ window.vis = {
     constructor(container, data) {
       const nodes = data.nodes && typeof data.nodes.get === "function" ? data.nodes.get() : [];
       const edges = data.edges && typeof data.edges.get === "function" ? data.edges.get() : [];
+      window.__visLastNodes = nodes;
       window.__visRender = { nodes: nodes.length, edges: edges.length };
       container.innerHTML = "<div id='vis-ready'>ready</div>";
     }
@@ -171,8 +239,30 @@ window.vis = {
             page.wait_for_selector("#service-graph-modal:not([hidden])", timeout=10000)
             page.wait_for_selector("#vis-ready", timeout=10000)
             rendered = page.evaluate("window.__serviceGraphLastRender")
+            vis_nodes = page.evaluate("window.__visLastNodes")
+            page.uncheck("#service-graph-show-reverse")
+            page.wait_for_function(
+                "() => window.__serviceGraphLastRender && window.__serviceGraphLastRender.edges < "
+                + str(cast(dict[str, Any], graph_json["meta"])["edge_count"]),
+                timeout=10000,
+            )
+            rendered_without_reverse = page.evaluate("window.__serviceGraphLastRender")
             browser.close()
 
         assert isinstance(rendered, dict)
-        assert rendered["nodes"] == graph_json["meta"]["node_count"]
-        assert rendered["edges"] == graph_json["meta"]["edge_count"]
+        meta = cast(dict[str, Any], graph_json["meta"])
+        assert rendered["nodes"] == meta["node_count"]
+        assert rendered["edges"] == meta["edge_count"]
+        assert isinstance(vis_nodes, list)
+        route_node = next(
+            node for node in vis_nodes if node["id"] == "proc_shared_routing::route_recheck"
+        )
+        finish_node = next(
+            node for node in vis_nodes if node["id"] == "proc_shared_routing::finish"
+        )
+        assert "Nesting level: 1" in route_node["title"]
+        assert "Block type: start" in route_node["title"]
+        assert "Block type: postpone" in finish_node["title"]
+        assert isinstance(rendered_without_reverse, dict)
+        assert rendered_without_reverse["nodes"] == meta["node_count"]
+        assert rendered_without_reverse["edges"] == rendered["edges"] - 1

@@ -116,11 +116,22 @@ catalog:
 - Detail view includes downloads for `.excalidraw` and `.unidraw`; `Open Excalidraw` is controlled by
   `diagram_excalidraw_enabled`. When `service_link_path` / `team_link_path` are configured, metadata
   values `Service ID` and `Team` become clickable links built from `unit_id` and `team_id`.
-- Detail view also includes `Render graph`, which opens a full-screen interactive block graph (zoom/pan/drag).
+- Detail view has two diagram action cards in one row: `Block-level diagram` and `Procedure-level diagram`.
+  Each card has `Show graph`, `Open Excalidraw`, and both download actions.
+- `Block-level diagram` includes `Show graph`, which opens a full-screen interactive block graph (zoom/pan/drag).
   Graph data is extracted from the same Excalidraw scene payload used for diagram rendering (`/api/scenes/{scene_id}`)
   and is available via `/api/scenes/{scene_id}/block-graph`.
+- `Procedure-level diagram` is built on demand for the current service using the same team-graph builder path.
+  Default mode is potential merge nodes against all markups of the same team:
+  `merge_nodes_all_markups=true`, `merge_selected_markups=false`, `merge_node_min_chain_size=1`.
+  API endpoints: `/api/scenes/{scene_id}/procedure-graph` (diagram payload) and
+  `/api/scenes/{scene_id}/procedure-graph-view` (interactive graph nodes/edges for the modal).
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
+- Catalog search uses token filters in the main search input.
+  Type a value and press `Enter` to add it as a token; each next `Enter` adds one more token.
+  Tokens are combined with `AND`, and each token is matched across title/tags/markup metadata
+  plus `procedure_id` and `block_id`.
 - The Catalog page has a dedicated cross-team graphs section. Use it to select multiple teams and
   open a combined procedure-level graph built from `procedure_graph` (`/catalog/teams/graph`,
   `/api/teams/graph`, `team_ids` supports comma-separated values). The builder also accepts
@@ -163,7 +174,7 @@ catalog:
   Graph/intersection drilldowns share one `team / service` output format with team color chips,
   including `Multi graphs` and tabular `Top linking procedures` details per graph
   (`cross-entity`, `inbound deps`, `outbound deps`).
-  `Top overloaded entities` detail shows the same columns per procedure in graph order and adds
+  `Top overloaded entities` detail (Russian UI label: `Топ перегруженных разметок`) shows the same columns per procedure in graph order and adds
   per-procedure block-type breakdown (start/end types) using the same colors as in the diagram.
   Procedure order and links in this detail are calculated from the same merged procedure graph
   payload that is rendered in the team diagram.

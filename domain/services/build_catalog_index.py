@@ -94,6 +94,9 @@ class BuildCatalogIndex:
         if not team_name:
             team_name = config.unknown_value
         markup_meta = self._extract_markup_meta(raw)
+        procedure_blocks = self._extract_procedure_blocks(document)
+        procedure_ids = list(procedure_blocks.keys())
+        block_ids = self._collect_block_ids(procedure_blocks)
 
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
@@ -124,6 +127,9 @@ class BuildCatalogIndex:
             markup_rel_path=markup_rel_path,
             excalidraw_rel_path=excalidraw_rel_path,
             unidraw_rel_path=unidraw_rel_path,
+            procedure_ids=procedure_ids,
+            block_ids=block_ids,
+            procedure_blocks=procedure_blocks,
         )
 
     def _relative_path(self, path: Path, base: Path) -> str:
@@ -209,6 +215,28 @@ class BuildCatalogIndex:
         fields.setdefault("team_id", team_id)
         fields.setdefault("team_name", team_name)
         return fields
+
+    def _extract_procedure_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:
+        result: dict[str, list[str]] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id or procedure_id in result:
+                continue
+            block_ids = sorted(procedure.block_ids(), key=str.lower)
+            result[procedure_id] = block_ids
+        return result
+
+    def _collect_block_ids(self, procedure_blocks: Mapping[str, list[str]]) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+        for block_ids in procedure_blocks.values():
+            for block_id in block_ids:
+                normalized = str(block_id).strip()
+                if not normalized or normalized in seen:
+                    continue
+                seen.add(normalized)
+                result.append(normalized)
+        return result
 
     def _normalize_tags(self, value: Any) -> list[str]:
         if value is None:

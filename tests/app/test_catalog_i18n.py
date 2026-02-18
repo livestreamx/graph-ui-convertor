@@ -99,10 +99,32 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
     assert translate_ui_text("Graph {index}", "ru").format(index=1) == "Граф 1"
     assert translate_ui_text("Merge node", "ru") == "Узел слияния"
     assert translate_ui_text("Merge node #{index}", "ru").format(index=1) == "Узел слияния #1"
+    assert translate_ui_text("Potential merge node", "ru") == "Потенциальный узел слияния"
+    assert (
+        translate_ui_text("Potential merge node #{index}", "ru").format(index=1)
+        == "Потенциальный узел слияния #1"
+    )
+    assert translate_ui_text("Top overloaded entities", "ru") == "Топ перегруженных разметок"
+    assert translate_ui_text("Entity", "ru") == "Разметка"
 
 
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
     assert translate_ui_text("Service ID", "ru") == "ID услуги"
-    assert translate_ui_text("Render graph", "ru") == "Отрисовать граф"
+    assert translate_ui_text("Block-level diagram", "ru") == "Диаграмма уровня блоков"
+    assert translate_ui_text("Show graph", "ru") == "Показать граф"
+    assert translate_ui_text("Show reverse links", "ru") == "Показывать обратные связи"
+    assert (
+        translate_ui_text("Press Show graph to load procedure graph.", "ru")
+        == "Нажмите «Показать граф», чтобы загрузить граф процедур."
+    )
+    assert (
+        translate_ui_text("No procedure graph data available for this service.", "ru")
+        == "Для этой услуги нет данных procedure_graph."
+    )
+    assert translate_ui_text("Block type", "ru") == "Тип блока"
+    assert translate_ui_text("Starts", "ru") == "Старты"
+    assert translate_ui_text("Branches", "ru") == "Ветвления"
+    assert translate_ui_text("End blocks", "ru") == "End-блоки"
+    assert translate_ui_text("none", "ru") == "нет"
     assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"

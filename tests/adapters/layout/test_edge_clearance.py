@@ -11,7 +11,7 @@ def test_end_blocks_shifted_for_cross_procedure_edges() -> None:
             {
                 "proc_id": "p1",
                 "start_block_ids": ["a"],
-                "end_block_ids": ["c::end"],
+                "end_block_ids": ["c::exit"],
                 "branches": {"a": ["b"], "b": ["c"]},
             },
             {

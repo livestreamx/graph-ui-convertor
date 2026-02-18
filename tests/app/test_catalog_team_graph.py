@@ -2365,11 +2365,155 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
         )
         assert html_response.status_code == 200
         assert "Potential intersection node breakdown" in html_response.text
+        assert "Potential merge node" in html_response.text
+        assert "Merge node #1" not in html_response.text
         assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
         assert "Potential merges" in html_response.text
         assert (
             "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled."
             not in html_response.text
         )
+    finally:
+        stubber.deactivate()
+
+
+def test_catalog_scene_procedure_graph_merges_against_same_team_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_selected = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Selected Service",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "proc_shared_same_team",
+                "proc_name": "Shared Same Team",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            },
+            {
+                "proc_id": "proc_shared_other_team",
+                "proc_name": "Shared Other Team",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            },
+        ],
+        "procedure_graph": {
+            "proc_shared_same_team": ["proc_shared_other_team"],
+            "proc_shared_other_team": [],
+        },
+    }
+    payload_same_team = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Sibling Service",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "proc_shared_same_team",
+                "proc_name": "Shared Same Team",
+                "start_block_ids": ["e"],
+                "end_block_ids": ["f"],
+                "branches": {"e": ["f"]},
+            }
+        ],
+        "procedure_graph": {"proc_shared_same_team": []},
+    }
+    payload_other_team = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "External Service",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "proc_shared_other_team",
+                "proc_name": "Shared Other Team",
+                "start_block_ids": ["g"],
+                "end_block_ids": ["h"],
+                "branches": {"g": ["h"]},
+            }
+        ],
+        "procedure_graph": {"proc_shared_other_team": []},
+    }
+    objects = {
+        "markup/selected.json": payload_selected,
+        "markup/sibling.json": payload_same_team,
+        "markup/external.json": payload_other_team,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/selected.json", payload=payload_selected
+    )
+    add_get_object(
+        stubber, bucket="cjm-bucket", key="markup/sibling.json", payload=payload_same_team
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+        index_response = client_api.get("/api/index")
+        assert index_response.status_code == 200
+        selected_scene_id = next(
+            item["scene_id"]
+            for item in index_response.json()["items"]
+            if item["markup_rel_path"] == "selected.json"
+        )
+
+        response = client_api.get(f"/api/scenes/{selected_scene_id}/procedure-graph-view")
+        assert response.status_code == 200
+        nodes = response.json()["nodes"]
+        merge_node_ids = {
+            node["procedure_id"] for node in nodes if node.get("is_merge_node") is True
+        }
+        assert "proc_shared_same_team" in merge_node_ids
+        assert "proc_shared_other_team" not in merge_node_ids
     finally:
         stubber.deactivate()

@@ -898,6 +898,10 @@ class BuildCrossTeamGraphDashboard:
                     ),
                 )
             )
+        merge_count_by_base_label = {
+            label: sum(len(component.merge_nodes) for component in components)
+            for label, components in components_by_base_label.items()
+        }
         graph_groups = tuple(
             GraphGroupStat(
                 label=label,
@@ -911,7 +915,11 @@ class BuildCrossTeamGraphDashboard:
             )
             for label, count in sorted(
                 base_label_counts.items(),
-                key=lambda item: (-item[1], item[0].lower()),
+                key=lambda item: (
+                    -merge_count_by_base_label.get(item[0], 0),
+                    -item[1],
+                    item[0].lower(),
+                ),
             )
         )
         return graph_document, graph_keys, graph_keys_by_procedure_id, graph_groups

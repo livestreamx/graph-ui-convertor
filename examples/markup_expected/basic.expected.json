@@ -22,8 +22,7 @@
     ]
   },
   "end_types": {
-    "end": 2,
-    "exit": 0,
+    "exit": 2,
     "all": 0,
     "intermediate": 0,
     "postpone": 0,
