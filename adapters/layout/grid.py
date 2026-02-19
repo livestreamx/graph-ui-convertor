@@ -30,7 +30,7 @@ from domain.services.graph_metrics import build_directed_graph, compute_graph_me
 
 @dataclass(frozen=True)
 class LayoutConfig:
-    block_size: Size = field(default_factory=lambda: Size(260, 120))
+    block_size: Size = field(default_factory=lambda: Size(320, 120))
     marker_size: Size = field(default_factory=lambda: Size(180, 90))
     padding: float = 150.0
     gap_x: float = 120.0

@@ -93,6 +93,10 @@ def test_catalog_team_graph_api(
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -151,6 +155,26 @@ def test_catalog_team_graph_api(
         assert not any(
             str(element.get("customData", {}).get("cjm", {}).get("role", "")).startswith("scenario")
             for element in service_elements
+        )
+
+        procedure_download = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-1,team-2", "download": "true"},
+        )
+        assert procedure_download.status_code == 200
+        assert re.search(
+            r'filename="team-graph_team-1_team-2_procedures_\d{4}-\d{2}-\d{2}\.excalidraw"',
+            procedure_download.headers.get("content-disposition", ""),
+        )
+
+        service_download = client_api.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-1,team-2", "graph_level": "service", "download": "true"},
+        )
+        assert service_download.status_code == 200
+        assert re.search(
+            r'filename="team-service-graph_team-1_team-2_services_\d{4}-\d{2}-\d{2}\.excalidraw"',
+            service_download.headers.get("content-disposition", ""),
         )
 
         html_response = client_api.get(

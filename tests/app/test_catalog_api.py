@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -41,7 +42,11 @@ def test_catalog_api_smoke(
         )
         assert unidraw_response.status_code == 200
         assert unidraw_response.json().get("type") == "unidraw"
-        assert "billing.unidraw" in unidraw_response.headers.get("content-disposition", "")
+        content_disposition = unidraw_response.headers.get("content-disposition", "")
+        assert re.search(
+            r'filename="billing_blocks_\d{4}-\d{2}-\d{2}\.unidraw"',
+            content_disposition,
+        )
 
         markup_response = context.client.get(f"/api/markup/{scene_id}?download=true")
         assert markup_response.status_code == 200
@@ -81,7 +86,10 @@ def test_catalog_api_unidraw_download_with_legacy_index_item(
         )
         assert response.status_code == 200
         assert response.json().get("type") == "unidraw"
-        assert "billing.unidraw" in response.headers.get("content-disposition", "")
+        assert re.search(
+            r'filename="billing_blocks_\d{4}-\d{2}-\d{2}\.unidraw"',
+            response.headers.get("content-disposition", ""),
+        )
 
 
 def test_catalog_api_unidraw_download_generated_on_demand_when_file_missing(
@@ -103,7 +111,10 @@ def test_catalog_api_unidraw_download_generated_on_demand_when_file_missing(
         )
         assert response.status_code == 200
         assert response.json().get("type") == "unidraw"
-        assert "billing.unidraw" in response.headers.get("content-disposition", "")
+        assert re.search(
+            r'filename="billing_blocks_\d{4}-\d{2}-\d{2}\.unidraw"',
+            response.headers.get("content-disposition", ""),
+        )
 
 
 def test_catalog_scene_links_applied(
@@ -202,7 +213,10 @@ def test_catalog_scene_procedure_graph_download_unidraw(
         )
         assert download_response.status_code == 200
         assert download_response.json().get("type") == "unidraw"
-        assert "procedure_graph.unidraw" in download_response.headers.get("content-disposition", "")
+        assert re.search(
+            r'filename="[^"]+_procedure_graph_procedures_\d{4}-\d{2}-\d{2}\.unidraw"',
+            download_response.headers.get("content-disposition", ""),
+        )
 
 
 def test_catalog_ui_text_overrides(
