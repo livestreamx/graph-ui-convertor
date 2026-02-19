@@ -1001,11 +1001,21 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                 set(service_tokens),
                 key=lambda item: (item[0].lower(), item[1].lower(), item[2].lower()),
             )
-            label_parts = [
-                f"[{team}] [{humanize_markup_type_for_brackets(markup_type)}] {service}"
-                for team, markup_type, service in unique_tokens
-            ]
-            label = " x ".join(label_parts)
+            unique_teams = {team for team, _, _ in unique_tokens}
+            same_team_group = len(unique_teams) == 1
+            label_lines: list[str] = []
+            for team, markup_type, service in unique_tokens:
+                if same_team_group:
+                    label_lines.append(
+                        f"[{humanize_markup_type_for_brackets(markup_type)}] {service}"
+                    )
+                else:
+                    label_lines.append(
+                        f"[{team}] [{humanize_markup_type_for_brackets(markup_type)}] {service}"
+                    )
+            if not label_lines:
+                label_lines = ["Unknown service"]
+            label = "\n".join([f"> {label_lines[0]}", *[f"x {item}" for item in label_lines[1:]]])
             key = tuple(unique_tokens)
             group = groups.setdefault(key, _MergeGroup(label=label, proc_ids=[]))
             chain_group_id = meta.get("merge_chain_group_id")
@@ -1057,9 +1067,9 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
             if idx > 0:
                 blocks.append(ScenarioProceduresBlock(kind="spacer", text="", height=group_gap))
                 lines.append("")
-            header_line = f"> {label}:"
+            header_source_lines = label.splitlines() if label else ["> Unknown service"]
             header_lines = self._wrap_lines(
-                [header_line], content_width - item_padding * 2, font_size
+                header_source_lines, content_width - item_padding * 2, font_size
             )
             blocks.append(
                 ScenarioProceduresBlock(
@@ -1069,7 +1079,7 @@ class ProcedureGraphLayoutEngine(GridLayoutEngine):
                     font_size=font_size,
                 )
             )
-            lines.append(header_line)
+            lines.extend(header_source_lines)
             item_lines: list[str] = []
             for node_members in group_nodes:
                 proc_names: list[str] = []

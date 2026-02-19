@@ -848,8 +848,8 @@ class MarkupToDiagramConverter(ABC):
                     group_ids=[group_id],
                     frame_id=frame_ids.get(block.procedure_id),
                     metadata=self._with_base_metadata(label_meta, base_metadata),
-                    max_width=max(80.0, block.size.width - 30),
-                    max_height=max(24.0, block.size.height - 30),
+                    max_width=max(100.0, block.size.width - 24),
+                    max_height=max(24.0, block.size.height - 24),
                     font_size=18.0,
                 )
             )

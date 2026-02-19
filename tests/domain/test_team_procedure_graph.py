@@ -1599,7 +1599,7 @@ def test_procedure_graph_layout_includes_merge_panel() -> None:
     scenario = plan.scenarios[0]
     merge_text = scenario.merge_text or ""
     assert "Узлы слияния" in merge_text
-    assert "> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:" in merge_text
+    assert "> [Alpha] [Услуга] Payments\nx [Beta] [Услуга] Loans" in merge_text
     assert "(1) Shared Flow" in merge_text
     assert scenario.merge_origin is not None
     assert scenario.merge_size is not None
@@ -1642,7 +1642,7 @@ def test_procedure_graph_layout_uses_merge_services_for_groups() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert "> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:" in merge_text
+    assert "> [Alpha] [Услуга] Payments\nx [Beta] [Услуга] Loans" in merge_text
 
 
 def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
@@ -1692,9 +1692,45 @@ def test_procedure_graph_layout_groups_merge_nodes_by_services() -> None:
 
     assert plan.scenarios
     merge_text = plan.scenarios[0].merge_text or ""
-    assert merge_text.count("> [Alpha] [Услуга] Payments x [Beta] [Услуга] Loans:") == 1
+    assert merge_text.count("> [Alpha] [Услуга] Payments\nx [Beta] [Услуга] Loans") == 1
     assert "(1) Shared One" in merge_text
     assert "(2) Shared Two" in merge_text
+
+
+def test_procedure_graph_layout_omits_team_prefix_for_same_team_merge_group() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared Flow",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b::exit"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    document = MarkupDocument.model_validate(payload).model_copy(
+        update={
+            "procedure_meta": {
+                "shared": {
+                    "is_intersection": True,
+                    "merge_services": [
+                        {"team_name": "Alpha", "service_name": "Payments"},
+                        {"team_name": "Alpha", "service_name": "Loans"},
+                    ],
+                }
+            }
+        }
+    )
+
+    plan = ProcedureGraphLayoutEngine().build_plan(document)
+
+    assert plan.scenarios
+    merge_text = plan.scenarios[0].merge_text or ""
+    assert "> [Услуга] Loans\nx [Услуга] Payments" in merge_text
+    assert "[Alpha]" not in merge_text
 
 
 def test_procedure_graph_layout_groups_chain_merge_nodes_into_single_item() -> None:
