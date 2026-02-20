@@ -126,6 +126,8 @@ catalog:
 - `Block-level diagram` includes `Show graph`, which opens a full-screen interactive block graph (zoom/pan/drag).
   Graph data is extracted from the same Excalidraw scene payload used for diagram rendering (`/api/scenes/{scene_id}`)
   and is available via `/api/scenes/{scene_id}/block-graph`.
+  The API returns only nodes that participate in the rendered edges.
+  If `block_graph` edges are present, they take precedence and `branch` edges are ignored.
 - `Procedure-level diagram` is built on demand for the current service using the same team-graph builder path.
   Default mode is potential merge nodes against all markups of the same team:
   `merge_nodes_all_markups=true`, `merge_selected_markups=false`, `merge_node_min_chain_size=1`.
