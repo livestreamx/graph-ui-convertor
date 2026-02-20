@@ -41,12 +41,19 @@ class BuildCatalogIndex:
         self._index_repo.save(index, config.index_path)
         return index
 
+    def source_fingerprint(self, config: CatalogIndexConfig) -> str:
+        return self._source.fingerprint(config.markup_dir)
+
     def _build_item(self, entry: MarkupSourceItem, config: CatalogIndexConfig) -> CatalogItem:
         raw = entry.raw
         document = entry.document
-        slug = self._slugify(entry.path.stem)
-        payload_hash = self._hash_payload(raw)
-        scene_id = f"{slug}-{payload_hash[:10]}"
+        resolved_finedog_unit_id = self._resolve_first(
+            raw,
+            document,
+            ["finedog_unit_id", "finedog_unit_meta.unit_id"],
+            default="",
+        )
+        scene_id = resolved_finedog_unit_id or self._build_legacy_scene_id(entry.path.stem, raw)
 
         group_values = {
             field: self._stringify(self._resolve_field(raw, document, field), config.unknown_value)
@@ -65,12 +72,7 @@ class BuildCatalogIndex:
 
         tags = self._extract_tags(raw, document, config.tag_fields)
         markup_type = document.markup_type
-        finedog_unit_id = self._resolve_first(
-            raw,
-            document,
-            ["finedog_unit_id", "finedog_unit_meta.unit_id"],
-            default=config.unknown_value,
-        )
+        finedog_unit_id = resolved_finedog_unit_id or config.unknown_value
         criticality_level = self._resolve_first(
             raw,
             document,
@@ -311,6 +313,11 @@ class BuildCatalogIndex:
         canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
         digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
         return digest
+
+    def _build_legacy_scene_id(self, stem: str, payload: Mapping[str, Any]) -> str:
+        slug = self._slugify(stem)
+        payload_hash = self._hash_payload(payload)
+        return f"{slug}-{payload_hash[:10]}"
 
     def _generated_at(self, entries: Sequence[MarkupSourceItem]) -> str:
         if not entries:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 
@@ -45,7 +46,7 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
     def load_all(self, directory: Path) -> list[MarkupSourceItem]:
         prefix = self._prefix or self._normalize_prefix(directory.as_posix())
         items: list[MarkupSourceItem] = []
-        for key, updated_at in self._iter_objects(prefix):
+        for key, updated_at, _, _ in self._iter_objects(prefix):
             raw = self._load_raw(key)
             document = MarkupDocument.model_validate(raw)
             updated = updated_at or datetime.now(tz=UTC)
@@ -60,6 +61,19 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
                 )
             )
         return items
+
+    def fingerprint(self, directory: Path) -> str:
+        prefix = self._prefix or self._normalize_prefix(directory.as_posix())
+        parts: list[str] = []
+        for key, updated_at, size, etag in self._iter_objects(prefix):
+            updated = updated_at
+            if updated is not None and updated.tzinfo is None:
+                updated = updated.replace(tzinfo=UTC)
+            timestamp = updated.astimezone(UTC).isoformat() if updated is not None else ""
+            parts.append(f"{key}\t{timestamp}\t{size if size is not None else ''}\t{etag or ''}")
+        parts.sort()
+        canonical = "\n".join(parts)
+        return sha256(canonical.encode("utf-8")).hexdigest()
 
     def load_document(self, path: Path) -> MarkupDocument:
         key = self.build_key(path)
@@ -92,7 +106,7 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
             return key
         return f"{self._prefix}{key}"
 
-    def _iter_objects(self, prefix: str) -> Iterable[tuple[str, datetime | None]]:
+    def _iter_objects(self, prefix: str) -> Iterable[tuple[str, datetime | None, int | None, str]]:
         token: str | None = None
         while True:
             payload: dict[str, Any] = {"Bucket": self._bucket, "Prefix": prefix}
@@ -103,7 +117,8 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
                 key = entry.get("Key")
                 if not key or not self._is_markup_key(key):
                     continue
-                yield key, entry.get("LastModified")
+                etag = str(entry.get("ETag") or "").replace('"', "")
+                yield key, entry.get("LastModified"), entry.get("Size"), etag
             if not response.get("IsTruncated"):
                 break
             token = response.get("NextContinuationToken")

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -36,7 +38,7 @@ from app.web_i18n import (
     set_active_ui_language,
     translate_humanized_text,
 )
-from domain.catalog import CatalogIndex, CatalogItem
+from domain.catalog import CatalogIndex, CatalogIndexConfig, CatalogItem
 from domain.models import ExcalidrawDocument, MarkupDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
@@ -68,6 +70,7 @@ TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+logger = logging.getLogger(__name__)
 
 SceneFormat = Literal["excalidraw", "unidraw"]
 
@@ -98,12 +101,19 @@ class CatalogContext:
     link_templates: ExcalidrawLinkTemplates | None
 
 
+@dataclass
+class CatalogRefreshState:
+    last_source_fingerprint: str | None = None
+
+
 def create_app(settings: AppSettings) -> FastAPI:
     templates.env.filters["msk_datetime"] = format_msk_datetime
     templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
+        refresh_task: asyncio.Task[None] | None = None
+        refresh_stop = asyncio.Event()
         invalidate_scene_cache(context)
         if settings.catalog.auto_build_index:
             if settings.catalog.rebuild_index_on_start:
@@ -113,7 +123,15 @@ def create_app(settings: AppSettings) -> FastAPI:
                     index_repo.load(settings.catalog.index_path)
                 except FileNotFoundError:
                     context.index_builder.build(settings.catalog.to_index_config())
+            refresh_interval = settings.catalog.index_refresh_interval_seconds
+            if refresh_interval > 0:
+                refresh_task = asyncio.create_task(
+                    run_catalog_index_refresh_loop(context, refresh_interval, refresh_stop)
+                )
         yield
+        if refresh_task is not None:
+            refresh_stop.set()
+            await refresh_task
 
     app = FastAPI(title=settings.catalog.title, lifespan=lifespan)
 
@@ -1002,6 +1020,60 @@ def create_app(settings: AppSettings) -> FastAPI:
                 return await forward_upstream(request, upstream, request.url.path.lstrip("/"))
 
     return app
+
+
+async def run_catalog_index_refresh_loop(
+    context: CatalogContext,
+    interval_seconds: float,
+    stop_event: asyncio.Event,
+) -> None:
+    refresh_state = CatalogRefreshState()
+    while True:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            if stop_event.is_set():
+                return
+        except TimeoutError:
+            pass
+        refresh_catalog_index_if_needed(context, refresh_state)
+
+
+def refresh_catalog_index_if_needed(
+    context: CatalogContext,
+    state: CatalogRefreshState,
+) -> None:
+    config = context.settings.catalog.to_index_config()
+    if state.last_source_fingerprint is None:
+        try:
+            context.index_builder.build(config)
+        except Exception:
+            logger.exception("Periodic catalog index refresh failed.")
+            return
+        state.last_source_fingerprint = read_catalog_source_fingerprint(context, config)
+        return
+    current_fingerprint = read_catalog_source_fingerprint(context, config)
+    if current_fingerprint is not None and current_fingerprint == state.last_source_fingerprint:
+        return
+    try:
+        context.index_builder.build(config)
+    except Exception:
+        logger.exception("Periodic catalog index refresh failed.")
+        return
+    if current_fingerprint is not None:
+        state.last_source_fingerprint = current_fingerprint
+        return
+    state.last_source_fingerprint = read_catalog_source_fingerprint(context, config)
+
+
+def read_catalog_source_fingerprint(
+    context: CatalogContext,
+    config: CatalogIndexConfig,
+) -> str | None:
+    try:
+        return context.index_builder.source_fingerprint(config)
+    except Exception:
+        logger.exception("Catalog source fingerprint read failed.")
+        return None
 
 
 def get_context(request: Request) -> CatalogContext:
