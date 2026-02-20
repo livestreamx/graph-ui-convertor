@@ -41,7 +41,7 @@ def test_extract_block_graph_view_uses_block_graph_edges_only() -> None:
     assert edge["edge_type"] == "block_graph"
     assert edge["source"] == "p1::a_end"
     assert edge["target"] == "p2::b_start"
-    assert graph_payload["meta"]["node_count"] >= 4
+    assert graph_payload["meta"]["node_count"] == 2
     assert graph_payload["meta"]["edge_count"] == 1
 
 
@@ -66,3 +66,73 @@ def test_extract_block_graph_view_uses_branch_edges_when_block_graph_is_absent()
     assert edge_types == {"branch"}
     assert graph_payload["meta"]["node_count"] == 3
     assert graph_payload["meta"]["edge_count"] == 2
+
+
+def test_extract_block_graph_view_skips_unrelated_nodes_and_branch_artifacts() -> None:
+    scene_payload = {
+        "elements": [
+            {
+                "type": "rectangle",
+                "customData": {"cjm": {"role": "block", "procedure_id": "p1", "block_id": "a"}},
+            },
+            {
+                "type": "text",
+                "text": "A",
+                "customData": {
+                    "cjm": {"role": "block_label", "procedure_id": "p1", "block_id": "a"}
+                },
+            },
+            {
+                "type": "rectangle",
+                "customData": {"cjm": {"role": "block", "procedure_id": "p1", "block_id": "b"}},
+            },
+            {
+                "type": "text",
+                "text": "B",
+                "customData": {
+                    "cjm": {"role": "block_label", "procedure_id": "p1", "block_id": "b"}
+                },
+            },
+            {
+                "type": "rectangle",
+                "customData": {"cjm": {"role": "block", "procedure_id": "p2", "block_id": "ghost"}},
+            },
+            {
+                "id": "edge-block-graph",
+                "type": "arrow",
+                "customData": {
+                    "cjm": {
+                        "role": "edge",
+                        "edge_type": "block_graph",
+                        "procedure_id": "p1",
+                        "source_block_id": "a",
+                        "target_procedure_id": "p1",
+                        "target_block_id": "b",
+                    }
+                },
+            },
+            {
+                "id": "edge-branch-artifact",
+                "type": "arrow",
+                "customData": {
+                    "cjm": {
+                        "role": "edge",
+                        "edge_type": "branch",
+                        "procedure_id": "p2",
+                        "source_block_id": "ghost",
+                        "target_procedure_id": "p2",
+                        "target_block_id": "unknown",
+                    }
+                },
+            },
+        ]
+    }
+
+    graph_payload = extract_block_graph_view(scene_payload)
+
+    node_ids = {node["id"] for node in graph_payload["nodes"]}
+    edge_ids = {edge["id"] for edge in graph_payload["edges"]}
+
+    assert node_ids == {"p1::a", "p1::b"}
+    assert edge_ids == {"edge-block-graph"}
+    assert graph_payload["meta"] == {"node_count": 2, "edge_count": 1}
