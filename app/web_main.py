@@ -347,6 +347,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         team_query = ""
         procedure_team_query = ""
         service_team_query = ""
+        service_graph_view_query = ""
         procedure_excalidraw_open_url = None
         service_excalidraw_open_url = None
         error_message = None
@@ -393,6 +394,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level="service",
                     )
+                    service_graph_view_query = service_team_query
                     team_query = procedure_team_query
                     procedure_excalidraw_open_url = diagram_base_url
                     service_excalidraw_open_url = diagram_base_url
@@ -470,6 +472,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_query": team_query,
                 "procedure_team_query": procedure_team_query,
                 "service_team_query": service_team_query,
+                "service_graph_view_query": service_graph_view_query,
                 "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
                 "service_excalidraw_open_url": service_excalidraw_open_url,
                 "error_message": error_message,
@@ -685,15 +688,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         try:
             index_data = load_index(context)
             if index_data is not None:
-                effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
-                if effective_excluded_ids:
-                    excluded_team_set = set(effective_excluded_ids)
-                    filtered_items = [
-                        item for item in index_data.items if item.team_id not in excluded_team_set
-                    ]
-                else:
-                    filtered_items = index_data.items
-                items = filter_items_by_team_ids(index_data.items, team_ids)
+                items, merge_scope_items = resolve_team_graph_items(
+                    index_data.items,
+                    team_ids=team_ids,
+                    excluded_team_ids=excluded_team_ids,
+                )
                 if items:
                     scene_payload = build_team_diagram_payload(
                         context,
@@ -703,7 +702,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                         merge_selected_markups=merge_selected_markups,
                         merge_node_min_chain_size=merge_node_min_chain_size,
                         graph_level=graph_level,
-                        merge_items=filtered_items if merge_nodes_all_markups else None,
+                        merge_items=merge_scope_items if merge_nodes_all_markups else None,
                         ui_language=localizer_for_request(request).language,
                     )
         except Exception:
@@ -833,15 +832,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
-        if effective_excluded_ids:
-            excluded_team_set = set(effective_excluded_ids)
-            filtered_items = [
-                item for item in index_data.items if item.team_id not in excluded_team_set
-            ]
-        else:
-            filtered_items = index_data.items
-        items = filter_items_by_team_ids(index_data.items, team_ids)
+        items, merge_scope_items = resolve_team_graph_items(
+            index_data.items,
+            team_ids=team_ids,
+            excluded_team_ids=excluded_team_ids,
+        )
         if not items:
             raise HTTPException(status_code=404, detail="No scenes for selected teams")
         payload = build_team_diagram_payload(
@@ -852,7 +847,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
-            merge_items=filtered_items if merge_nodes_all_markups else None,
+            merge_items=merge_scope_items if merge_nodes_all_markups else None,
             ui_language=localizer_for_request(request).language,
         )
         headers = {}
@@ -868,6 +863,41 @@ def create_app(settings: AppSettings) -> FastAPI:
             )
             headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         return ORJSONResponse(payload, headers=headers)
+
+    @app.get("/api/teams/graph-view")
+    def api_team_graph_view(
+        team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
+        graph_level: GraphLevel = Query(default="service"),
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        team_ids = normalize_team_ids(team_ids)
+        excluded_team_ids = normalize_team_ids(excluded_team_ids)
+        if not team_ids:
+            raise HTTPException(status_code=400, detail="team_ids is required")
+        index_data = load_index(context)
+        if index_data is None:
+            raise HTTPException(status_code=404, detail="Catalog index not found")
+        items, merge_scope_items = resolve_team_graph_items(
+            index_data.items,
+            team_ids=team_ids,
+            excluded_team_ids=excluded_team_ids,
+        )
+        if not items:
+            raise HTTPException(status_code=404, detail="No scenes for selected teams")
+        graph_document = build_team_graph_document(
+            context,
+            items,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            graph_level=graph_level,
+            merge_items=merge_scope_items if merge_nodes_all_markups else None,
+        )
+        return ORJSONResponse(extract_procedure_graph_view(graph_document))
 
     @app.get("/api/markup/{scene_id}")
     def api_markup(
@@ -1479,6 +1509,21 @@ def effective_excluded_team_ids(
         return excluded_team_ids
     selected_team_set = set(selected_team_ids)
     return [team_id for team_id in excluded_team_ids if team_id not in selected_team_set]
+
+
+def resolve_team_graph_items(
+    items: list[CatalogItem],
+    *,
+    team_ids: list[str],
+    excluded_team_ids: list[str],
+) -> tuple[list[CatalogItem], list[CatalogItem]]:
+    selected_items = filter_items_by_team_ids(items, team_ids)
+    effective_excluded_ids = effective_excluded_team_ids(excluded_team_ids, team_ids)
+    if not effective_excluded_ids:
+        return selected_items, items
+    excluded_team_set = set(effective_excluded_ids)
+    merge_scope_items = [item for item in items if item.team_id not in excluded_team_set]
+    return selected_items, merge_scope_items
 
 
 def filter_items_by_team_ids(items: list[CatalogItem], team_ids: list[str]) -> list[CatalogItem]:

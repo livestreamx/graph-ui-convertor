@@ -424,12 +424,12 @@ def test_service_graph_splits_multiple_procedures_by_service() -> None:
     name_lookup = {proc.procedure_id: proc.procedure_name for proc in merged.procedures}
     names = sorted(name for name in name_lookup.values() if name is not None)
     assert names == [
-        "[Alpha] [Услуга] Payments (Graph #1)",
-        "[Alpha] [Услуга] Payments (Graph #2)",
+        "[Услуга] Payments (Graph #1)",
+        "[Услуга] Payments (Graph #2)",
     ]
     by_name = {name: proc_id for proc_id, name in name_lookup.items()}
-    assert merged.procedure_graph[by_name["[Alpha] [Услуга] Payments (Graph #1)"]] == []
-    assert merged.procedure_graph[by_name["[Alpha] [Услуга] Payments (Graph #2)"]] == []
+    assert merged.procedure_graph[by_name["[Услуга] Payments (Graph #1)"]] == []
+    assert merged.procedure_graph[by_name["[Услуга] Payments (Graph #2)"]] == []
 
 
 def test_service_graph_node_sizes_scale_with_procedure_count() -> None:

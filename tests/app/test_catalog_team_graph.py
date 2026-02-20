@@ -97,6 +97,8 @@ def test_catalog_team_graph_api(
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
     add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+    add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
 
     config = CatalogIndexConfig(
         markup_dir=Path("markup"),
@@ -156,6 +158,22 @@ def test_catalog_team_graph_api(
             str(element.get("customData", {}).get("cjm", {}).get("role", "")).startswith("scenario")
             for element in service_elements
         )
+        service_graph_view = client_api.get(
+            "/api/teams/graph-view",
+            params={"team_ids": "team-1,team-2", "graph_level": "service"},
+        )
+        assert service_graph_view.status_code == 200
+        service_graph_view_nodes = service_graph_view.json()["nodes"]
+        assert len(service_graph_view_nodes) == 2
+        assert all(
+            isinstance(node.get("id"), str) and node["id"].startswith("service::")
+            for node in service_graph_view_nodes
+        )
+        assert all("procedure_count" in node for node in service_graph_view_nodes)
+        assert all("start_count" in node for node in service_graph_view_nodes)
+        assert all("branch_count" in node for node in service_graph_view_nodes)
+        assert all("end_count" in node for node in service_graph_view_nodes)
+        assert all("postpone_count" in node for node in service_graph_view_nodes)
 
         procedure_download = client_api.get(
             "/api/teams/graph",
@@ -211,6 +229,11 @@ def test_catalog_team_graph_api(
         assert "Step 5. Get diagram" in html_response.text
         assert "Procedure-level diagram" in html_response.text
         assert "Service-level diagram" in html_response.text
+        assert "Render graph" in html_response.text
+        assert 'id="render-team-service-graph"' in html_response.text
+        assert 'id="team-service-graph-show-reverse"' in html_response.text
+        assert "Show reverse links" in html_response.text
+        assert "/api/teams/graph-view?" in html_response.text
         assert "graph_level=service" in html_response.text
         assert "graph_level=procedure" not in html_response.text
         assert "Graphs info" in html_response.text
@@ -1204,6 +1227,82 @@ def test_catalog_team_graph_open_preserves_graph_level_in_scene_api_url(
         stubber.deactivate()
 
 
+def test_catalog_team_graph_service_graph_view_url_preserves_merge_settings(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = _load_fixture("basic.json")
+    payload_beta = _load_fixture("graphs_set.json")
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    for _ in range(4):
+        add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+        add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        response = client_api.get(
+            "/catalog/teams/graph",
+            params={
+                "team_ids": "team-alpha,team-beta",
+                "merge_nodes_all_markups": "true",
+                "merge_selected_markups": "true",
+                "merge_node_min_chain_size": "3",
+            },
+        )
+        assert response.status_code == 200
+        assert "/api/teams/graph-view?" in response.text
+        assert "merge_nodes_all_markups=true" in response.text
+        assert "merge_selected_markups=true" in response.text
+        assert "merge_node_min_chain_size=3" in response.text
+        assert "graph_level=service" in response.text
+    finally:
+        stubber.deactivate()
+
+
 def test_catalog_team_graph_selected_team_scene_keeps_merge_nodes_from_all_markups(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1789,6 +1888,148 @@ def test_catalog_team_graph_can_merge_selected_markups_by_flag(
             if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
         ]
         assert frame_ids == ["shared"]
+    finally:
+        stubber.deactivate()
+
+
+@pytest.mark.parametrize(
+    ("params", "expect_merged"),
+    [
+        ({"team_ids": "team-alpha,team-beta", "graph_level": "procedure"}, False),
+        (
+            {
+                "team_ids": "team-alpha,team-beta",
+                "graph_level": "procedure",
+                "merge_selected_markups": "true",
+            },
+            True,
+        ),
+        (
+            {
+                "team_ids": "team-alpha,team-beta",
+                "graph_level": "procedure",
+                "merge_selected_markups": "true",
+                "merge_node_min_chain_size": "0",
+            },
+            False,
+        ),
+    ],
+)
+def test_catalog_team_graph_view_matches_team_diagram_merge_logic(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+    params: dict[str, str],
+    expect_merged: bool,
+) -> None:
+    excalidraw_in_dir = tmp_path / "excalidraw_in"
+    excalidraw_out_dir = tmp_path / "excalidraw_out"
+    roundtrip_dir = tmp_path / "roundtrip"
+    index_path = tmp_path / "catalog" / "index.json"
+
+    excalidraw_in_dir.mkdir(parents=True)
+    excalidraw_out_dir.mkdir(parents=True)
+    roundtrip_dir.mkdir(parents=True)
+
+    payload_alpha = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Payments",
+            "team_id": "team-alpha",
+            "team_name": "Alpha",
+        },
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    payload_beta = {
+        "markup_type": "service",
+        "finedog_unit_meta": {
+            "service_name": "Loans",
+            "team_id": "team-beta",
+            "team_name": "Beta",
+        },
+        "procedures": [
+            {
+                "proc_id": "shared",
+                "proc_name": "Shared",
+                "start_block_ids": ["c"],
+                "end_block_ids": ["d"],
+                "branches": {"c": ["d"]},
+            }
+        ],
+        "procedure_graph": {"shared": []},
+    }
+    objects = {
+        "markup/alpha.json": payload_alpha,
+        "markup/beta.json": payload_beta,
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects=objects,
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=1,
+    )
+    for _ in range(16):
+        add_get_object(stubber, bucket="cjm-bucket", key="markup/beta.json", payload=payload_beta)
+        add_get_object(stubber, bucket="cjm-bucket", key="markup/alpha.json", payload=payload_alpha)
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_in_dir,
+        index_path=index_path,
+        group_by=["markup_type"],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+    try:
+        BuildCatalogIndex(
+            S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+            FileSystemCatalogIndexRepository(),
+        ).build(config)
+
+        settings = app_settings_factory(
+            excalidraw_in_dir=excalidraw_in_dir,
+            excalidraw_out_dir=excalidraw_out_dir,
+            roundtrip_dir=roundtrip_dir,
+            index_path=index_path,
+            excalidraw_base_url="http://example.com",
+        )
+        client_api = TestClient(create_app(settings))
+
+        diagram_response = client_api.get("/api/teams/graph", params=params)
+        assert diagram_response.status_code == 200
+        frame_ids = {
+            element.get("customData", {}).get("cjm", {}).get("procedure_id")
+            for element in diagram_response.json()["elements"]
+            if element.get("customData", {}).get("cjm", {}).get("role") == "frame"
+        }
+
+        graph_view_response = client_api.get("/api/teams/graph-view", params=params)
+        assert graph_view_response.status_code == 200
+        view_node_ids = {node.get("id") for node in graph_view_response.json()["nodes"]}
+
+        if expect_merged:
+            assert view_node_ids == {"shared"}
+            assert frame_ids == {"shared"}
+        else:
+            assert len(view_node_ids) == 2
+            assert all(
+                isinstance(node_id, str) and node_id.startswith("shared::doc")
+                for node_id in view_node_ids
+            )
+            assert frame_ids == view_node_ids
     finally:
         stubber.deactivate()
 

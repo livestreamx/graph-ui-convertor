@@ -16,8 +16,11 @@ def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
 
     nodes: list[dict[str, Any]] = []
     for procedure_id in sorted(adjacency):
-        stats = procedure_stats_by_id.get(procedure_id, {})
         procedure_meta = document.procedure_meta.get(procedure_id, {})
+        stats = _resolve_node_stats(
+            procedure_stats_by_id.get(procedure_id, {}),
+            procedure_meta,
+        )
         services = procedure_meta.get("services")
         merge_entity_count = len(services) if isinstance(services, list) else 0
         nodes.append(
@@ -31,8 +34,11 @@ def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
                 or procedure_id,
                 "is_merge_node": procedure_meta.get("is_intersection") is True,
                 "merge_entity_count": merge_entity_count,
+                "procedure_count": _as_int(stats.get("procedure_count")),
                 "start_count": _as_int(stats.get("start_count")),
                 "branch_count": _as_int(stats.get("branch_count")),
+                "end_count": _as_int(stats.get("end_count")),
+                "postpone_count": _as_int(stats.get("postpone_count")),
                 "end_type_counts": _as_end_type_counts(stats.get("end_type_counts")),
             }
         )
@@ -80,12 +86,71 @@ def _build_procedure_stats(document: MarkupDocument) -> dict[str, dict[str, obje
         for block_id in procedure.end_block_ids:
             end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
             end_type_counts[end_type] = end_type_counts.get(end_type, 0) + 1
+        postpone_count = _as_int(end_type_counts.get("postpone", 0))
+        total_end_count = sum(end_type_counts.values())
         stats[procedure.procedure_id] = {
+            "procedure_count": 1,
             "start_count": start_count,
             "branch_count": branch_count,
+            "end_count": max(0, total_end_count - postpone_count),
+            "postpone_count": postpone_count,
             "end_type_counts": dict(sorted(end_type_counts.items())),
         }
     return stats
+
+
+def _resolve_node_stats(
+    base_stats: Mapping[str, object],
+    procedure_meta: Mapping[str, object],
+) -> dict[str, object]:
+    procedure_count = _as_int(base_stats.get("procedure_count")) or 1
+    start_count = _as_int(base_stats.get("start_count"))
+    branch_count = _as_int(base_stats.get("branch_count"))
+    end_count = _as_int(base_stats.get("end_count"))
+    postpone_count = _as_int(base_stats.get("postpone_count"))
+    end_type_counts = _as_end_type_counts(base_stats.get("end_type_counts"))
+
+    graph_stats = procedure_meta.get("graph_stats")
+    if not isinstance(graph_stats, Mapping):
+        return {
+            "procedure_count": procedure_count,
+            "start_count": start_count,
+            "branch_count": branch_count,
+            "end_count": end_count,
+            "postpone_count": postpone_count,
+            "end_type_counts": end_type_counts,
+        }
+
+    meta_procedure_count = _as_int(procedure_meta.get("procedure_count"))
+    if meta_procedure_count > 0:
+        procedure_count = meta_procedure_count
+
+    if start_count <= 0:
+        start_count = _as_int(graph_stats.get("start"))
+    if branch_count <= 0:
+        branch_count = _as_int(graph_stats.get("branch"))
+
+    postpone_from_end_types = _as_int(end_type_counts.get("postpone", 0))
+    end_from_end_types = max(0, sum(end_type_counts.values()) - postpone_from_end_types)
+
+    if end_count <= 0:
+        end_count = end_from_end_types
+    if postpone_count <= 0:
+        postpone_count = postpone_from_end_types
+
+    if end_count <= 0:
+        end_count = _as_int(graph_stats.get("end"))
+    if postpone_count <= 0:
+        postpone_count = _as_int(graph_stats.get("postpone"))
+
+    return {
+        "procedure_count": procedure_count,
+        "start_count": start_count,
+        "branch_count": branch_count,
+        "end_count": end_count,
+        "postpone_count": postpone_count,
+        "end_type_counts": end_type_counts,
+    }
 
 
 def _normalize_adjacency(

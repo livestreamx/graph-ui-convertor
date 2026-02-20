@@ -968,6 +968,15 @@ class BuildTeamProcedureGraph:
         service_graph_total: dict[str, int] = {
             key: len(nodes) for key, nodes in service_nodes_by_key.items()
         }
+        team_scope_tokens: set[str] = set()
+        for payload in service_nodes.values():
+            raw_team_id = payload.get("team_id")
+            if isinstance(raw_team_id, str | int):
+                team_scope_tokens.add(f"id:{str(raw_team_id).strip().lower()}")
+                continue
+            raw_team_name = str(payload.get("team_name") or "").strip() or "unknown team"
+            team_scope_tokens.add(f"name:{raw_team_name.lower()}")
+        show_team_prefix = len(team_scope_tokens) > 1
         service_procedures: list[Procedure] = []
         service_meta: dict[str, dict[str, object]] = {}
         for service_node_id in service_node_order:
@@ -980,7 +989,10 @@ class BuildTeamProcedureGraph:
             current_index = service_graph_index.get(service_key, 0) + 1
             service_graph_index[service_key] = current_index
             total_graphs = service_graph_total.get(service_key, 1)
-            label = f"[{team_name}] [{display_markup_type}] {service_name}"
+            if show_team_prefix:
+                label = f"[{team_name}] [{display_markup_type}] {service_name}"
+            else:
+                label = f"[{display_markup_type}] {service_name}"
             if total_graphs > 1:
                 label = f"{label} (Graph #{current_index})"
             color = service_colors.get(service_key, _SERVICE_COLORS[0])
