@@ -38,7 +38,7 @@ from app.web_i18n import (
     set_active_ui_language,
     translate_humanized_text,
 )
-from domain.catalog import CatalogIndex, CatalogItem
+from domain.catalog import CatalogIndex, CatalogIndexConfig, CatalogItem
 from domain.models import ExcalidrawDocument, MarkupDocument, Size, UnidrawDocument
 from domain.ports.repositories import MarkupRepository
 from domain.services.build_catalog_index import BuildCatalogIndex
@@ -99,6 +99,11 @@ class CatalogContext:
     to_procedure_graph_excalidraw: ProcedureGraphToExcalidrawConverter
     to_procedure_graph_unidraw: ProcedureGraphToUnidrawConverter
     link_templates: ExcalidrawLinkTemplates | None
+
+
+@dataclass
+class CatalogRefreshState:
+    last_source_fingerprint: str | None = None
 
 
 def create_app(settings: AppSettings) -> FastAPI:
@@ -1022,6 +1027,7 @@ async def run_catalog_index_refresh_loop(
     interval_seconds: float,
     stop_event: asyncio.Event,
 ) -> None:
+    refresh_state = CatalogRefreshState()
     while True:
         try:
             await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
@@ -1029,10 +1035,45 @@ async def run_catalog_index_refresh_loop(
                 return
         except TimeoutError:
             pass
+        refresh_catalog_index_if_needed(context, refresh_state)
+
+
+def refresh_catalog_index_if_needed(
+    context: CatalogContext,
+    state: CatalogRefreshState,
+) -> None:
+    config = context.settings.catalog.to_index_config()
+    if state.last_source_fingerprint is None:
         try:
-            context.index_builder.build(context.settings.catalog.to_index_config())
+            context.index_builder.build(config)
         except Exception:
             logger.exception("Periodic catalog index refresh failed.")
+            return
+        state.last_source_fingerprint = read_catalog_source_fingerprint(context, config)
+        return
+    current_fingerprint = read_catalog_source_fingerprint(context, config)
+    if current_fingerprint is not None and current_fingerprint == state.last_source_fingerprint:
+        return
+    try:
+        context.index_builder.build(config)
+    except Exception:
+        logger.exception("Periodic catalog index refresh failed.")
+        return
+    if current_fingerprint is not None:
+        state.last_source_fingerprint = current_fingerprint
+        return
+    state.last_source_fingerprint = read_catalog_source_fingerprint(context, config)
+
+
+def read_catalog_source_fingerprint(
+    context: CatalogContext,
+    config: CatalogIndexConfig,
+) -> str | None:
+    try:
+        return context.index_builder.source_fingerprint(config)
+    except Exception:
+        logger.exception("Catalog source fingerprint read failed.")
+        return None
 
 
 def get_context(request: Request) -> CatalogContext:

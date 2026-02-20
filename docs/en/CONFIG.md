@@ -27,7 +27,7 @@ catalog:
   index_path: "data/catalog/index.json"
   auto_build_index: true
   rebuild_index_on_start: false
-  index_refresh_interval_seconds: 0
+  index_refresh_interval_seconds: 300
   generate_excalidraw_on_demand: true
   cache_excalidraw_on_demand: true
   invalidate_excalidraw_cache_on_start: true
@@ -67,7 +67,7 @@ catalog:
 - `auto_build_index`: Build the catalog index on startup if it is missing.
 - `rebuild_index_on_start`: Force rebuilding the catalog index on startup (useful for S3).
 - `index_refresh_interval_seconds`: Periodic catalog index rebuild interval in seconds. Set to `0`
-  to disable background refresh.
+  to disable background refresh. Default is `300` (5 minutes).
 - `diagram_excalidraw_enabled`: Controls whether the `Open Excalidraw` button is shown in UI.
 - `generate_excalidraw_on_demand`: Generate scenes from markup when a diagram file is missing.
 - `cache_excalidraw_on_demand`: Persist generated scenes into the active `*_in_dir` for reuse.

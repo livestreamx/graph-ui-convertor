@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 from botocore.stub import Stubber  # type: ignore[import-untyped]
 from fastapi.testclient import TestClient
 
 from app.config import AppSettings
-from app.web_main import create_app
+from app.web_main import CatalogRefreshState, create_app, refresh_catalog_index_if_needed
 from tests.adapters.s3.s3_utils import add_get_object, add_list_objects, create_stubbed_client
 
 
@@ -100,3 +102,53 @@ def test_catalog_rebuilds_index_periodically_from_s3(
             assert refreshed_count == 2
     finally:
         stubber.deactivate()
+
+
+@dataclass
+class _FakeBuilder:
+    builds: int = 0
+    fingerprints: list[str | None] | None = None
+
+    def build(self, config: object) -> None:
+        self.builds += 1
+
+    def source_fingerprint(self, config: object) -> str:
+        assert self.fingerprints is not None
+        if self.fingerprints:
+            value = self.fingerprints.pop(0)
+        else:
+            value = None
+        if value is None:
+            raise RuntimeError("fingerprint unavailable")
+        return value
+
+
+@dataclass
+class _FakeCatalog:
+    def to_index_config(self) -> object:
+        return object()
+
+
+@dataclass
+class _FakeSettings:
+    catalog: _FakeCatalog
+
+
+@dataclass
+class _FakeContext:
+    settings: _FakeSettings
+    index_builder: _FakeBuilder
+
+
+def test_refresh_skips_rebuild_when_s3_fingerprint_unchanged() -> None:
+    builder = _FakeBuilder(fingerprints=["fp-1", "fp-1"])
+    context = _FakeContext(
+        settings=_FakeSettings(catalog=_FakeCatalog()),
+        index_builder=builder,
+    )
+    state = CatalogRefreshState()
+
+    refresh_catalog_index_if_needed(cast(Any, context), state)
+    refresh_catalog_index_if_needed(cast(Any, context), state)
+
+    assert builder.builds == 1

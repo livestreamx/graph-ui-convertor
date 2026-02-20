@@ -41,6 +41,9 @@ class BuildCatalogIndex:
         self._index_repo.save(index, config.index_path)
         return index
 
+    def source_fingerprint(self, config: CatalogIndexConfig) -> str:
+        return self._source.fingerprint(config.markup_dir)
+
     def _build_item(self, entry: MarkupSourceItem, config: CatalogIndexConfig) -> CatalogItem:
         raw = entry.raw
         document = entry.document

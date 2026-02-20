@@ -47,3 +47,59 @@ def test_s3_markup_catalog_source_loads_items() -> None:
     assert items[0].path == Path("markup/billing.json")
     assert items[0].document.markup_type == "service"
     assert items[0].updated_at == last_modified
+
+
+def test_s3_markup_catalog_source_fingerprint_uses_object_list_metadata() -> None:
+    client = boto3.client("s3", region_name="us-east-1")
+    stubber = Stubber(client)
+
+    last_modified = datetime(2024, 1, 1, tzinfo=UTC)
+    list_response_initial = {
+        "IsTruncated": False,
+        "Contents": [
+            {
+                "Key": "markup/billing.json",
+                "LastModified": last_modified,
+                "Size": 123,
+                "ETag": '"etag-1"',
+            }
+        ],
+    }
+    list_response_changed = {
+        "IsTruncated": False,
+        "Contents": [
+            {
+                "Key": "markup/billing.json",
+                "LastModified": last_modified,
+                "Size": 124,
+                "ETag": '"etag-2"',
+            }
+        ],
+    }
+    stubber.add_response(
+        "list_objects_v2",
+        list_response_initial,
+        {"Bucket": "cjm-bucket", "Prefix": "markup/"},
+    )
+    stubber.add_response(
+        "list_objects_v2",
+        list_response_initial,
+        {"Bucket": "cjm-bucket", "Prefix": "markup/"},
+    )
+    stubber.add_response(
+        "list_objects_v2",
+        list_response_changed,
+        {"Bucket": "cjm-bucket", "Prefix": "markup/"},
+    )
+
+    stubber.activate()
+    try:
+        source = S3MarkupCatalogSource(client, "cjm-bucket", "markup/")
+        fingerprint_1 = source.fingerprint(Path("markup"))
+        fingerprint_2 = source.fingerprint(Path("markup"))
+        fingerprint_3 = source.fingerprint(Path("markup"))
+    finally:
+        stubber.deactivate()
+
+    assert fingerprint_1 == fingerprint_2
+    assert fingerprint_1 != fingerprint_3

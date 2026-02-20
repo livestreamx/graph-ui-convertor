@@ -18,7 +18,7 @@ catalog:
   index_path: "/data/catalog/index.json"
   auto_build_index: true
   rebuild_index_on_start: false
-  index_refresh_interval_seconds: 30
+  index_refresh_interval_seconds: 300
   generate_excalidraw_on_demand: true
   cache_excalidraw_on_demand: true
   group_by:

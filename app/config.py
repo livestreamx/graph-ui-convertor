@@ -76,7 +76,7 @@ class CatalogSettings(BaseModel):
     index_path: Path = Path("data/catalog/index.json")
     auto_build_index: bool = True
     rebuild_index_on_start: bool = False
-    index_refresh_interval_seconds: float = 0.0
+    index_refresh_interval_seconds: float = 300.0
     generate_excalidraw_on_demand: bool = True
     cache_excalidraw_on_demand: bool = True
     invalidate_excalidraw_cache_on_start: bool = True
