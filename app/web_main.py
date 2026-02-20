@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -68,6 +70,7 @@ TEMPLATES_DIR = Path(__file__).parent / "web" / "templates"
 STATIC_DIR = Path(__file__).parent / "web" / "static"
 
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+logger = logging.getLogger(__name__)
 
 SceneFormat = Literal["excalidraw", "unidraw"]
 
@@ -104,6 +107,8 @@ def create_app(settings: AppSettings) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
+        refresh_task: asyncio.Task[None] | None = None
+        refresh_stop = asyncio.Event()
         invalidate_scene_cache(context)
         if settings.catalog.auto_build_index:
             if settings.catalog.rebuild_index_on_start:
@@ -113,7 +118,15 @@ def create_app(settings: AppSettings) -> FastAPI:
                     index_repo.load(settings.catalog.index_path)
                 except FileNotFoundError:
                     context.index_builder.build(settings.catalog.to_index_config())
+            refresh_interval = settings.catalog.index_refresh_interval_seconds
+            if refresh_interval > 0:
+                refresh_task = asyncio.create_task(
+                    run_catalog_index_refresh_loop(context, refresh_interval, refresh_stop)
+                )
         yield
+        if refresh_task is not None:
+            refresh_stop.set()
+            await refresh_task
 
     app = FastAPI(title=settings.catalog.title, lifespan=lifespan)
 
@@ -1002,6 +1015,24 @@ def create_app(settings: AppSettings) -> FastAPI:
                 return await forward_upstream(request, upstream, request.url.path.lstrip("/"))
 
     return app
+
+
+async def run_catalog_index_refresh_loop(
+    context: CatalogContext,
+    interval_seconds: float,
+    stop_event: asyncio.Event,
+) -> None:
+    while True:
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
+            if stop_event.is_set():
+                return
+        except TimeoutError:
+            pass
+        try:
+            context.index_builder.build(context.settings.catalog.to_index_config())
+        except Exception:
+            logger.exception("Periodic catalog index refresh failed.")
 
 
 def get_context(request: Request) -> CatalogContext:

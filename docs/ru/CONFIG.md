@@ -27,6 +27,7 @@ catalog:
   index_path: "data/catalog/index.json"
   auto_build_index: true
   rebuild_index_on_start: false
+  index_refresh_interval_seconds: 0
   generate_excalidraw_on_demand: true
   cache_excalidraw_on_demand: true
   invalidate_excalidraw_cache_on_start: true
@@ -64,6 +65,8 @@ catalog:
   `endpoint_url` + `use_path_style: true`. Префикс также влияет на вычисление относительных путей в индексе.
 - `auto_build_index`: строить индекс каталога при старте, если он отсутствует.
 - `rebuild_index_on_start`: принудительная пересборка индекса при старте (полезно для S3).
+- `index_refresh_interval_seconds`: интервал фоновой пересборки индекса каталога в секундах.
+  Значение `0` отключает периодическое обновление.
 - `diagram_excalidraw_enabled`: управляет показом кнопки `Open Excalidraw` в UI.
 - `generate_excalidraw_on_demand`: генерировать сцены из markup, если файл диаграммы отсутствует.
 - `cache_excalidraw_on_demand`: сохранять сгенерированные сцены в активную `*_in_dir`.
