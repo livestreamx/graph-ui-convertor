@@ -81,6 +81,8 @@ catalog:
   `finedog_unit_meta` keys are shown in the catalog metadata panel.
 - `sort_by`: Can be `title`, `updated_at`, `markup_type`, `finedog_unit_id`, or any configured field.
 - Catalog index items include `updated_at`.
+- Catalog index `scene_id` is built from `finedog_unit_id` when present (stable across rebuilds).
+  If `finedog_unit_id` is missing, the app uses legacy `<file-stem>-<payload-hash10>` fallback.
 - `unknown_value`: Placeholder when a field is missing.
 - `ui_text_overrides`: Optional mapping used to replace raw field keys/values in the Catalog UI.
   When set via environment variables, pass a JSON object.
