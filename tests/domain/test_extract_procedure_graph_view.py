@@ -108,3 +108,37 @@ def test_extract_procedure_graph_view_adds_nodes_from_adjacency() -> None:
     assert edges[0]["target"] == "p2"
     assert edges[0]["is_cycle"] is False
     assert edges[0]["edge_type"] == "procedure_graph"
+
+
+def test_extract_procedure_graph_view_uses_service_graph_stats_from_meta() -> None:
+    payload = {
+        "markup_type": "service_graph",
+        "procedures": [
+            {
+                "proc_id": "svc::payments::1",
+                "proc_name": "[Услуга] Payments",
+                "start_block_ids": [],
+                "end_block_ids": [],
+                "branches": {},
+            }
+        ],
+        "procedure_graph": {"svc::payments::1": []},
+        "procedure_meta": {
+            "svc::payments::1": {
+                "team_name": "Alpha",
+                "service_name": "Payments",
+                "procedure_count": 4,
+                "graph_stats": {"start": 3, "branch": 5, "end": 2, "postpone": 1},
+            }
+        },
+    }
+    document = MarkupDocument.model_validate(payload)
+
+    graph_payload = extract_procedure_graph_view(document)
+    node = graph_payload["nodes"][0]
+
+    assert node["procedure_count"] == 4
+    assert node["start_count"] == 3
+    assert node["branch_count"] == 5
+    assert node["end_count"] == 2
+    assert node["postpone_count"] == 1

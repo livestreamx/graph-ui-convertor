@@ -570,6 +570,8 @@
         const textStarts = {{ t("Starts") | tojson }};
         const textBranches = {{ t("Branches") | tojson }};
         const textEndBlocks = {{ t("End blocks") | tojson }};
+        const textNestingLevel = {{ t("Nesting level") | tojson }};
+        const textUnreachable = {{ t("not reachable from start") | tojson }};
         const textNone = {{ t("none") | tojson }};
         const textYes = {{ t("yes") | tojson }};
         const textNo = {{ t("no") | tojson }};
@@ -682,15 +684,65 @@
 
         const isReverseEdge = (edge) => String(edge.edge_type || "").endsWith("_cycle");
 
+        const buildDepthMap = (rawNodes, rawEdges) => {
+          const adjacency = new Map();
+          const inDegree = new Map();
+          rawNodes.forEach((node) => {
+            const nodeId = String(node.id);
+            adjacency.set(nodeId, []);
+            inDegree.set(nodeId, 0);
+          });
+          rawEdges.forEach((edge) => {
+            const source = String(edge.source);
+            const target = String(edge.target);
+            if (!adjacency.has(source) || !adjacency.has(target)) {
+              return;
+            }
+            adjacency.get(source).push(target);
+            inDegree.set(target, (inDegree.get(target) || 0) + 1);
+          });
+
+          const startNodes = [];
+          inDegree.forEach((value, key) => {
+            if (value === 0) {
+              startNodes.push(key);
+            }
+          });
+          const depthByNode = new Map();
+          const queue = [];
+          startNodes.forEach((nodeId) => {
+            depthByNode.set(nodeId, 0);
+            queue.push(nodeId);
+          });
+
+          while (queue.length) {
+            const current = queue.shift();
+            const baseDepth = depthByNode.get(current);
+            if (typeof baseDepth !== "number") {
+              continue;
+            }
+            const nextNodes = adjacency.get(current) || [];
+            nextNodes.forEach((nextId) => {
+              const nextDepth = baseDepth + 1;
+              const seenDepth = depthByNode.get(nextId);
+              if (typeof seenDepth !== "number" || nextDepth < seenDepth) {
+                depthByNode.set(nextId, nextDepth);
+                queue.push(nextId);
+              }
+            });
+          }
+          return depthByNode;
+        };
+
         const formatEndTypeCounts = (counts) => {
           if (!counts || typeof counts !== "object") {
-            return textNone;
+            return "0";
           }
           const parts = Object.entries(counts)
             .filter(([, count]) => Number.isFinite(Number(count)) && Number(count) > 0)
             .sort(([left], [right]) => String(left).localeCompare(String(right)))
             .map(([endType, count]) => `${String(endType)}=${Number(count)}`);
-          return parts.length ? parts.join(", ") : textNone;
+          return parts.length ? parts.join(", ") : "0";
         };
 
         const renderGraph = (graphPayload) => {
@@ -719,6 +771,7 @@
           const visibleEdges = showReverseToggle.checked
             ? decoratedEdges
             : decoratedEdges.filter((edge) => edge.__isReverse !== true);
+          const depthByNode = buildDepthMap(rawNodes, visibleEdges);
 
           const nodes = rawNodes.map((node) => {
             const procedureId = String(node.procedure_id || node.id || "");
@@ -727,6 +780,9 @@
             const isMergeNode = node.is_merge_node === true;
             const starts = Number(node.start_count || 0);
             const branches = Number(node.branch_count || 0);
+            const nodeDepth = depthByNode.get(String(node.id));
+            const depthLabel =
+              typeof nodeDepth === "number" ? String(nodeDepth) : textUnreachable;
             const background = isMergeNode ? "#ffd6d6" : nodeColor(teamName, serviceName);
             return {
               id: String(node.id),
@@ -736,7 +792,8 @@
                 `${textPotentialMergeNode}: ${isMergeNode ? textYes : textNo}\n` +
                 `${textStarts}: ${starts}\n` +
                 `${textBranches}: ${branches}\n` +
-                `${textEndBlocks}: ${formatEndTypeCounts(node.end_type_counts)}`,
+                `${textEndBlocks}: ${formatEndTypeCounts(node.end_type_counts)}\n` +
+                `${textNestingLevel}: ${depthLabel}`,
               shape: "box",
               margin: 8,
               borderWidth: isMergeNode ? 2 : 1,

@@ -75,6 +75,8 @@ def test_catalog_detail_shows_dual_download_buttons_by_default(
         assert f"/api/scenes/{context.scene_id}/procedure-graph-view" in detail_response.text
         assert "service-graph-modal" in detail_response.text
         assert "procedure-graph-modal" in detail_response.text
+        assert "const formatEndTypeCounts = (counts) => {" in detail_response.text
+        assert 'return "0";' in detail_response.text
         assert "Open Excalidraw" in detail_response.text
         assert "Download .excalidraw" in detail_response.text
         assert "Download .unidraw" in detail_response.text

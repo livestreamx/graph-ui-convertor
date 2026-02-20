@@ -1392,6 +1392,14 @@
               {{ t("High-level service map: service nodes aggregate all selected service graphs.") }}
             </p>
             <div class="button-row">
+              <button
+                class="ghost-button render-graph-button"
+                type="button"
+                id="render-team-service-graph"
+                data-graph-api-url="{{ ("/api/teams/graph-view?" ~ service_graph_view_query) if service_graph_view_query else '' }}"
+              >
+                {{ t("Render graph") }}
+              </button>
               {% if diagram_excalidraw_enabled %}
                 <a class="primary-button" target="_blank" href="{{ service_excalidraw_open_url }}">
                   {{ t("Open Excalidraw") }}
@@ -1410,6 +1418,36 @@
         <p class="team-graph-subtitle">{{ t("Merge graphs in Step 3 to enable diagram actions.") }}</p>
       {% endif %}
     </div>
+
+    {% if diagram_ready and service_graph_view_query %}
+    <div class="service-graph-modal" id="team-service-graph-modal" hidden>
+      <div class="service-graph-backdrop" id="team-service-graph-backdrop"></div>
+      <section
+        class="service-graph-sheet"
+        role="dialog"
+        aria-modal="true"
+        aria-label="{{ t("Service graph") }}"
+      >
+        <header class="service-graph-toolbar">
+          <h3 class="service-graph-title">{{ t("Service graph") }}</h3>
+          <div class="button-row service-graph-actions">
+            <button class="ghost-button" type="button" id="team-service-graph-fit">{{ t("Fit graph") }}</button>
+            <button class="ghost-button" type="button" id="team-service-graph-close">{{ t("Close") }}</button>
+          </div>
+        </header>
+        <div class="service-graph-status-row">
+          <p class="note service-graph-status" id="team-service-graph-status">
+            {{ t("Press Render graph to load service graph.") }}
+          </p>
+          <label class="service-graph-toggle" for="team-service-graph-show-reverse">
+            <input id="team-service-graph-show-reverse" type="checkbox" checked />
+            <span>{{ t("Show reverse links") }}</span>
+          </label>
+        </div>
+        <div class="service-graph-canvas" id="team-service-graph-canvas"></div>
+      </section>
+    </div>
+    {% endif %}
   </section>
 
   <script>
@@ -1430,6 +1468,23 @@
         showMoreTeamsTemplate: {{ t("Show {count} more teams", count="__COUNT__") | tojson }},
         clickToCollapse: {{ t("Click to collapse") | tojson }},
         clickToExpand: {{ t("Click to expand") | tojson }},
+        serviceGraphLoading: {{ t("Loading graph...") | tojson }},
+        serviceGraphLoadFailed: {{ t("Failed to load graph data.") | tojson }},
+        serviceGraphLibraryFailed: {{ t("Graph library did not load. Refresh the page and retry.") | tojson }},
+        serviceGraphEmpty: {{ t("No service-level data.") | tojson }},
+        serviceGraphRendered: {{ t("Rendered {nodes} nodes and {edges} edges.") | tojson }},
+        reason: {{ t("Reason") | tojson }},
+        procedure: {{ t("Procedure") | tojson }},
+        team: {{ t("Team") | tojson }},
+        entity: {{ t("Entity") | tojson }},
+        procedures: {{ t("Procedures") | tojson }},
+        starts: {{ t("Starts") | tojson }},
+        branches: {{ t("Branches") | tojson }},
+        endBlocks: {{ t("End blocks") | tojson }},
+        postpones: {{ t("Postpones") | tojson }},
+        nestingLevel: {{ t("Nesting level") | tojson }},
+        unreachableFromStart: {{ t("not reachable from start") | tojson }},
+        mergeNode: {{ t("Merge node") | tojson }},
       };
 
       const updateToggle = (button, input) => {
@@ -1448,7 +1503,37 @@
         }
       };
 
-        const initTeamGraphPage = () => {
+      let visNetworkLoadPromise = null;
+      const ensureVisNetworkLoaded = async () => {
+        const visLib = window.vis;
+        if (
+          visLib &&
+          typeof visLib.Network === "function" &&
+          typeof visLib.DataSet === "function"
+        ) {
+          return visLib;
+        }
+        if (!visNetworkLoadPromise) {
+          visNetworkLoadPromise = new Promise((resolve, reject) => {
+            const existingScript = document.querySelector('script[data-service-graph-lib="vis-network"]');
+            if (existingScript instanceof HTMLScriptElement) {
+              existingScript.addEventListener("load", () => resolve(window.vis), { once: true });
+              existingScript.addEventListener("error", () => reject(new Error("vis-network load error")), { once: true });
+              return;
+            }
+            const script = document.createElement("script");
+            script.src = "https://unpkg.com/vis-network/standalone/umd/vis-network.min.js";
+            script.async = true;
+            script.dataset.serviceGraphLib = "vis-network";
+            script.addEventListener("load", () => resolve(window.vis), { once: true });
+            script.addEventListener("error", () => reject(new Error("vis-network load error")), { once: true });
+            document.head.appendChild(script);
+          });
+        }
+        return visNetworkLoadPromise;
+      };
+
+      const initTeamGraphPage = () => {
         const page = document.getElementById("team-graph-page");
         if (!(page instanceof HTMLElement) || page.dataset.initialized === "true") {
           return;
@@ -1591,6 +1676,264 @@
           mergeThresholdInput.addEventListener("change", syncMergeThreshold);
           syncMergeThreshold();
         }
+
+        const setupServiceGraphModal = () => {
+          const openButton = page.querySelector("#render-team-service-graph");
+          const modal = page.querySelector("#team-service-graph-modal");
+          const closeButton = page.querySelector("#team-service-graph-close");
+          const fitButton = page.querySelector("#team-service-graph-fit");
+          const backdrop = page.querySelector("#team-service-graph-backdrop");
+          const canvas = page.querySelector("#team-service-graph-canvas");
+          const status = page.querySelector("#team-service-graph-status");
+          const showReverseToggle = page.querySelector("#team-service-graph-show-reverse");
+          if (
+            !(openButton instanceof HTMLButtonElement) ||
+            !(modal instanceof HTMLElement) ||
+            !(closeButton instanceof HTMLButtonElement) ||
+            !(fitButton instanceof HTMLButtonElement) ||
+            !(backdrop instanceof HTMLElement) ||
+            !(canvas instanceof HTMLElement) ||
+            !(status instanceof HTMLElement) ||
+            !(showReverseToggle instanceof HTMLInputElement)
+          ) {
+            return;
+          }
+          const graphApiUrl = (openButton.dataset.graphApiUrl || "").trim();
+          if (!graphApiUrl) {
+            return;
+          }
+
+          let network = null;
+          let cachedGraph = null;
+          const setStatus = (message, isError = false) => {
+            status.textContent = message;
+            status.classList.toggle("is-error", isError);
+          };
+          const formatRendered = (nodesCount, edgesCount) =>
+            I18N.serviceGraphRendered
+              .replace("{nodes}", String(nodesCount))
+              .replace("{edges}", String(edgesCount));
+          const closeModal = () => {
+            modal.hidden = true;
+            document.body.classList.remove("service-graph-open");
+          };
+          const openModal = () => {
+            modal.hidden = false;
+            document.body.classList.add("service-graph-open");
+          };
+          const isReverseEdge = (edge) => String(edge?.edge_type || "").endsWith("_cycle");
+          const buildDepthMap = (rawNodes, rawEdges) => {
+            const adjacency = new Map();
+            const inDegree = new Map();
+            rawNodes.forEach((node) => {
+              const nodeId = String(node.id);
+              adjacency.set(nodeId, []);
+              inDegree.set(nodeId, 0);
+            });
+            rawEdges.forEach((edge) => {
+              const source = String(edge.source);
+              const target = String(edge.target);
+              if (!adjacency.has(source) || !adjacency.has(target)) {
+                return;
+              }
+              adjacency.get(source).push(target);
+              inDegree.set(target, (inDegree.get(target) || 0) + 1);
+            });
+
+            const startNodes = [];
+            inDegree.forEach((value, key) => {
+              if (value === 0) {
+                startNodes.push(key);
+              }
+            });
+            const depthByNode = new Map();
+            const queue = [];
+            startNodes.forEach((nodeId) => {
+              depthByNode.set(nodeId, 0);
+              queue.push(nodeId);
+            });
+            while (queue.length) {
+              const current = queue.shift();
+              const baseDepth = depthByNode.get(current);
+              if (typeof baseDepth !== "number") {
+                continue;
+              }
+              const nextNodes = adjacency.get(current) || [];
+              nextNodes.forEach((nextId) => {
+                const nextDepth = baseDepth + 1;
+                const seenDepth = depthByNode.get(nextId);
+                if (typeof seenDepth !== "number" || nextDepth < seenDepth) {
+                  depthByNode.set(nextId, nextDepth);
+                  queue.push(nextId);
+                }
+              });
+            }
+            return depthByNode;
+          };
+          const countFrom = (value, fallback = 0) => {
+            const parsed = Number(value);
+            if (!Number.isFinite(parsed)) {
+              return fallback;
+            }
+            return Math.max(0, Math.round(parsed));
+          };
+          const renderGraph = (visLib, graphPayload) => {
+            const rawNodes = Array.isArray(graphPayload?.nodes) ? graphPayload.nodes : [];
+            const rawEdges = Array.isArray(graphPayload?.edges) ? graphPayload.edges : [];
+            if (!rawNodes.length) {
+              setStatus(I18N.serviceGraphEmpty);
+              if (network) {
+                network.setData({ nodes: [], edges: [] });
+              }
+              return;
+            }
+
+            const decoratedEdges = rawEdges.map((edge) => ({
+              ...edge,
+              __isReverse: isReverseEdge(edge),
+            }));
+            const visibleEdges = showReverseToggle.checked
+              ? decoratedEdges
+              : decoratedEdges.filter((edge) => edge.__isReverse !== true);
+            const depthByNode = buildDepthMap(rawNodes, visibleEdges);
+
+            const nodes = rawNodes.map((node) => {
+              const label = String(node?.label || node?.procedure_id || node?.id || "");
+              const isMergeNode = node?.is_merge_node === true;
+              const tooltipParts = [label];
+              const endTypeCounts =
+                node?.end_type_counts && typeof node.end_type_counts === "object"
+                  ? node.end_type_counts
+                  : {};
+              const postponeFromEndTypes = countFrom(endTypeCounts?.postpone, 0);
+              const endFromEndTypes = Object.values(endTypeCounts).reduce(
+                (total, rawCount) => total + countFrom(rawCount, 0),
+                0,
+              ) - postponeFromEndTypes;
+              const procedureCount = countFrom(node?.procedure_count, 1);
+              const startCount = countFrom(node?.start_count, 0);
+              const branchCount = countFrom(node?.branch_count, 0);
+              const endCount = countFrom(node?.end_count, Math.max(0, endFromEndTypes));
+              const postponeCount = countFrom(node?.postpone_count, postponeFromEndTypes);
+              const nodeDepth = depthByNode.get(String(node?.id || ""));
+              const depthLabel =
+                typeof nodeDepth === "number" ? String(nodeDepth) : I18N.unreachableFromStart;
+              tooltipParts.push(`${I18N.procedures}: ${procedureCount}`);
+              tooltipParts.push(`${I18N.starts}: ${startCount}`);
+              tooltipParts.push(`${I18N.branches}: ${branchCount}`);
+              tooltipParts.push(`${I18N.endBlocks}: ${endCount}`);
+              tooltipParts.push(`${I18N.postpones}: ${postponeCount}`);
+              tooltipParts.push(`${I18N.nestingLevel}: ${depthLabel}`);
+              if (isMergeNode) {
+                tooltipParts.push(I18N.mergeNode);
+              }
+              return {
+                id: String(node?.id || ""),
+                label,
+                title: tooltipParts.join("\n"),
+                shape: "box",
+                margin: 12,
+                font: { face: "Space Grotesk", size: 13 },
+                color: isMergeNode
+                  ? { background: "#ffd6d6", border: "#ff8080" }
+                  : { background: "#d9f5ff", border: "#5fa8d3" },
+              };
+            });
+            const edges = visibleEdges.map((edge) => ({
+              id: String(edge?.id || ""),
+              from: String(edge?.source || ""),
+              to: String(edge?.target || ""),
+              arrows: "to",
+              dashes: edge?.is_cycle === true || edge?.__isReverse === true,
+              color:
+                edge?.is_cycle === true || edge?.__isReverse === true
+                  ? { color: "#ffb347" }
+                  : undefined,
+            }));
+
+            const data = {
+              nodes: new visLib.DataSet(nodes),
+              edges: new visLib.DataSet(edges),
+            };
+            if (!network) {
+              network = new visLib.Network(
+                canvas,
+                data,
+                {
+                  autoResize: true,
+                  interaction: { hover: true, multiselect: true },
+                  physics: { enabled: true, stabilization: { iterations: 200 } },
+                  layout: { improvedLayout: true },
+                  edges: { smooth: { type: "dynamic" } },
+                },
+              );
+            } else {
+              network.setData(data);
+            }
+            window.requestAnimationFrame(() => {
+              network?.fit({ animation: true });
+            });
+            setStatus(formatRendered(nodes.length, edges.length));
+          };
+          const loadGraph = async () => {
+            if (cachedGraph) {
+              const visLib = await ensureVisNetworkLoaded();
+              if (!visLib || typeof visLib.Network !== "function" || typeof visLib.DataSet !== "function") {
+                throw new Error(I18N.serviceGraphLibraryFailed);
+              }
+              renderGraph(visLib, cachedGraph);
+              return;
+            }
+            setStatus(I18N.serviceGraphLoading);
+            const [response, visLib] = await Promise.all([
+              fetch(graphApiUrl, { headers: { Accept: "application/json" } }),
+              ensureVisNetworkLoaded(),
+            ]);
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+            if (!visLib || typeof visLib.Network !== "function" || typeof visLib.DataSet !== "function") {
+              throw new Error(I18N.serviceGraphLibraryFailed);
+            }
+            cachedGraph = await response.json();
+            renderGraph(visLib, cachedGraph);
+          };
+
+          openButton.addEventListener("click", async () => {
+            openModal();
+            try {
+              await loadGraph();
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error);
+              setStatus(`${I18N.serviceGraphLoadFailed} ${I18N.reason}: ${message}`, true);
+            }
+          });
+          showReverseToggle.addEventListener("change", () => {
+            if (!cachedGraph) {
+              return;
+            }
+            ensureVisNetworkLoaded()
+              .then((visLib) => {
+                if (!visLib || typeof visLib.Network !== "function" || typeof visLib.DataSet !== "function") {
+                  setStatus(I18N.serviceGraphLibraryFailed, true);
+                  return;
+                }
+                renderGraph(visLib, cachedGraph);
+              })
+              .catch(() => {
+                setStatus(I18N.serviceGraphLibraryFailed, true);
+              });
+          });
+          closeButton.addEventListener("click", closeModal);
+          backdrop.addEventListener("click", closeModal);
+          fitButton.addEventListener("click", () => network?.fit({ animation: true }));
+          document.addEventListener("keydown", (event) => {
+            if (event.key === "Escape" && modal.hidden === false) {
+              closeModal();
+            }
+          });
+        };
+        setupServiceGraphModal();
 
         const toggles = page.querySelectorAll("[data-flag-toggle]");
         toggles.forEach((toggle) => {

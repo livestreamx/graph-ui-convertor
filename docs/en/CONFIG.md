@@ -205,6 +205,8 @@ catalog:
   aggregation layer.
 
 - Step 5 (`Get diagram`) contains the procedure-level and service-level open/download actions.
+  The service-level card also has `Render graph`, which opens an in-browser interactive service graph
+  (unique service graph nodes and links) powered by `/api/teams/graph-view` (`graph_level=service`).
 
 ## Dot-path resolution
 
