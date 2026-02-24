@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from domain.catalog import CatalogIndex, CatalogIndexConfig, CatalogItem, MarkupSourceItem
-from domain.models import MarkupDocument
+from domain.models import END_TYPE_DEFAULT, MarkupDocument
 from domain.ports.catalog import CatalogIndexRepository, MarkupCatalogSource
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
@@ -97,8 +97,11 @@ class BuildCatalogIndex:
             team_name = config.unknown_value
         markup_meta = self._extract_markup_meta(raw)
         procedure_blocks = self._extract_procedure_blocks(document)
-        procedure_ids = list(procedure_blocks.keys())
+        procedure_graph = self._extract_procedure_graph(document)
+        procedure_ids = self._collect_procedure_ids(procedure_blocks, procedure_graph)
         block_ids = self._collect_block_ids(procedure_blocks)
+        branch_block_count = self._count_branch_blocks(document)
+        non_postpone_end_block_count, postpone_end_block_count = self._count_end_blocks(document)
 
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
@@ -132,6 +135,10 @@ class BuildCatalogIndex:
             procedure_ids=procedure_ids,
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
+            procedure_graph=procedure_graph,
+            branch_block_count=branch_block_count,
+            non_postpone_end_block_count=non_postpone_end_block_count,
+            postpone_end_block_count=postpone_end_block_count,
         )
 
     def _relative_path(self, path: Path, base: Path) -> str:
@@ -239,6 +246,85 @@ class BuildCatalogIndex:
                 seen.add(normalized)
                 result.append(normalized)
         return result
+
+    def _extract_procedure_graph(self, document: MarkupDocument) -> dict[str, list[str]]:
+        nodes: dict[str, set[str]] = {}
+        for procedure_id in self._collect_document_procedure_ids(document):
+            nodes.setdefault(procedure_id, set())
+        for source, targets in document.procedure_graph.items():
+            source_id = str(source).strip()
+            if not source_id:
+                continue
+            source_targets = nodes.setdefault(source_id, set())
+            for target in targets:
+                target_id = str(target).strip()
+                if not target_id:
+                    continue
+                source_targets.add(target_id)
+                nodes.setdefault(target_id, set())
+        return {
+            source: sorted(targets, key=str.lower)
+            for source, targets in sorted(nodes.items(), key=lambda entry: entry[0].lower())
+        }
+
+    def _collect_document_procedure_ids(self, document: MarkupDocument) -> set[str]:
+        result: set[str] = set()
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if procedure_id:
+                result.add(procedure_id)
+        for source, targets in document.procedure_graph.items():
+            source_id = str(source).strip()
+            if source_id:
+                result.add(source_id)
+            for target in targets:
+                target_id = str(target).strip()
+                if target_id:
+                    result.add(target_id)
+        return result
+
+    def _collect_procedure_ids(
+        self,
+        procedure_blocks: Mapping[str, list[str]],
+        procedure_graph: Mapping[str, list[str]],
+    ) -> list[str]:
+        result: list[str] = []
+        seen: set[str] = set()
+
+        def add(value: str) -> None:
+            normalized = str(value).strip()
+            if not normalized or normalized in seen:
+                return
+            seen.add(normalized)
+            result.append(normalized)
+
+        for procedure_id in procedure_blocks:
+            add(procedure_id)
+        for source, targets in procedure_graph.items():
+            add(source)
+            for target in targets:
+                add(target)
+        return result
+
+    def _count_branch_blocks(self, document: MarkupDocument) -> int:
+        count = 0
+        for procedure in document.procedures:
+            for targets in procedure.branches.values():
+                if len(targets) > 1:
+                    count += 1
+        return count
+
+    def _count_end_blocks(self, document: MarkupDocument) -> tuple[int, int]:
+        non_postpone_count = 0
+        postpone_count = 0
+        for procedure in document.procedures:
+            for block_id in procedure.end_block_ids:
+                end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
+                if str(end_type).strip().lower() == "postpone":
+                    postpone_count += 1
+                else:
+                    non_postpone_count += 1
+        return non_postpone_count, postpone_count
 
     def _normalize_tags(self, value: Any) -> list[str]:
         if value is None:

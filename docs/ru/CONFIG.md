@@ -51,6 +51,8 @@ catalog:
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
+  health_same_team_overlap_threshold_percent: 40
+  health_cross_team_overlap_threshold_percent: 20
   rebuild_token: ""
   procedure_link_path: ""
   block_link_path: ""
@@ -106,6 +108,12 @@ catalog:
 - `unidraw_proxy_upstream`: опциональный upstream для проксирования Unidraw через Catalog.
 - `unidraw_proxy_prefix`: префикс пути для прокси Unidraw.
 - `unidraw_max_url_length`: параметр для паритета с Excalidraw URL (пока не используется).
+- `health_same_team_overlap_threshold_percent`: порог `X` (в процентах) для маркера совпадений
+  внутри команды. Разметка помечается проблемной, если лучшее совпадение с разметкой той же
+  команды `> X`. По умолчанию: `40`.
+- `health_cross_team_overlap_threshold_percent`: порог `Y` (в процентах) для маркера
+  кросс-командных совпадений. Разметка помечается проблемной, если лучшее совпадение с разметкой
+  из других команд `> Y`. По умолчанию: `20`.
 
 ## Большие диаграммы
 
@@ -137,6 +145,13 @@ catalog:
   `/api/scenes/{scene_id}/procedure-graph-view` (nodes/edges для интерактивной модалки).
 - В хедере рядом с `Index JSON` добавлен переключатель языка (с иконками); выбранная локаль
   сохраняется между страницами каталога и HTMX-обновлениями.
+- На карточках каталога выводятся три health-маркера:
+  качество графовой структуры, лучшее совпадение `procedure_id` внутри команды и лучшее
+  кросс-командное совпадение. Проблемные маркеры светятся по умолчанию и имеют hover-анимацию.
+- На главной добавлен фильтр `Проблемы здоровья` (`Только с проблемами`) для показа только
+  карточек хотя бы с одной активной проблемой.
+- На главной добавлена кнопка `Аналитика по командам`, ведущая на `/catalog/teams/health` с
+  рейтингом и детализацией по командам по всем health-критериям.
 - Поиск на главной странице каталога работает через токены в основном поле.
   Введите значение и нажмите `Enter`, чтобы добавить токен; каждое следующее нажатие `Enter`
   добавляет новый токен.
@@ -237,6 +252,8 @@ export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Тип разметки","service":"Услуга"}'
 export CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS="team-alpha,team-beta"
+export CJM_CATALOG__HEALTH_SAME_TEAM_OVERLAP_THRESHOLD_PERCENT="40"
+export CJM_CATALOG__HEALTH_CROSS_TEAM_OVERLAP_THRESHOLD_PERCENT="20"
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 

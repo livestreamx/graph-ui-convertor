@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="detail-header">
+    <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
+    <div class="detail-title">{{ t("Analytics by teams") }}</div>
+    <div class="detail-meta">
+      <span>{{ t("Ranking by markup health problems") }}</span>
+    </div>
+  </section>
+
+  <section class="detail-card team-health-overview">
+    <h3>{{ t("Total health summary") }}</h3>
+    <div class="team-health-kpi-grid">
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Markups in catalog") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.total_markup_count }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Markups with problems") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.total_problem_markups }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Graph marker problems") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.graph_problem_count }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Gaming marker problems") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.gaming_problem_count }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Team overlap problems") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.same_team_problem_count }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Cross-team overlap problems") }}</div>
+        <div class="team-health-kpi-value">{{ health_report.cross_team_problem_count }}</div>
+      </div>
+      <div class="team-health-kpi-item">
+        <div class="team-health-kpi-label">{{ t("Active thresholds") }}</div>
+        <div class="team-health-kpi-value team-health-kpi-value-sm">
+          {{ t("Team overlap") }}: &gt;{{ "%.1f"|format(health_report.same_team_threshold_percent) }}%<br />
+          {{ t("Cross-team overlap") }}: &gt;{{ "%.1f"|format(health_report.cross_team_threshold_percent) }}%
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="team-health-list">
+    {% for row in team_rows %}
+      {% set team = row.team %}
+      <details class="detail-card team-health-team {% if team.total_problem_markups > 0 %}is-problem{% endif %}" {% if loop.first %}open{% endif %}>
+        <summary class="team-health-team-summary">
+          <div>
+            <div class="team-health-team-title">{{ team.team_name }}</div>
+            <div class="team-health-team-id">{{ team.team_id }}</div>
+          </div>
+          <div class="team-health-team-counters">
+            <span class="team-health-counter">{{ t("Markups") }}: {{ team.markup_count }}</span>
+            <span class="team-health-counter">{{ t("With problems") }}: {{ team.total_problem_markups }}</span>
+            <span class="team-health-counter">{{ t("Total") }}: {{ team.total_problem_count }}</span>
+          </div>
+        </summary>
+
+        <div class="team-health-team-body">
+          <div class="team-health-team-stats">
+            <span class="health-detail-pill">{{ t("Graph marker problems") }}: {{ team.graph_problem_count }}</span>
+            <span class="health-detail-pill">{{ t("Gaming marker problems") }}: {{ team.gaming_problem_count }}</span>
+            <span class="health-detail-pill">{{ t("Team overlap problems") }}: {{ team.same_team_problem_count }}</span>
+            <span class="health-detail-pill">{{ t("Cross-team overlap problems") }}: {{ team.cross_team_problem_count }}</span>
+            <span class="health-detail-pill">{{ t("No bot graphs found") }}: {{ team.no_bot_graph_count }}</span>
+            <span class="health-detail-pill">{{ t("Multiple graphs but no bot starts") }}: {{ team.multiple_graphs_without_bot_count }}</span>
+            <span class="health-detail-pill">{{ t("Only bot graphs found") }}: {{ team.only_bot_graph_count }}</span>
+            <span class="health-detail-pill">{{ t("More than three graphs in markup") }}: {{ team.too_many_graphs_count }}</span>
+          </div>
+
+          <div class="team-health-markup-list">
+            {% for entry in row.markup_rows %}
+              {% set item = entry.item %}
+              {% set health = entry.health %}
+              <article class="team-health-markup {% if entry.has_problem %}is-problem{% endif %}">
+                <div class="team-health-markup-head">
+                  <a class="team-health-markup-link" href="/catalog/{{ item.scene_id }}?lang={{ lang }}">{{ item.title }}</a>
+                  <span class="team-health-markup-score">{{ t("Problem score") }}: {{ entry.problem_score }}</span>
+                </div>
+                <div class="team-health-markup-meta">
+                  <span>{{ t("Graphs") }}: {{ health.graph.unique_graph_count }}</span>
+                  <span>
+                    {{ t("Gaming validity") }}: {{ health.gaming.branch_block_count }}/{{ health.gaming.non_postpone_end_block_count }}
+                  </span>
+                  <span>{{ t("Team overlap") }}:
+                    {% if health.same_team_similarity.top_match %}
+                      {{ "%.1f"|format(health.same_team_similarity.top_match.overlap_percent) }}%
+                    {% else %}
+                      0.0%
+                    {% endif %}
+                  </span>
+                  <span>{{ t("Cross-team overlap") }}:
+                    {% if health.cross_team_similarity.top_match %}
+                      {{ "%.1f"|format(health.cross_team_similarity.top_match.overlap_percent) }}%
+                    {% else %}
+                      0.0%
+                    {% endif %}
+                  </span>
+                </div>
+                {% if health.graph.issue_codes %}
+                  <div class="team-health-markup-issues">
+                    {% for issue_code in health.graph.issue_codes %}
+                      <span class="health-detail-pill">{{ t(graph_issue_text_keys.get(issue_code, issue_code)) }}</span>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                {% if health.gaming.is_problem %}
+                  <div class="team-health-markup-issues">
+                    <span class="health-detail-pill">{{ t("No branches and no end blocks except postpone") }}</span>
+                  </div>
+                {% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        </div>
+      </details>
+    {% endfor %}
+  </section>
+{% endblock %}

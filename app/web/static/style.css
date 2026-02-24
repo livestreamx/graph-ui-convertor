@@ -2258,6 +2258,14 @@ main {
   margin-bottom: 16px;
 }
 
+.cross-team-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .group-title {
   font-family: "Space Grotesk", sans-serif;
   font-size: 18px;
@@ -2309,6 +2317,83 @@ main {
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
+}
+
+.health-marker-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.health-marker {
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 6px 8px;
+  display: grid;
+  gap: 3px;
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.health-marker-label {
+  font-size: 10px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.health-marker-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  line-height: 1.1;
+}
+
+.health-marker:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.34);
+}
+
+.health-marker.is-problem {
+  border-color: rgba(255, 121, 121, 0.62);
+  background: linear-gradient(140deg, rgba(93, 28, 38, 0.55), rgba(62, 19, 34, 0.45));
+  box-shadow: 0 0 0 1px rgba(255, 112, 112, 0.2);
+}
+
+.health-marker.is-problem .health-marker-label,
+.health-marker.is-problem .health-marker-value {
+  color: #ffe2e2;
+}
+
+.health-marker.is-glow {
+  animation: healthMarkerGlow 1.9s ease-in-out infinite;
+}
+
+.card-health-note {
+  margin-top: 8px;
+  color: #ffcbcb;
+  font-size: 11px;
+  border-left: 2px solid rgba(255, 122, 122, 0.55);
+  padding-left: 8px;
+}
+
+@keyframes healthMarkerGlow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 112, 112, 0.18), 0 0 0 rgba(255, 115, 115, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 126, 126, 0.45), 0 0 16px rgba(255, 124, 124, 0.24);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .health-marker,
+  .health-marker.is-glow {
+    transition: none;
+    animation: none;
+  }
 }
 
 .tag-row {
@@ -2668,6 +2753,233 @@ body.service-graph-open {
   opacity: 0.85;
 }
 
+.health-detail-card {
+  margin-top: 16px;
+}
+
+.health-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.health-detail-item {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 8px;
+}
+
+.health-detail-item.is-problem {
+  border-color: rgba(255, 122, 122, 0.52);
+  background: linear-gradient(145deg, rgba(82, 25, 36, 0.45), rgba(54, 18, 32, 0.35));
+}
+
+.health-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.health-detail-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.health-detail-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+}
+
+.health-detail-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.health-detail-note {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.health-detail-pill {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: #e8efff;
+}
+
+.team-health-overview {
+  margin-bottom: 18px;
+}
+
+.team-health-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 10px;
+}
+
+.team-health-kpi-item {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 6px;
+}
+
+.team-health-kpi-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.team-health-kpi-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 22px;
+}
+
+.team-health-kpi-value-sm {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.team-health-list {
+  display: grid;
+  gap: 12px;
+}
+
+.team-health-team {
+  padding: 0;
+  overflow: hidden;
+}
+
+.team-health-team.is-problem {
+  border-color: rgba(255, 120, 120, 0.36);
+}
+
+.team-health-team-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-health-team-summary::-webkit-details-marker {
+  display: none;
+}
+
+.team-health-team-title {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 18px;
+}
+
+.team-health-team-id {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.team-health-team-counters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.team-health-counter {
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+}
+
+.team-health-team-body {
+  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 12px 14px 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.team-health-team-stats {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.team-health-markup-list {
+  display: grid;
+  gap: 10px;
+}
+
+.team-health-markup {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 6px;
+}
+
+.team-health-markup.is-problem {
+  border-color: rgba(255, 121, 121, 0.54);
+  background: linear-gradient(135deg, rgba(75, 23, 34, 0.46), rgba(53, 18, 32, 0.36));
+}
+
+.team-health-markup-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.team-health-markup-link {
+  color: #ffe4c0;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.team-health-markup-link:hover {
+  color: #fff2e1;
+}
+
+.team-health-markup-score {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.team-health-markup-meta {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.team-health-markup-issues {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .action-result {
   margin-top: 16px;
   color: var(--accent);
@@ -2758,5 +3070,19 @@ body.service-graph-open {
   }
   .team-graph-actions-split {
     grid-template-columns: 1fr;
+  }
+  .cross-team-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .health-marker-row {
+    grid-template-columns: 1fr;
+  }
+  .team-health-team-summary {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .team-health-team-counters {
+    justify-content: flex-start;
   }
 }

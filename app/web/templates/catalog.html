@@ -7,7 +7,10 @@
         <div class="group-title">{{ t("Cross-team graph analytics") }}</div>
         <div class="group-count">{{ t("Get high-level graph analytics across multiple domain teams") }}</div>
       </div>
-      <a class="primary-button" href="/catalog/teams/graph?lang={{ lang }}">{{ t("Open builder") }}</a>
+      <div class="cross-team-actions">
+        <a class="ghost-button" href="/catalog/teams/health?lang={{ lang }}">{{ t("Analytics by teams") }}</a>
+        <a class="primary-button" href="/catalog/teams/graph?lang={{ lang }}">{{ t("Open builder") }}</a>
+      </div>
     </div>
   </section>
 
@@ -70,6 +73,15 @@
                 {{ team_label }}
               </option>
             {% endfor %}
+          </select>
+        </label>
+        <label class="filter-control">
+          <span>{{ t("Health problems") }}</span>
+          <select name="health_problem">
+            <option value="">{{ t("All markups") }}</option>
+            <option value="1" {% if health_problem == "1" %}selected{% endif %}>
+              {{ t("Only with problems") }}
+            </option>
           </select>
         </label>
       </div>

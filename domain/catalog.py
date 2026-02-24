@@ -36,6 +36,10 @@ class CatalogItem:
     procedure_ids: list[str] = field(default_factory=list)
     block_ids: list[str] = field(default_factory=list)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_graph: dict[str, list[str]] = field(default_factory=dict)
+    branch_block_count: int = 0
+    non_postpone_end_block_count: int = 0
+    postpone_end_block_count: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -57,15 +61,20 @@ class CatalogItem:
             "procedure_ids": list(self.procedure_ids),
             "block_ids": list(self.block_ids),
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
+            "procedure_graph": {key: list(value) for key, value in self.procedure_graph.items()},
+            "branch_block_count": int(self.branch_block_count),
+            "non_postpone_end_block_count": int(self.non_postpone_end_block_count),
+            "postpone_end_block_count": int(self.postpone_end_block_count),
         }
 
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
         procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_graph = _load_procedure_graph(payload.get("procedure_graph"))
         procedure_ids = _load_string_list(payload.get("procedure_ids"))
         block_ids = _load_string_list(payload.get("block_ids"))
         if not procedure_ids:
-            procedure_ids = list(procedure_blocks.keys())
+            procedure_ids = _collect_procedure_ids(procedure_blocks, procedure_graph)
         if not block_ids:
             block_ids = _collect_block_ids(procedure_blocks)
         return cls(
@@ -87,6 +96,14 @@ class CatalogItem:
             procedure_ids=procedure_ids,
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
+            procedure_graph=procedure_graph,
+            branch_block_count=_load_non_negative_int(payload.get("branch_block_count")),
+            non_postpone_end_block_count=_load_non_negative_int(
+                payload.get("non_postpone_end_block_count")
+            ),
+            postpone_end_block_count=_load_non_negative_int(
+                payload.get("postpone_end_block_count")
+            ),
         )
 
 
@@ -117,6 +134,41 @@ def _load_procedure_blocks(raw: Any) -> dict[str, list[str]]:
     return normalized
 
 
+def _load_procedure_graph(raw: Any) -> dict[str, list[str]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, list[str]] = {}
+    for source_id, target_values in raw.items():
+        source_text = str(source_id).strip()
+        if not source_text:
+            continue
+        normalized[source_text] = _load_string_list(target_values)
+    return normalized
+
+
+def _collect_procedure_ids(
+    procedure_blocks: dict[str, list[str]],
+    procedure_graph: dict[str, list[str]],
+) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+
+    def add(value: str) -> None:
+        text = str(value).strip()
+        if not text or text in seen:
+            return
+        seen.add(text)
+        result.append(text)
+
+    for procedure_id in procedure_blocks:
+        add(procedure_id)
+    for source_id, target_ids in procedure_graph.items():
+        add(source_id)
+        for target_id in target_ids:
+            add(target_id)
+    return result
+
+
 def _collect_block_ids(procedure_blocks: dict[str, list[str]]) -> list[str]:
     result: list[str] = []
     seen: set[str] = set()
@@ -127,6 +179,14 @@ def _collect_block_ids(procedure_blocks: dict[str, list[str]]) -> list[str]:
             seen.add(block_id)
             result.append(block_id)
     return result
+
+
+def _load_non_negative_int(raw: Any) -> int:
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return 0
+    return max(0, value)
 
 
 @dataclass(frozen=True)

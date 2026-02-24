@@ -32,6 +32,66 @@
                 </span>
                 <span>{{ t("Updated") }} {{ item.updated_at | msk_datetime }}</span>
               </div>
+              {% set item_health = health_by_scene.get(item.scene_id) %}
+              {% if item_health %}
+                <div class="health-marker-row">
+                  <div
+                    class="health-marker health-marker-graphs {% if item_health.graph.is_problem %}is-problem is-glow{% endif %}"
+                    data-health-marker="graphs"
+                  >
+                    <span class="health-marker-label">{{ t("Graphs") }}</span>
+                    <span class="health-marker-value">{{ item_health.graph.unique_graph_count }}</span>
+                  </div>
+                  <div
+                    class="health-marker health-marker-same-team {% if item_health.same_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                    data-health-marker="same-team"
+                  >
+                    <span class="health-marker-label">{{ t("Team overlap") }}</span>
+                    <span class="health-marker-value">
+                      {% if item_health.same_team_similarity.top_match %}
+                        {{ "%.1f"|format(item_health.same_team_similarity.top_match.overlap_percent) }}%
+                      {% else %}
+                        0.0%
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div
+                    class="health-marker health-marker-cross-team {% if item_health.cross_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                    data-health-marker="cross-team"
+                  >
+                    <span class="health-marker-label">{{ t("Cross-team overlap") }}</span>
+                    <span class="health-marker-value">
+                      {% if item_health.cross_team_similarity.top_match %}
+                        {{ "%.1f"|format(item_health.cross_team_similarity.top_match.overlap_percent) }}%
+                      {% else %}
+                        0.0%
+                      {% endif %}
+                    </span>
+                  </div>
+                  <div
+                    class="health-marker health-marker-gaming {% if item_health.gaming.is_problem %}is-problem is-glow{% endif %}"
+                    data-health-marker="gaming"
+                  >
+                    <span class="health-marker-label">{{ t("Gaming validity") }}</span>
+                    <span class="health-marker-value">
+                      {{ item_health.gaming.branch_block_count }}/{{ item_health.gaming.non_postpone_end_block_count }}
+                    </span>
+                  </div>
+                </div>
+                {% if item_health.graph.issue_codes %}
+                  {% set issue_code = item_health.graph.issue_codes[0] %}
+                  <div class="card-health-note">
+                    {{ t(graph_issue_text_keys.get(issue_code, issue_code)) }}
+                    {% if item_health.graph.issue_codes|length > 1 %}
+                      +{{ item_health.graph.issue_codes|length - 1 }}
+                    {% endif %}
+                  </div>
+                {% elif item_health.gaming.is_problem %}
+                  <div class="card-health-note">
+                    {{ t("No branches and no end blocks except postpone") }}
+                  </div>
+                {% endif %}
+              {% endif %}
               {% if item.tags %}
                 <div class="tag-row">
                   {% for tag in item.tags %}

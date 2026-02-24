@@ -25,6 +25,7 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Cross-team graph analytics": "Кросс-командная аналитика графов",
     "Get high-level graph analytics across multiple domain teams": "Сводная аналитика графов по нескольким доменным командам",
     "Open builder": "Открыть конструктор",
+    "Analytics by teams": "Аналитика по командам",
     "Search by title, tag, markup type": "Поиск по названию, тегу, типу разметки",
     "Type a filter and press Enter": "Введите фильтр и нажмите Enter",
     "Press Enter to add a filter token. Tokens are combined with AND and search by title, tags, markup type, procedure_id, and block_id.": "Нажмите Enter, чтобы добавить фильтр. Токены объединяются через И и ищут по названию, тегам, типу разметки, procedure_id и block_id.",
@@ -33,6 +34,9 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "All levels": "Все уровни",
     "Team": "Команда",
     "All teams": "Все команды",
+    "Health problems": "Проблемы здоровья",
+    "All markups": "Все разметки",
+    "Only with problems": "Только с проблемами",
     "Active filters": "Активные фильтры",
     "Clear filters": "Сбросить фильтры",
     "scenes": "сцен",
@@ -166,6 +170,36 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Merge nodes are derived from the full catalog, while only selected teams render.": "Merge-узлы вычисляются по всему каталогу, но рендерятся только выбранные команды.",
     "Graphs info": "Информация о графах",
     "Graphs": "Графы",
+    "Team overlap": "Совпадение в команде",
+    "Cross-team overlap": "Кросс-командное совпадение",
+    "Gaming validity": "Гейминг-валидность",
+    "Gaming marker problems": "Проблемы гейминг-маркера",
+    "Markup health markers": "Маркеры здоровья разметки",
+    "Non-bot graphs": "Графы без бота",
+    "No graph health problems": "Проблем по графам не найдено",
+    "Problem threshold": "Порог проблемы",
+    "Closest markup in team": "Наиболее похожая разметка в команде",
+    "No comparable markups in team": "В команде нет разметок для сравнения",
+    "Closest markup across teams": "Наиболее похожая разметка среди других команд",
+    "No comparable markups across teams": "Нет разметок для сравнения в других командах",
+    "No branches and no end blocks except postpone": "Нет ветвлений и нет end-блоков, кроме postpone",
+    "End blocks except postpone": "End-блоки кроме postpone",
+    "Postpone end blocks": "End-блоки postpone",
+    "Gaming structure looks valid": "Гейминг-структура выглядит валидной",
+    "Multiple graphs but no bot starts": "Несколько графов, но нет bot/multi стартов",
+    "No bot graphs found": "Графы с ботом не найдены",
+    "Only bot graphs found": "Только графы с ботом",
+    "More than three graphs in markup": "В разметке больше трёх графов",
+    "Ranking by markup health problems": "Рейтинг по проблемам здоровья разметок",
+    "Total health summary": "Суммарная сводка по здоровью",
+    "Markups in catalog": "Разметок в каталоге",
+    "Markups with problems": "Разметок с проблемами",
+    "Graph marker problems": "Проблемы маркера графов",
+    "Team overlap problems": "Проблемы совпадений в команде",
+    "Cross-team overlap problems": "Проблемы кросс-командных совпадений",
+    "Active thresholds": "Активные пороги",
+    "With problems": "С проблемами",
+    "Problem score": "Счёт проблем",
     "Unique graphs": "Уникальные графы",
     "Count of unique graphs from selected teams.": "Количество уникальных графов из выбранных команд.",
     "Detailed list is shown below.": "Подробный список показан ниже.",
@@ -262,6 +296,8 @@ _HUMANIZE_RU_TRANSLATIONS: Final[dict[str, str]] = {
     "unknown": "неизвестно",
     "yes": "да",
     "no": "нет",
+    "health": "Здоровье",
+    "only_with_health_problems": "только с проблемами",
 }
 
 _HUMANIZE_EN_TRANSLATIONS: Final[dict[str, str]] = {
@@ -270,6 +306,8 @@ _HUMANIZE_EN_TRANSLATIONS: Final[dict[str, str]] = {
     "system_task_processor": "Task Processor",
     "system_default": "Default System",
     "unknown": "Unknown",
+    "health": "Health",
+    "only_with_health_problems": "only with problems",
 }
 _MARKUP_TYPE_COLUMN_RU_TRANSLATIONS: Final[dict[str, str]] = {
     "service": "Услуги",
@@ -369,7 +407,7 @@ def build_localizer(request: Request) -> UILocalizer:
 def build_language_switch_url(request: Request, target_language: str) -> str:
     lang = normalize_ui_language(target_language) or DEFAULT_UI_LANGUAGE
     params: list[tuple[str, str]] = []
-    if request.url.path in {"/catalog", "/catalog/teams/graph"}:
+    if request.url.path in {"/catalog", "/catalog/teams/graph", "/catalog/teams/health"}:
         for key, value in request.query_params.multi_items():
             if key == UI_LANGUAGE_QUERY_PARAM:
                 continue

@@ -35,4 +35,6 @@ catalog:
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
+  health_same_team_overlap_threshold_percent: 40
+  health_cross_team_overlap_threshold_percent: 20
   rebuild_token: ""

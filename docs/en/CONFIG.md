@@ -51,6 +51,8 @@ catalog:
   unidraw_proxy_upstream: ""
   unidraw_proxy_prefix: "/unidraw"
   unidraw_max_url_length: 8000
+  health_same_team_overlap_threshold_percent: 40
+  health_cross_team_overlap_threshold_percent: 20
   rebuild_token: ""
   procedure_link_path: ""
   block_link_path: ""
@@ -108,6 +110,12 @@ catalog:
 - `unidraw_proxy_upstream`: Optional upstream for proxying Unidraw through the Catalog service.
 - `unidraw_proxy_prefix`: Path prefix used for proxying Unidraw.
 - `unidraw_max_url_length`: Reserved for parity with Excalidraw URLs (currently unused).
+- `health_same_team_overlap_threshold_percent`: Threshold `X` (in percent) for same-team overlap marker.
+  A markup is flagged when its best overlap with another markup from the same team is `> X`.
+  Default: `40`.
+- `health_cross_team_overlap_threshold_percent`: Threshold `Y` (in percent) for cross-team overlap marker.
+  A markup is flagged when its best overlap with another markup from other teams is `> Y`.
+  Default: `20`.
 
 ## Large diagrams
 
@@ -135,6 +143,13 @@ catalog:
   `/api/scenes/{scene_id}/procedure-graph-view` (interactive graph nodes/edges for the modal).
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
+- Catalog cards show three health markers:
+  graph composition quality, top same-team `procedure_id` overlap, and top cross-team overlap.
+  Problematic markers glow by default and have hover animation.
+- The main page includes an additional filter `Health problems` (`Only with problems`) to show only
+  cards with at least one active health issue.
+- The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
+  with ranking and per-team breakdown for all health criteria.
 - Catalog search uses token filters in the main search input.
   Type a value and press `Enter` to add it as a token; each next `Enter` adds one more token.
   Tokens are combined with `AND`, and each token is matched across title/tags/markup metadata
@@ -231,6 +246,8 @@ export CJM_CATALOG__S3__BUCKET="cjm-markup"
 export CJM_CATALOG__S3__PREFIX="markup/"
 export CJM_CATALOG__UI_TEXT_OVERRIDES='{"markup_type":"Type","service":"Service"}'
 export CJM_CATALOG__BUILDER_EXCLUDED_TEAM_IDS="team-alpha,team-beta"
+export CJM_CATALOG__HEALTH_SAME_TEAM_OVERLAP_THRESHOLD_PERCENT="40"
+export CJM_CATALOG__HEALTH_CROSS_TEAM_OVERLAP_THRESHOLD_PERCENT="20"
 export CJM_CONFIG_PATH="config/catalog/app.s3.yaml"
 ```
 

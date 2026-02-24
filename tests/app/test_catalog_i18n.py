@@ -129,3 +129,32 @@ def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Postpones", "ru") == "Отложенные"
     assert translate_ui_text("none", "ru") == "нет"
     assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"
+
+
+def test_catalog_health_texts_are_localized_in_russian() -> None:
+    assert translate_ui_text("Analytics by teams", "ru") == "Аналитика по командам"
+    assert translate_ui_text("Health problems", "ru") == "Проблемы здоровья"
+    assert translate_ui_text("Only with problems", "ru") == "Только с проблемами"
+    assert translate_ui_text("Gaming validity", "ru") == "Гейминг-валидность"
+    assert translate_ui_text("Gaming marker problems", "ru") == "Проблемы гейминг-маркера"
+    assert (
+        translate_ui_text("No branches and no end blocks except postpone", "ru")
+        == "Нет ветвлений и нет end-блоков, кроме postpone"
+    )
+    assert translate_ui_text("End blocks except postpone", "ru") == "End-блоки кроме postpone"
+    assert translate_ui_text("Postpone end blocks", "ru") == "End-блоки postpone"
+    assert (
+        translate_ui_text("Gaming structure looks valid", "ru")
+        == "Гейминг-структура выглядит валидной"
+    )
+    assert (
+        translate_ui_text("Multiple graphs but no bot starts", "ru")
+        == "Несколько графов, но нет bot/multi стартов"
+    )
+    assert translate_ui_text("No bot graphs found", "ru") == "Графы с ботом не найдены"
+    assert translate_ui_text("Only bot graphs found", "ru") == "Только графы с ботом"
+    assert (
+        translate_ui_text("More than three graphs in markup", "ru")
+        == "В разметке больше трёх графов"
+    )
+    assert translate_ui_text("Markup health markers", "ru") == "Маркеры здоровья разметки"
