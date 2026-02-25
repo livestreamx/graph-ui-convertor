@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from collections.abc import Callable
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 import pytest
 
@@ -115,6 +118,61 @@ def test_catalog_api_unidraw_download_generated_on_demand_when_file_missing(
             r'filename="billing_blocks_\d{4}-\d{2}-\d{2}\.unidraw"',
             response.headers.get("content-disposition", ""),
         )
+
+
+def test_catalog_api_regenerates_stale_cached_scene_from_latest_markup(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        settings_overrides={
+            "generate_excalidraw_on_demand": True,
+            "cache_excalidraw_on_demand": True,
+        },
+    ) as context:
+        context.scene_path.write_text(
+            json.dumps(
+                {
+                    "type": "excalidraw",
+                    "elements": [{"id": "stale", "type": "text", "text": "STALE"}],
+                }
+            ),
+            encoding="utf-8",
+        )
+        stale_timestamp = datetime(2000, 1, 1, tzinfo=UTC).timestamp()
+        os.utime(context.scene_path, (stale_timestamp, stale_timestamp))
+
+        index_path = tmp_path / "catalog" / "index.json"
+        index_payload = json.loads(index_path.read_text(encoding="utf-8"))
+        index_payload["items"][0]["updated_at"] = "2030-01-01T00:00:00+00:00"
+        index_path.write_text(json.dumps(index_payload), encoding="utf-8")
+
+        app_context = cast(Any, context.client.app).state.context
+        latest_payload = json.loads(json.dumps(context.payload))
+        latest_payload["finedog_unit_meta"]["service_name"] = "Billing v2"
+        latest_document = MarkupDocument.model_validate(latest_payload)
+        monkeypatch.setattr(app_context.markup_reader, "load_by_path", lambda _: latest_document)
+
+        response = context.client.get(f"/api/scenes/{context.scene_id}")
+        assert response.status_code == 200
+        element_texts = [
+            str(element.get("text", ""))
+            for element in response.json().get("elements", [])
+            if isinstance(element, dict)
+        ]
+        assert any("Billing v2" in text for text in element_texts)
+
+        cached_payload = json.loads(context.scene_path.read_text(encoding="utf-8"))
+        cached_texts = [
+            str(element.get("text", ""))
+            for element in cached_payload.get("elements", [])
+            if isinstance(element, dict)
+        ]
+        assert any("Billing v2" in text for text in cached_texts)
 
 
 def test_catalog_scene_links_applied(

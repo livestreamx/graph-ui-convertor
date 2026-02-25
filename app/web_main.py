@@ -1234,16 +1234,50 @@ def load_scene_payload(
 ) -> tuple[dict[str, Any], str]:
     diagram_rel_path = resolve_scene_rel_path(item, diagram_format)
     scene_path = resolve_diagram_in_dir(context.settings, diagram_format) / diagram_rel_path
+    should_regenerate = False
     try:
         payload = context.scene_repo.load(scene_path)
     except FileNotFoundError as exc:
         if not context.settings.catalog.generate_excalidraw_on_demand:
             raise HTTPException(status_code=404, detail="Scene file missing") from exc
+        should_regenerate = True
+    else:
+        if context.settings.catalog.generate_excalidraw_on_demand and is_scene_cache_outdated(
+            item, scene_path
+        ):
+            should_regenerate = True
+    if should_regenerate:
         payload = build_diagram_payload(context, item, diagram_format)
         if context.settings.catalog.cache_excalidraw_on_demand:
             context.scene_repo.save(payload, scene_path)
     enhance_scene_payload(payload, context, diagram_format)
     return payload, diagram_rel_path
+
+
+def is_scene_cache_outdated(item: CatalogItem, scene_path: Path) -> bool:
+    try:
+        scene_mtime = datetime.fromtimestamp(scene_path.stat().st_mtime, tz=UTC)
+    except FileNotFoundError:
+        return True
+    source_updated_at = parse_iso_datetime(item.updated_at)
+    if source_updated_at is None:
+        return False
+    return scene_mtime < source_updated_at
+
+
+def parse_iso_datetime(value: str) -> datetime | None:
+    normalized = str(value or "").strip()
+    if not normalized:
+        return None
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
 
 
 def infer_unidraw_rel_path(item: CatalogItem) -> str:
