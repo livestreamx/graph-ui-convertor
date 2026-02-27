@@ -133,6 +133,18 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
 }
 
+HEALTH_MARKER_FILTER_ALL = ""
+HEALTH_MARKER_FILTER_GRAPHS = "graphs"
+HEALTH_MARKER_FILTER_VALIDITY = "validity"
+HEALTH_MARKER_FILTER_SAME_TEAM = "same-team"
+HEALTH_MARKER_FILTER_CROSS_TEAM = "cross-team"
+HEALTH_MARKER_FILTER_VALUES: set[str] = {
+    HEALTH_MARKER_FILTER_GRAPHS,
+    HEALTH_MARKER_FILTER_VALIDITY,
+    HEALTH_MARKER_FILTER_SAME_TEAM,
+    HEALTH_MARKER_FILTER_CROSS_TEAM,
+}
+
 
 def create_app(settings: AppSettings) -> FastAPI:
     templates.env.filters["msk_datetime"] = format_msk_datetime
@@ -270,7 +282,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         group: list[str] = Query(default_factory=list),
         criticality_level: str | None = Query(default=None),
         team_id: str | None = Query(default=None),
-        health_problem: str | None = Query(default=None),
+        health_marker: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data, health_report = load_index_bundle(context)
@@ -289,25 +301,28 @@ def create_app(settings: AppSettings) -> FastAPI:
             filters["team_id"] = team_id
         search_tokens = normalize_search_tokens(search, q)
         filtered_items = filter_items(index_data.items, search_tokens, filters)
-        health_problem_only = health_problem == "1"
-        if health_problem_only and health_report is not None:
+        health_marker_filter = normalize_health_marker_filter(health_marker)
+        if health_marker_filter and health_report is not None:
             filtered_items = [
                 item
                 for item in filtered_items
-                if is_item_health_problem(health_report.item(item.scene_id))
+                if is_item_health_problem_for_marker(
+                    health_report.item(item.scene_id), health_marker_filter
+                )
             ]
         groups = build_group_tree(filtered_items, index_data.group_by)
         criticality_levels, team_options = build_filter_options(
             index_data.items, index_data.unknown_value
         )
         team_lookup = dict(team_options)
-        active_filters = build_active_filters(filters, team_lookup, health_problem_only)
+        active_filters = build_active_filters(filters, team_lookup, health_marker_filter)
         group_query_base = build_group_query_base(
             search_tokens,
             criticality_level,
             team_id,
-            health_problem_only=health_problem_only,
+            health_marker_filter=health_marker_filter,
         )
+        catalog_back_url = build_catalog_back_url(request)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
         return render_catalog_template(
             request,
@@ -323,10 +338,11 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "active_filters": active_filters,
                 "criticality_level": criticality_level or "",
                 "team_id": team_id or "",
-                "health_problem": "1" if health_problem_only else "",
+                "health_marker": health_marker_filter,
                 "criticality_levels": criticality_levels,
                 "team_options": team_options,
                 "group_query_base": group_query_base,
+                "catalog_back_url": catalog_back_url,
                 "health_by_scene": health_report.items_by_scene if health_report else {},
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
             },
@@ -572,6 +588,7 @@ def create_app(settings: AppSettings) -> FastAPI:
     def catalog_detail(
         request: Request,
         scene_id: str,
+        back: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
         index_data, health_report = load_index_bundle(context)
@@ -645,6 +662,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         service_external_url = resolve_service_external_url(context, item)
         team_external_url = resolve_team_external_url(context, item)
         item_health = health_report.item(item.scene_id) if health_report is not None else None
+        catalog_back_url = resolve_catalog_back_url(
+            back,
+            language=localizer_for_request(request).language,
+        )
         return render_catalog_template(
             request,
             "catalog_detail.html",
@@ -669,6 +690,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
                 "procedure_open_mode": procedure_open_mode,
                 "item_health": item_health,
+                "catalog_back_url": catalog_back_url,
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
             },
         )
@@ -1908,7 +1930,7 @@ def build_filter_options(
 def build_active_filters(
     filters: dict[str, str],
     team_lookup: dict[str, str],
-    health_problem_only: bool = False,
+    health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
 ) -> list[dict[str, str]]:
     active: list[dict[str, str]] = []
     for field, value in filters.items():
@@ -1922,12 +1944,12 @@ def build_active_filters(
                 "display_value": display_value,
             }
         )
-    if health_problem_only:
+    if health_marker_filter:
         active.append(
             {
-                "field": "health",
-                "value": "problem",
-                "display_value": "only_with_health_problems",
+                "field": "problem_marker",
+                "value": health_marker_filter,
+                "display_value": f"health_marker_{health_marker_filter.replace('-', '_')}",
             }
         )
     return active
@@ -1938,7 +1960,7 @@ def build_group_query_base(
     criticality_level: str | None,
     team_id: str | None,
     *,
-    health_problem_only: bool = False,
+    health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
 ) -> str:
     params: dict[str, str | list[str]] = {}
     if search_tokens:
@@ -1947,8 +1969,8 @@ def build_group_query_base(
         params["criticality_level"] = criticality_level
     if team_id:
         params["team_id"] = team_id
-    if health_problem_only:
-        params["health_problem"] = "1"
+    if health_marker_filter:
+        params["health_marker"] = health_marker_filter
     return urlencode(params, doseq=True)
 
 
@@ -1974,6 +1996,56 @@ def is_item_health_problem(item_health: CatalogItemHealth | None) -> bool:
     if item_health is None:
         return False
     return item_health.has_problem
+
+
+def normalize_health_marker_filter(value: str | None) -> str:
+    if value is None:
+        return HEALTH_MARKER_FILTER_ALL
+    normalized = value.strip().lower()
+    if normalized in HEALTH_MARKER_FILTER_VALUES:
+        return normalized
+    return HEALTH_MARKER_FILTER_ALL
+
+
+def is_item_health_problem_for_marker(
+    item_health: CatalogItemHealth | None,
+    marker_filter: str,
+) -> bool:
+    if not marker_filter:
+        return is_item_health_problem(item_health)
+    if item_health is None:
+        return False
+    if marker_filter == HEALTH_MARKER_FILTER_GRAPHS:
+        return item_health.graph.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_VALIDITY:
+        return item_health.gaming.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_SAME_TEAM:
+        return item_health.same_team_similarity.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_CROSS_TEAM:
+        return item_health.cross_team_similarity.is_problem
+    return False
+
+
+def build_catalog_back_url(request: Request) -> str:
+    query = request.url.query
+    if query:
+        return f"/catalog?{query}"
+    return f"/catalog?lang={build_localizer(request).language}"
+
+
+def resolve_catalog_back_url(back: str | None, *, language: str) -> str:
+    default_url = f"/catalog?lang={language}"
+    if not back:
+        return default_url
+    candidate = back.strip()
+    if not candidate:
+        return default_url
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return default_url
+    if not candidate.startswith("/catalog"):
+        return default_url
+    return candidate
 
 
 def build_team_health_rows(

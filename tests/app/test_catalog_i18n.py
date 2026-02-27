@@ -133,20 +133,17 @@ def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
 
 def test_catalog_health_texts_are_localized_in_russian() -> None:
     assert translate_ui_text("Analytics by teams", "ru") == "Аналитика по командам"
-    assert translate_ui_text("Health problems", "ru") == "Проблемы здоровья"
-    assert translate_ui_text("Only with problems", "ru") == "Только с проблемами"
-    assert translate_ui_text("Gaming validity", "ru") == "Гейминг-валидность"
-    assert translate_ui_text("Gaming marker problems", "ru") == "Проблемы гейминг-маркера"
+    assert translate_ui_text("Problem markers", "ru") == "Маркеры проблем"
+    assert translate_ui_text("All", "ru") == "Все"
+    assert translate_ui_text("Validity", "ru") == "Валидность"
+    assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
     assert (
         translate_ui_text("No branches and no end blocks except postpone", "ru")
         == "Нет ветвлений и нет end-блоков, кроме postpone"
     )
     assert translate_ui_text("End blocks except postpone", "ru") == "End-блоки кроме postpone"
     assert translate_ui_text("Postpone end blocks", "ru") == "End-блоки postpone"
-    assert (
-        translate_ui_text("Gaming structure looks valid", "ru")
-        == "Гейминг-структура выглядит валидной"
-    )
+    assert translate_ui_text("Structure looks valid", "ru") == "Структура выглядит валидной"
     assert (
         translate_ui_text("Multiple graphs but no bot starts", "ru")
         == "Несколько графов, но нет bot/multi стартов"
@@ -157,4 +154,5 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
         translate_ui_text("More than three graphs in markup", "ru")
         == "В разметке больше трёх графов"
     )
+    assert translate_ui_text("Cross-team overlap", "ru") == "Кросс-командное пересечение"
     assert translate_ui_text("Markup health markers", "ru") == "Маркеры здоровья разметки"

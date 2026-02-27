@@ -1,0 +1,13 @@
+<div id="catalog-active-filters" class="filters" {% if oob %}hx-swap-oob="outerHTML"{% endif %}>
+  {% if active_filters %}
+    <div class="filter-label">{{ t("Active filters") }}</div>
+    <div class="filter-row">
+      {% for filter in active_filters %}
+        <span class="filter-pill">
+          {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
+        </span>
+      {% endfor %}
+      <a class="ghost-button" href="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}">{{ t("Clear filters") }}</a>
+    </div>
+  {% endif %}
+</div>

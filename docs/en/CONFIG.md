@@ -143,11 +143,12 @@ catalog:
   `/api/scenes/{scene_id}/procedure-graph-view` (interactive graph nodes/edges for the modal).
 - The header includes a language toggle (with icons) next to `Index JSON` and keeps the selected
   locale across catalog pages and HTMX updates.
-- Catalog cards show three health markers:
-  graph composition quality, top same-team `procedure_id` overlap, and top cross-team overlap.
+- Catalog cards show four health markers:
+  graph composition quality, validity, top same-team `procedure_id` overlap, and top cross-team overlap.
   Problematic markers glow by default and have hover animation.
-- The main page includes an additional filter `Health problems` (`Only with problems`) to show only
-  cards with at least one active health issue.
+- The main page includes an additional filter `Problem markers` with options:
+  `All`, `Graphs`, `Validity`, `Team overlap`, and `Cross-team overlap`.
+  Selecting a marker shows only cards where that exact marker is in a problem state.
 - The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
   with ranking and per-team breakdown for all health criteria.
 - Catalog search uses token filters in the main search input.

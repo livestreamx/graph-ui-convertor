@@ -25,7 +25,7 @@
         <div class="team-health-kpi-value">{{ health_report.graph_problem_count }}</div>
       </div>
       <div class="team-health-kpi-item">
-        <div class="team-health-kpi-label">{{ t("Gaming marker problems") }}</div>
+        <div class="team-health-kpi-label">{{ t("Validity marker problems") }}</div>
         <div class="team-health-kpi-value">{{ health_report.gaming_problem_count }}</div>
       </div>
       <div class="team-health-kpi-item">
@@ -65,7 +65,7 @@
         <div class="team-health-team-body">
           <div class="team-health-team-stats">
             <span class="health-detail-pill">{{ t("Graph marker problems") }}: {{ team.graph_problem_count }}</span>
-            <span class="health-detail-pill">{{ t("Gaming marker problems") }}: {{ team.gaming_problem_count }}</span>
+            <span class="health-detail-pill">{{ t("Validity marker problems") }}: {{ team.gaming_problem_count }}</span>
             <span class="health-detail-pill">{{ t("Team overlap problems") }}: {{ team.same_team_problem_count }}</span>
             <span class="health-detail-pill">{{ t("Cross-team overlap problems") }}: {{ team.cross_team_problem_count }}</span>
             <span class="health-detail-pill">{{ t("No bot graphs found") }}: {{ team.no_bot_graph_count }}</span>
@@ -86,7 +86,7 @@
                 <div class="team-health-markup-meta">
                   <span>{{ t("Graphs") }}: {{ health.graph.unique_graph_count }}</span>
                   <span>
-                    {{ t("Gaming validity") }}: {{ health.gaming.branch_block_count }}/{{ health.gaming.non_postpone_end_block_count }}
+                    {{ t("Validity") }}: {{ health.gaming.branch_block_count }}/{{ health.gaming.non_postpone_end_block_count }}
                   </span>
                   <span>{{ t("Team overlap") }}:
                     {% if health.same_team_similarity.top_match %}

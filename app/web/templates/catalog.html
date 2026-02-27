@@ -76,12 +76,13 @@
           </select>
         </label>
         <label class="filter-control">
-          <span>{{ t("Health problems") }}</span>
-          <select name="health_problem">
-            <option value="">{{ t("All markups") }}</option>
-            <option value="1" {% if health_problem == "1" %}selected{% endif %}>
-              {{ t("Only with problems") }}
-            </option>
+          <span>{{ t("Problem markers") }}</span>
+          <select name="health_marker">
+            <option value="">{{ t("All") }}</option>
+            <option value="graphs" {% if health_marker == "graphs" %}selected{% endif %}>{{ t("Graphs") }}</option>
+            <option value="validity" {% if health_marker == "validity" %}selected{% endif %}>{{ t("Validity") }}</option>
+            <option value="same-team" {% if health_marker == "same-team" %}selected{% endif %}>{{ t("Team overlap") }}</option>
+            <option value="cross-team" {% if health_marker == "cross-team" %}selected{% endif %}>{{ t("Cross-team overlap") }}</option>
           </select>
         </label>
       </div>
@@ -89,20 +90,9 @@
         <input type="hidden" name="group" value="{{ field }}:{{ value }}" />
       {% endfor %}
     </form>
-    <div class="filters">
-      {% if active_filters %}
-        <div class="filter-label">{{ t("Active filters") }}</div>
-        <div class="filter-row">
-          {% for filter in active_filters %}
-            <span class="filter-pill">
-              {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
-            </span>
-          {% endfor %}
-          <a class="ghost-button" href="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}">{{ t("Clear filters") }}</a>
-        </div>
-      {% endif %}
-    </div>
-
+    {% with oob=false %}
+      {% include "_catalog_active_filters.html" %}
+    {% endwith %}
   </section>
 
   <div id="catalog-list">

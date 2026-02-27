@@ -2,7 +2,7 @@
 
 {% block content %}
   <section class="detail-header">
-    <a class="ghost-button" href="/catalog?lang={{ lang }}">{{ t("Back to catalog") }}</a>
+    <a class="ghost-button" href="{{ catalog_back_url }}">{{ t("Back to catalog") }}</a>
     <div class="detail-title">{{ item.title }}</div>
     <div class="detail-markup-type">
       <span class="detail-markup-type-label">{{ "markup_type" | humanize_text }}</span>
@@ -32,10 +32,10 @@
         {% endif %}
         {% if diagram_excalidraw_enabled %}
           <a class="primary-button" target="_blank" href="{{ excalidraw_open_url }}">{{ t("Open Excalidraw") }}</a>
+          <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?format=excalidraw&download=true">
+            {{ t("Download .excalidraw") }}
+          </a>
         {% endif %}
-        <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}?format=excalidraw&download=true">
-          {{ t("Download .excalidraw") }}
-        </a>
         <a
           class="{% if diagram_excalidraw_enabled %}ghost-button unidraw-button{% else %}primary-button{% endif %}"
           href="/api/scenes/{{ item.scene_id }}?format=unidraw&download=true"
@@ -68,10 +68,10 @@
           <a class="primary-button" target="_blank" href="{{ procedure_excalidraw_open_url }}">
             {{ t("Open Excalidraw") }}
           </a>
+          <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}/procedure-graph?format=excalidraw&download=true">
+            {{ t("Download .excalidraw") }}
+          </a>
         {% endif %}
-        <a class="ghost-button" href="/api/scenes/{{ item.scene_id }}/procedure-graph?format=excalidraw&download=true">
-          {{ t("Download .excalidraw") }}
-        </a>
         <a
           class="{% if diagram_excalidraw_enabled %}ghost-button unidraw-button{% else %}primary-button{% endif %}"
           href="/api/scenes/{{ item.scene_id }}/procedure-graph?format=unidraw&download=true"
@@ -1000,16 +1000,16 @@
             <span class="health-detail-title">{{ t("Graphs") }}</span>
             <span class="health-detail-value">{{ item_health.graph.unique_graph_count }}</span>
           </div>
-          <div class="health-detail-meta">
-            {{ t("Bot graphs") }}: {{ item_health.graph.bot_graph_count }} ·
-            {{ t("Non-bot graphs") }}: {{ item_health.graph.non_bot_graph_count }}
-          </div>
+          <ul class="health-detail-list">
+            <li>{{ t("Bot graphs") }}: {{ item_health.graph.bot_graph_count }}</li>
+            <li>{{ t("Non-bot graphs") }}: {{ item_health.graph.non_bot_graph_count }}</li>
+          </ul>
           {% if item_health.graph.issue_codes %}
-            <div class="health-detail-note">
+            <ul class="health-detail-list">
               {% for issue_code in item_health.graph.issue_codes %}
-                <span class="health-detail-pill">{{ t(graph_issue_text_keys.get(issue_code, issue_code)) }}</span>
+                <li>{{ t(graph_issue_text_keys.get(issue_code, issue_code)) }}</li>
               {% endfor %}
-            </div>
+            </ul>
           {% else %}
             <div class="health-detail-note">{{ t("No graph health problems") }}</div>
           {% endif %}
@@ -1025,12 +1025,12 @@
               {% endif %}
             </span>
           </div>
-          <div class="health-detail-meta">
-            {{ t("Problem threshold") }}: &gt;{{ "%.1f"|format(item_health.same_team_similarity.threshold_percent) }}%
-          </div>
+          <ul class="health-detail-list">
+            <li>{{ t("Problem threshold") }}: &gt;{{ "%.1f"|format(item_health.same_team_similarity.threshold_percent) }}%</li>
+          </ul>
           {% if item_health.same_team_similarity.top_match %}
-            <div class="health-detail-note">
-              {{ t("Closest markup in team") }}:
+            <div class="health-detail-note health-detail-note-column">
+              <span class="health-detail-note-label">{{ t("Closest markup in team") }}:</span>
               <a class="meta-link" href="/catalog/{{ item_health.same_team_similarity.top_match.scene_id }}?lang={{ lang }}">
                 <span class="meta-link-text">{{ item_health.same_team_similarity.top_match.title }}</span>
               </a>
@@ -1050,18 +1050,20 @@
               {% endif %}
             </span>
           </div>
-          <div class="health-detail-meta">
-            {{ t("Problem threshold") }}: &gt;{{ "%.1f"|format(item_health.cross_team_similarity.threshold_percent) }}%
-          </div>
+          <ul class="health-detail-list">
+            <li>{{ t("Problem threshold") }}: &gt;{{ "%.1f"|format(item_health.cross_team_similarity.threshold_percent) }}%</li>
+          </ul>
           {% if item_health.cross_team_similarity.top_match %}
-            <div class="health-detail-note">
-              {{ t("Closest markup across teams") }}:
-              <a class="meta-link" href="/catalog/{{ item_health.cross_team_similarity.top_match.scene_id }}?lang={{ lang }}">
-                <span class="meta-link-text">{{ item_health.cross_team_similarity.top_match.title }}</span>
+            <div class="health-detail-note health-detail-note-column">
+              <span class="health-detail-note-label">{{ t("Closest markup across teams") }}:</span>
+              <a class="health-detail-entity-link" href="../{{ item_health.cross_team_similarity.top_match.scene_id }}?lang={{ lang }}">
+                <span class="team-graph-graph-entities health-detail-team-entities">
+                  <span class="team-graph-graph-entity team-graph-graph-entity-sm">
+                    <span class="team-graph-graph-entity-team">{{ item_health.cross_team_similarity.top_match.team_name }}</span>
+                    <span class="team-graph-graph-entity-service">{{ item_health.cross_team_similarity.top_match.title }}</span>
+                  </span>
+                </span>
               </a>
-              <span class="meta-label">
-                {{ t("Team") }}: {{ item_health.cross_team_similarity.top_match.team_name }}
-              </span>
             </div>
           {% else %}
             <div class="health-detail-note">{{ t("No comparable markups across teams") }}</div>
@@ -1069,20 +1071,20 @@
         </article>
         <article class="health-detail-item {% if item_health.gaming.is_problem %}is-problem{% endif %}">
           <div class="health-detail-head">
-            <span class="health-detail-title">{{ t("Gaming validity") }}</span>
+            <span class="health-detail-title">{{ t("Validity") }}</span>
             <span class="health-detail-value">
               {{ item_health.gaming.branch_block_count }}/{{ item_health.gaming.non_postpone_end_block_count }}
             </span>
           </div>
-          <div class="health-detail-meta">
-            {{ t("Branches") }}: {{ item_health.gaming.branch_block_count }} ·
-            {{ t("End blocks except postpone") }}: {{ item_health.gaming.non_postpone_end_block_count }} ·
-            {{ t("Postpone end blocks") }}: {{ item_health.gaming.postpone_end_block_count }}
-          </div>
+          <ul class="health-detail-list">
+            <li>{{ t("Branches") }}: {{ item_health.gaming.branch_block_count }}</li>
+            <li>{{ t("End blocks except postpone") }}: {{ item_health.gaming.non_postpone_end_block_count }}</li>
+            <li>{{ t("Postpone end blocks") }}: {{ item_health.gaming.postpone_end_block_count }}</li>
+          </ul>
           {% if item_health.gaming.is_problem %}
             <div class="health-detail-note">{{ t("No branches and no end blocks except postpone") }}</div>
           {% else %}
-            <div class="health-detail-note">{{ t("Gaming structure looks valid") }}</div>
+            <div class="health-detail-note">{{ t("Structure looks valid") }}</div>
           {% endif %}
         </article>
       </div>
