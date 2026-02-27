@@ -89,6 +89,10 @@ def test_build_catalog_index_extracts_fields(
         assert item.procedure_ids == ["p1"]
         assert item.block_ids == ["a", "b"]
         assert item.procedure_blocks == {"p1": ["a", "b"]}
+        assert item.start_block_count == 1
+        assert item.branch_block_count == 0
+        assert item.non_postpone_end_block_count == 1
+        assert item.postpone_end_block_count == 0
         expected_timestamp = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
         assert item.updated_at == expected_timestamp
 

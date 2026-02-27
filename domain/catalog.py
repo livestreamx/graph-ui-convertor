@@ -37,6 +37,7 @@ class CatalogItem:
     block_ids: list[str] = field(default_factory=list)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_graph: dict[str, list[str]] = field(default_factory=dict)
+    start_block_count: int = 0
     branch_block_count: int = 0
     non_postpone_end_block_count: int = 0
     postpone_end_block_count: int = 0
@@ -62,6 +63,7 @@ class CatalogItem:
             "block_ids": list(self.block_ids),
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
             "procedure_graph": {key: list(value) for key, value in self.procedure_graph.items()},
+            "start_block_count": int(self.start_block_count),
             "branch_block_count": int(self.branch_block_count),
             "non_postpone_end_block_count": int(self.non_postpone_end_block_count),
             "postpone_end_block_count": int(self.postpone_end_block_count),
@@ -97,6 +99,7 @@ class CatalogItem:
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
             procedure_graph=procedure_graph,
+            start_block_count=_load_non_negative_int(payload.get("start_block_count")),
             branch_block_count=_load_non_negative_int(payload.get("branch_block_count")),
             non_postpone_end_block_count=_load_non_negative_int(
                 payload.get("non_postpone_end_block_count")

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import render_validity_breakdown, render_validity_problem_explanation with context %}
 
 {% block content %}
   <section class="detail-header">
@@ -1013,6 +1014,16 @@
           {% else %}
             <div class="health-detail-note">{{ t("No graph health problems") }}</div>
           {% endif %}
+          <div class="health-detail-final-status {% if item_health.graph.is_problem %}is-problem{% else %}is-ok{% endif %}">
+            <span class="health-detail-final-status-label">{{ t("Status") }}</span>
+            <span class="health-detail-final-status-value">
+              {% if item_health.graph.is_problem %}
+                {{ t("Needs attention") }}
+              {% else %}
+                {{ t("Looks good") }}
+              {% endif %}
+            </span>
+          </div>
         </article>
         <article class="health-detail-item {% if item_health.same_team_similarity.is_problem %}is-problem{% endif %}">
           <div class="health-detail-head">
@@ -1038,6 +1049,16 @@
           {% else %}
             <div class="health-detail-note">{{ t("No comparable markups in team") }}</div>
           {% endif %}
+          <div class="health-detail-final-status {% if item_health.same_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
+            <span class="health-detail-final-status-label">{{ t("Status") }}</span>
+            <span class="health-detail-final-status-value">
+              {% if item_health.same_team_similarity.is_problem %}
+                {{ t("Needs attention") }}
+              {% else %}
+                {{ t("Looks good") }}
+              {% endif %}
+            </span>
+          </div>
         </article>
         <article class="health-detail-item {% if item_health.cross_team_similarity.is_problem %}is-problem{% endif %}">
           <div class="health-detail-head">
@@ -1056,7 +1077,7 @@
           {% if item_health.cross_team_similarity.top_match %}
             <div class="health-detail-note health-detail-note-column">
               <span class="health-detail-note-label">{{ t("Closest markup across teams") }}:</span>
-              <a class="health-detail-entity-link" href="../{{ item_health.cross_team_similarity.top_match.scene_id }}?lang={{ lang }}">
+              <a class="health-detail-entity-link" href="/catalog/{{ item_health.cross_team_similarity.top_match.scene_id }}?lang={{ lang }}">
                 <span class="team-graph-graph-entities health-detail-team-entities">
                   <span class="team-graph-graph-entity team-graph-graph-entity-sm">
                     <span class="team-graph-graph-entity-team">{{ item_health.cross_team_similarity.top_match.team_name }}</span>
@@ -1068,24 +1089,40 @@
           {% else %}
             <div class="health-detail-note">{{ t("No comparable markups across teams") }}</div>
           {% endif %}
+          <div class="health-detail-final-status {% if item_health.cross_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
+            <span class="health-detail-final-status-label">{{ t("Status") }}</span>
+            <span class="health-detail-final-status-value">
+              {% if item_health.cross_team_similarity.is_problem %}
+                {{ t("Needs attention") }}
+              {% else %}
+                {{ t("Looks good") }}
+              {% endif %}
+            </span>
+          </div>
         </article>
         <article class="health-detail-item {% if item_health.gaming.is_problem %}is-problem{% endif %}">
           <div class="health-detail-head">
             <span class="health-detail-title">{{ t("Validity") }}</span>
-            <span class="health-detail-value">
-              {{ item_health.gaming.branch_block_count }}/{{ item_health.gaming.non_postpone_end_block_count }}
+            <span class="health-detail-value health-detail-value-status">
+              {% if item_health.gaming.is_problem %}
+                {{ t("Needs attention") }}
+              {% else %}
+                {{ t("Looks good") }}
+              {% endif %}
             </span>
           </div>
-          <ul class="health-detail-list">
-            <li>{{ t("Branches") }}: {{ item_health.gaming.branch_block_count }}</li>
-            <li>{{ t("End blocks except postpone") }}: {{ item_health.gaming.non_postpone_end_block_count }}</li>
-            <li>{{ t("Postpone end blocks") }}: {{ item_health.gaming.postpone_end_block_count }}</li>
-          </ul>
-          {% if item_health.gaming.is_problem %}
-            <div class="health-detail-note">{{ t("No branches and no end blocks except postpone") }}</div>
-          {% else %}
-            <div class="health-detail-note">{{ t("Structure looks valid") }}</div>
-          {% endif %}
+          {{ render_validity_breakdown(item_health.gaming) }}
+          {{ render_validity_problem_explanation(item_health.gaming, show_ok=true) }}
+          <div class="health-detail-final-status {% if item_health.gaming.is_problem %}is-problem{% else %}is-ok{% endif %}">
+            <span class="health-detail-final-status-label">{{ t("Status") }}</span>
+            <span class="health-detail-final-status-value">
+              {% if item_health.gaming.is_problem %}
+                {{ t("Needs attention") }}
+              {% else %}
+                {{ t("Looks good") }}
+              {% endif %}
+            </span>
+          </div>
         </article>
       </div>
     </section>

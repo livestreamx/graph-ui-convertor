@@ -100,6 +100,7 @@ class BuildCatalogIndex:
         procedure_graph = self._extract_procedure_graph(document)
         procedure_ids = self._collect_procedure_ids(procedure_blocks, procedure_graph)
         block_ids = self._collect_block_ids(procedure_blocks)
+        start_block_count = self._count_start_blocks(document)
         branch_block_count = self._count_branch_blocks(document)
         non_postpone_end_block_count, postpone_end_block_count = self._count_end_blocks(document)
 
@@ -136,6 +137,7 @@ class BuildCatalogIndex:
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
             procedure_graph=procedure_graph,
+            start_block_count=start_block_count,
             branch_block_count=branch_block_count,
             non_postpone_end_block_count=non_postpone_end_block_count,
             postpone_end_block_count=postpone_end_block_count,
@@ -312,6 +314,12 @@ class BuildCatalogIndex:
             for targets in procedure.branches.values():
                 if len(targets) > 1:
                     count += 1
+        return count
+
+    def _count_start_blocks(self, document: MarkupDocument) -> int:
+        count = 0
+        for procedure in document.procedures:
+            count += len(procedure.start_block_ids)
         return count
 
     def _count_end_blocks(self, document: MarkupDocument) -> tuple[int, int]:

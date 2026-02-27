@@ -145,7 +145,11 @@ catalog:
   locale across catalog pages and HTMX updates.
 - Catalog cards show four health markers:
   graph composition quality, validity, top same-team `procedure_id` overlap, and top cross-team overlap.
+  The validity marker shows a per-block breakdown (`start`, `branches`, `end except postpone`,
+  `postpone`) instead of a single numeric ratio.
   Problematic markers glow by default and have hover animation.
+  For validity problems, the UI explains the exact trigger:
+  no branch blocks and no non-postpone end blocks (postpone-only endings do not count as completion).
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graphs`, `Validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.

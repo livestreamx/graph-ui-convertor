@@ -18,6 +18,7 @@ def _catalog_item(
     team_id: str,
     team_name: str,
     procedure_graph: dict[str, list[str]],
+    start_block_count: int = 1,
     branch_block_count: int = 1,
     non_postpone_end_block_count: int = 1,
     postpone_end_block_count: int = 0,
@@ -53,6 +54,7 @@ def _catalog_item(
         block_ids=[],
         procedure_blocks={},
         procedure_graph=procedure_graph,
+        start_block_count=start_block_count,
         branch_block_count=branch_block_count,
         non_postpone_end_block_count=non_postpone_end_block_count,
         postpone_end_block_count=postpone_end_block_count,
@@ -198,6 +200,7 @@ def test_catalog_health_report_detects_gaming_marker_problem() -> None:
         team_id="team-a",
         team_name="Team A",
         procedure_graph={"bot_entry": ["finish"]},
+        start_block_count=1,
         branch_block_count=1,
         non_postpone_end_block_count=1,
         postpone_end_block_count=0,
@@ -208,6 +211,7 @@ def test_catalog_health_report_detects_gaming_marker_problem() -> None:
         team_id="team-a",
         team_name="Team A",
         procedure_graph={"bot_entry": ["postpone_only"]},
+        start_block_count=1,
         branch_block_count=0,
         non_postpone_end_block_count=0,
         postpone_end_block_count=2,
@@ -217,6 +221,7 @@ def test_catalog_health_report_detects_gaming_marker_problem() -> None:
     problematic_health = report.item("problematic")
     assert problematic_health is not None
     assert problematic_health.gaming.is_problem is True
+    assert problematic_health.gaming.start_block_count == 1
     assert problematic_health.gaming.issue_codes == (GAMING_ISSUE_NO_BRANCH_AND_NO_END,)
     assert report.gaming_problem_count == 1
     assert report.total_problem_markups == 2

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros.html" import render_validity_breakdown, render_validity_problem_explanation with context %}
 
 {% block content %}
   <section class="detail-header">
@@ -85,9 +86,6 @@
                 </div>
                 <div class="team-health-markup-meta">
                   <span>{{ t("Graphs") }}: {{ health.graph.unique_graph_count }}</span>
-                  <span>
-                    {{ t("Validity") }}: {{ health.gaming.branch_block_count }}/{{ health.gaming.non_postpone_end_block_count }}
-                  </span>
                   <span>{{ t("Team overlap") }}:
                     {% if health.same_team_similarity.top_match %}
                       {{ "%.1f"|format(health.same_team_similarity.top_match.overlap_percent) }}%
@@ -103,6 +101,10 @@
                     {% endif %}
                   </span>
                 </div>
+                <div class="team-health-markup-validity">
+                  <span class="team-health-markup-validity-label">{{ t("Validity") }}</span>
+                  {{ render_validity_breakdown(health.gaming, compact=true) }}
+                </div>
                 {% if health.graph.issue_codes %}
                   <div class="team-health-markup-issues">
                     {% for issue_code in health.graph.issue_codes %}
@@ -112,7 +114,7 @@
                 {% endif %}
                 {% if health.gaming.is_problem %}
                   <div class="team-health-markup-issues">
-                    <span class="health-detail-pill">{{ t("No branches and no end blocks except postpone") }}</span>
+                    {{ render_validity_problem_explanation(health.gaming, compact=true) }}
                   </div>
                 {% endif %}
               </article>

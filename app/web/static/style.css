@@ -2367,6 +2367,66 @@ main {
   line-height: 1.1;
 }
 
+.health-marker-gaming {
+  gap: 6px;
+}
+
+.validity-breakdown {
+  display: grid;
+  gap: 6px;
+}
+
+.validity-breakdown-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.validity-breakdown-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.validity-breakdown-compact .validity-breakdown-item {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 4px 6px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.validity-breakdown-label {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.validity-breakdown-value {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.health-marker .validity-breakdown {
+  gap: 4px;
+}
+
+.health-marker .validity-breakdown-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.health-marker .validity-breakdown-value {
+  font-size: 13px;
+}
+
+.health-marker.is-problem .validity-breakdown-label,
+.health-marker.is-problem .validity-breakdown-value {
+  color: #ffe2e2;
+}
+
 .health-marker:hover {
   transform: translateY(-2px);
   border-color: rgba(255, 255, 255, 0.34);
@@ -2393,6 +2453,43 @@ main {
   font-size: 11px;
   border-left: 2px solid rgba(255, 122, 122, 0.55);
   padding-left: 8px;
+}
+
+.card-health-note-validity {
+  color: inherit;
+  border-left: 0;
+  padding-left: 0;
+}
+
+.validity-status {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.validity-status-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.validity-status-reason {
+  color: #ffd6d6;
+}
+
+.validity-status-problem {
+  color: #ffe2e2;
+  border-left: 2px solid rgba(255, 122, 122, 0.55);
+  padding-left: 8px;
+}
+
+.validity-status-ok {
+  color: #d2ecd7;
+}
+
+.validity-status-compact {
+  font-size: 11px;
 }
 
 @keyframes healthMarkerGlow {
@@ -2785,8 +2882,8 @@ body.service-graph-open {
   border-radius: 16px;
   padding: 14px;
   background: linear-gradient(160deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
-  display: grid;
-  grid-template-rows: auto auto 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 10px;
 }
 
@@ -2823,6 +2920,14 @@ body.service-graph-open {
   font-size: 22px;
 }
 
+.health-detail-value-status {
+  font-family: "IBM Plex Sans", sans-serif;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #dbe8ff;
+}
+
 .health-detail-list {
   margin: 0;
   padding: 0;
@@ -2855,6 +2960,48 @@ body.service-graph-open {
 
 .health-detail-note-label {
   color: var(--muted);
+}
+
+.health-detail-final-status {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  padding: 7px 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.health-detail-final-status-label {
+  color: var(--muted);
+}
+
+.health-detail-final-status-value {
+  font-weight: 600;
+}
+
+.health-detail-final-status.is-ok {
+  border-color: rgba(139, 235, 170, 0.5);
+  background: linear-gradient(145deg, rgba(28, 61, 41, 0.48), rgba(13, 32, 22, 0.4));
+}
+
+.health-detail-final-status.is-ok .health-detail-final-status-label,
+.health-detail-final-status.is-ok .health-detail-final-status-value {
+  color: #ccf7d7;
+}
+
+.health-detail-final-status.is-problem {
+  border-color: rgba(255, 122, 122, 0.5);
+  background: linear-gradient(145deg, rgba(87, 30, 42, 0.46), rgba(52, 18, 31, 0.38));
+}
+
+.health-detail-final-status.is-problem .health-detail-final-status-label,
+.health-detail-final-status.is-problem .health-detail-final-status-value {
+  color: #ffdada;
 }
 
 .health-detail-entity-link {
@@ -3029,10 +3176,21 @@ body.service-graph-open {
   color: var(--muted);
 }
 
-.team-health-markup-issues {
-  display: flex;
+.team-health-markup-validity {
+  display: grid;
   gap: 6px;
-  flex-wrap: wrap;
+}
+
+.team-health-markup-validity-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.team-health-markup-issues {
+  display: grid;
+  gap: 6px;
 }
 
 .action-result {

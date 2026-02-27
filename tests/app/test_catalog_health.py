@@ -233,6 +233,8 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Team A Main" not in filtered.text
         assert "Active filters" in filtered.text
         assert "Problem markers: validity" in filtered.text
+        assert "Validity marker issue" in filtered.text
+        assert "Start blocks" in filtered.text
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
         assert f'href="/catalog/{scene_id}?lang=en' in filtered.text
@@ -258,6 +260,7 @@ def test_catalog_detail_renders_health_section(
         app_settings_factory=app_settings_factory,
     ) as client:
         scene_id = _scene_id_by_title(client, "Team A Main")
+        cross_team_scene_id = _scene_id_by_title(client, "Team B Overlap")
         response = client.get(f"/catalog/{scene_id}")
         assert response.status_code == 200
         assert "Markup health markers" in response.text
@@ -265,7 +268,16 @@ def test_catalog_detail_renders_health_section(
         assert "Closest markup across teams" in response.text
         assert "Problem threshold" in response.text
         assert "Validity" in response.text
+        assert "Start blocks" in response.text
         assert "End blocks except postpone" in response.text
+        assert "Looks good" in response.text
+        assert response.text.count('class="health-detail-final-status ') == 4
+        assert 'class="health-detail-final-status is-ok"' in response.text
+        assert f'href="/catalog/{cross_team_scene_id}?lang=en"' in response.text
+
+        linked_response = client.get(f"/catalog/{cross_team_scene_id}", params={"lang": "en"})
+        assert linked_response.status_code == 200
+        assert "Team B Overlap" in linked_response.text
 
         back_url = "/catalog?lang=en&search=team&health_marker=validity"
         with_back = client.get(f"/catalog/{scene_id}", params={"back": back_url})
@@ -298,6 +310,7 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team Z" in response.text
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
+        assert "Validity marker issue" in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text
 

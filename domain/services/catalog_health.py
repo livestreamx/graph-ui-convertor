@@ -43,6 +43,7 @@ class GraphHealth:
 
 @dataclass(frozen=True)
 class GamingHealth:
+    start_block_count: int
     branch_block_count: int
     non_postpone_end_block_count: int
     postpone_end_block_count: int
@@ -235,6 +236,7 @@ def _build_graph_health(item: CatalogItem) -> GraphHealth:
 
 
 def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHealth:
+    start_block_count = max(0, int(item.start_block_count))
     branch_block_count = max(0, int(item.branch_block_count))
     non_postpone_end_block_count = max(0, int(item.non_postpone_end_block_count))
     postpone_end_block_count = max(0, int(item.postpone_end_block_count))
@@ -243,6 +245,7 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
     )
     issue_codes = (GAMING_ISSUE_NO_BRANCH_AND_NO_END,) if is_problem else ()
     return GamingHealth(
+        start_block_count=start_block_count,
         branch_block_count=branch_block_count,
         non_postpone_end_block_count=non_postpone_end_block_count,
         postpone_end_block_count=postpone_end_block_count,
