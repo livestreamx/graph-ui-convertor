@@ -238,3 +238,24 @@ def test_catalog_ui_text_overrides(
         response = context.client.get("/catalog")
         assert response.status_code == 200
         assert "Kind: Svc" in response.text
+
+
+def test_catalog_homepage_limits_card_grid_to_three_columns(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+    ) as context:
+        response = context.client.get("/catalog")
+        assert response.status_code == 200
+        assert 'class="card-grid card-grid-limited"' in response.text
+
+    style_path = Path("app/web/static/style.css")
+    styles = style_path.read_text(encoding="utf-8")
+    assert ".card-grid-limited" in styles
+    assert "@media (min-width: 1008px)" in styles
+    assert "grid-template-columns: repeat(3, minmax(0, 1fr));" in styles
