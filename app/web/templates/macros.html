@@ -74,7 +74,10 @@
         {% endfor %}
       </div>
     {% else %}
-      <div class="card-grid card-grid-limited">
+      {% set group_item_count = group.items | length %}
+      <div
+        class="card-grid card-grid-limited{% if group_item_count < 3 %} card-grid-limited-fill-{{ group_item_count }}{% endif %}"
+      >
         {% for item in group.items %}
           <article class="card">
             <div class="card-body">

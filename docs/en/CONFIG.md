@@ -155,6 +155,8 @@ catalog:
   Selecting a marker shows only cards where that exact marker is in a problem state.
 - The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
   with ranking and per-team breakdown for all health criteria.
+- On desktop, catalog list groups still cap the grid at three cards per row, but groups with only
+  one or two cards stretch those cards to fill the row width instead of leaving empty columns.
 - Catalog search uses token filters in the main search input.
   Type a value and press `Enter` to add it as a token; each next `Enter` adds one more token.
   Tokens are combined with `AND`, and each token is matched across title/tags/markup metadata

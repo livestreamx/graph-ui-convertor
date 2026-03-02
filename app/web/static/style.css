@@ -3248,6 +3248,14 @@ body.service-graph-open {
   .card-grid-limited {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+
+  .card-grid-limited-fill-1 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .card-grid-limited-fill-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 720px) {
