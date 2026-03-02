@@ -106,18 +106,53 @@ def test_catalog_health_report_graph_issue_classification() -> None:
     single_no_bot = report.item("single-no-bot")
     assert single_no_bot is not None
     assert single_no_bot.graph.issue_codes == (GRAPH_ISSUE_NO_BOT,)
+    assert single_no_bot.graph.bot_graph_count == 0
+    assert single_no_bot.graph.multi_graph_count == 0
+    assert single_no_bot.graph.employee_graph_count == 1
 
     only_bot = report.item("only-bot")
     assert only_bot is not None
     assert only_bot.graph.issue_codes == (GRAPH_ISSUE_ONLY_BOT,)
+    assert only_bot.graph.bot_graph_count == 1
+    assert only_bot.graph.multi_graph_count == 0
+    assert only_bot.graph.employee_graph_count == 0
 
     multiple_no_bot = report.item("multiple-no-bot")
     assert multiple_no_bot is not None
     assert multiple_no_bot.graph.issue_codes == (GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,)
+    assert multiple_no_bot.graph.bot_graph_count == 0
+    assert multiple_no_bot.graph.multi_graph_count == 0
+    assert multiple_no_bot.graph.employee_graph_count == 2
 
     too_many = report.item("too-many")
     assert too_many is not None
     assert too_many.graph.issue_codes == (GRAPH_ISSUE_TOO_MANY,)
+    assert too_many.graph.bot_graph_count == 1
+    assert too_many.graph.multi_graph_count == 0
+    assert too_many.graph.employee_graph_count == 3
+
+
+def test_catalog_health_report_counts_multi_and_employee_graphs() -> None:
+    item = _catalog_item(
+        scene_id="mixed-graphs",
+        title="Mixed graphs",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={
+            "bot_entry": ["bot_finish"],
+            "multi_entry": ["multi_finish"],
+            "employee_entry": ["employee_finish"],
+        },
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("mixed-graphs")
+    assert health is not None
+    assert health.graph.unique_graph_count == 3
+    assert health.graph.bot_graph_count == 1
+    assert health.graph.multi_graph_count == 1
+    assert health.graph.employee_graph_count == 1
 
 
 def test_catalog_health_report_similarity_thresholds_and_team_ranking() -> None:

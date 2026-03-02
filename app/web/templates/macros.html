@@ -1,3 +1,20 @@
+{% macro render_graph_breakdown(graph, compact=false) %}
+  <div class="validity-breakdown{% if compact %} validity-breakdown-compact{% endif %}">
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label">{{ t("Graphs with bot") }}</span>
+      <span class="validity-breakdown-value">{{ graph.bot_graph_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label">{{ t("Multichannel graphs") }}</span>
+      <span class="validity-breakdown-value">{{ graph.multi_graph_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label">{{ t("Employee graphs") }}</span>
+      <span class="validity-breakdown-value">{{ graph.employee_graph_count }}</span>
+    </div>
+  </div>
+{% endmacro %}
+
 {% macro render_validity_breakdown(gaming, compact=false) %}
   <div class="validity-breakdown{% if compact %} validity-breakdown-compact{% endif %}">
     <div class="validity-breakdown-item">
@@ -9,11 +26,11 @@
       <span class="validity-breakdown-value">{{ gaming.branch_block_count }}</span>
     </div>
     <div class="validity-breakdown-item">
-      <span class="validity-breakdown-label">{{ t("End blocks except postpone") }}</span>
+      <span class="validity-breakdown-label">{{ t("End blocks") }}</span>
       <span class="validity-breakdown-value">{{ gaming.non_postpone_end_block_count }}</span>
     </div>
     <div class="validity-breakdown-item">
-      <span class="validity-breakdown-label">{{ t("Postpone end blocks") }}</span>
+      <span class="validity-breakdown-label">{{ t("Postpone blocks") }}</span>
       <span class="validity-breakdown-value">{{ gaming.postpone_end_block_count }}</span>
     </div>
   </div>
@@ -81,13 +98,6 @@
                 <div class="card-health-section">
                   <div class="health-marker-row">
                     <div
-                      class="health-marker health-marker-graphs {% if item_health.graph.is_problem %}is-problem is-glow{% endif %}"
-                      data-health-marker="graphs"
-                    >
-                      <span class="health-marker-label">{{ t("Graphs") }}</span>
-                      <span class="health-marker-value">{{ item_health.graph.unique_graph_count }}</span>
-                    </div>
-                    <div
                       class="health-marker health-marker-same-team {% if item_health.same_team_similarity.is_problem %}is-problem is-glow{% endif %}"
                       data-health-marker="same-team"
                     >
@@ -112,6 +122,13 @@
                           0.0%
                         {% endif %}
                       </span>
+                    </div>
+                    <div
+                      class="health-marker health-marker-graphs {% if item_health.graph.is_problem %}is-problem is-glow{% endif %}"
+                      data-health-marker="graphs"
+                    >
+                      <span class="health-marker-label">{{ t("Graphs") }}</span>
+                      {{ render_graph_breakdown(item_health.graph, compact=true) }}
                     </div>
                     <div
                       class="health-marker health-marker-gaming {% if item_health.gaming.is_problem %}is-problem is-glow{% endif %}"

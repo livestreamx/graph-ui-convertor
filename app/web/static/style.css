@@ -2371,6 +2371,7 @@ main {
   line-height: 1.1;
 }
 
+.health-marker-graphs,
 .health-marker-gaming {
   gap: 6px;
 }
@@ -2891,6 +2892,18 @@ body.service-graph-open {
   gap: 10px;
 }
 
+.health-detail-body {
+  display: grid;
+  gap: 10px;
+}
+
+.health-detail-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 .health-detail-item.is-problem {
   border-color: rgba(255, 122, 122, 0.58);
   background:
@@ -2947,6 +2960,15 @@ body.service-graph-open {
   white-space: normal;
 }
 
+.health-detail-issue-text {
+  gap: 6px;
+  color: #ffb6b6;
+}
+
+.health-detail-issue-text li {
+  color: inherit;
+}
+
 .health-detail-note {
   display: flex;
   gap: 6px;
@@ -2967,7 +2989,6 @@ body.service-graph-open {
 }
 
 .health-detail-final-status {
-  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;

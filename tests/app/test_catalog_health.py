@@ -225,6 +225,18 @@ def test_catalog_health_markers_and_problem_filter(
         assert 'data-health-marker="same-team"' in catalog_response.text
         assert 'data-health-marker="cross-team"' in catalog_response.text
         assert 'data-health-marker="gaming"' in catalog_response.text
+        assert "Graphs with bot" in catalog_response.text
+        assert "Multichannel graphs" in catalog_response.text
+        assert "Employee graphs" in catalog_response.text
+        assert catalog_response.text.find(
+            'data-health-marker="same-team"'
+        ) < catalog_response.text.find('data-health-marker="cross-team"')
+        assert catalog_response.text.find(
+            'data-health-marker="cross-team"'
+        ) < catalog_response.text.find('data-health-marker="graphs"')
+        assert catalog_response.text.find(
+            'data-health-marker="graphs"'
+        ) < catalog_response.text.find('data-health-marker="gaming"')
 
         filtered = client.get("/catalog", params={"health_marker": "validity"})
         assert filtered.status_code == 200
@@ -263,15 +275,25 @@ def test_catalog_detail_renders_health_section(
         cross_team_scene_id = _scene_id_by_title(client, "Team B Overlap")
         response = client.get(f"/catalog/{scene_id}")
         assert response.status_code == 200
+        assert "Markup ID" in response.text
         assert "Markup health markers" in response.text
         assert "Closest markup in team" in response.text
         assert "Closest markup across teams" in response.text
         assert "Problem threshold" in response.text
         assert "Validity" in response.text
         assert "Start blocks" in response.text
-        assert "End blocks except postpone" in response.text
-        assert "Looks good" in response.text
+        assert "End blocks" in response.text
+        assert "Postpone blocks" in response.text
+        assert "Graphs with bot" in response.text
+        assert "Multichannel graphs" in response.text
+        assert "Employee graphs" in response.text
+        assert 'class="health-detail-list health-detail-issue-text"' in response.text
+        assert "OK" in response.text
+        assert response.text.find("Team overlap") < response.text.find("Cross-team overlap")
+        assert response.text.find("Cross-team overlap") < response.text.find("Graphs")
+        assert response.text.find("Graphs") < response.text.find("Validity")
         assert response.text.count('class="health-detail-final-status ') == 4
+        assert response.text.count('class="health-detail-footer"') == 4
         assert 'class="health-detail-final-status is-ok"' in response.text
         assert f'href="/catalog/{cross_team_scene_id}?lang=en"' in response.text
 

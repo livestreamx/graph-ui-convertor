@@ -36,6 +36,8 @@ class SimilarityHealth:
 class GraphHealth:
     unique_graph_count: int
     bot_graph_count: int
+    multi_graph_count: int
+    employee_graph_count: int
     non_bot_graph_count: int
     issue_codes: tuple[str, ...]
     is_problem: bool
@@ -210,25 +212,38 @@ def _build_graph_health(item: CatalogItem) -> GraphHealth:
     unique_graph_count = len(components)
 
     bot_graph_count = 0
+    multi_graph_count = 0
+    employee_graph_count = 0
+    bot_or_multi_start_graph_count = 0
     for component_nodes in components:
+        has_bot = any(_has_substring(procedure_id, "bot") for procedure_id in component_nodes)
+        has_multi = any(_has_substring(procedure_id, "multi") for procedure_id in component_nodes)
+        if has_bot:
+            bot_graph_count += 1
+        if has_multi:
+            multi_graph_count += 1
+        if not has_bot and not has_multi:
+            employee_graph_count += 1
         starts = _component_starts(component_nodes, adjacency)
         if any(_is_bot_or_multi(procedure_id) for procedure_id in starts):
-            bot_graph_count += 1
+            bot_or_multi_start_graph_count += 1
     non_bot_graph_count = max(0, unique_graph_count - bot_graph_count)
 
     issue_codes: list[str] = []
     if unique_graph_count > 3:
         issue_codes.append(GRAPH_ISSUE_TOO_MANY)
-    if unique_graph_count >= 2 and bot_graph_count == 0:
+    if unique_graph_count >= 2 and bot_or_multi_start_graph_count == 0:
         issue_codes.append(GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT)
-    elif bot_graph_count == 0:
+    elif bot_or_multi_start_graph_count == 0:
         issue_codes.append(GRAPH_ISSUE_NO_BOT)
-    elif unique_graph_count > 0 and bot_graph_count == unique_graph_count:
+    elif unique_graph_count > 0 and bot_or_multi_start_graph_count == unique_graph_count:
         issue_codes.append(GRAPH_ISSUE_ONLY_BOT)
 
     return GraphHealth(
         unique_graph_count=unique_graph_count,
         bot_graph_count=bot_graph_count,
+        multi_graph_count=multi_graph_count,
+        employee_graph_count=employee_graph_count,
         non_bot_graph_count=non_bot_graph_count,
         issue_codes=tuple(issue_codes),
         is_problem=bool(issue_codes),
@@ -465,5 +480,8 @@ def _component_starts(
 
 
 def _is_bot_or_multi(value: str) -> bool:
-    normalized = str(value).lower()
-    return "bot" in normalized or "multi" in normalized
+    return _has_substring(value, "bot") or _has_substring(value, "multi")
+
+
+def _has_substring(value: str, needle: str) -> bool:
+    return needle in str(value).lower()
