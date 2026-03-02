@@ -79,8 +79,8 @@
           <span>{{ t("Problem markers") }}</span>
           <select name="health_marker">
             <option value="">{{ t("All") }}</option>
-            <option value="graphs" {% if health_marker == "graphs" %}selected{% endif %}>{{ t("Graphs") }}</option>
-            <option value="validity" {% if health_marker == "validity" %}selected{% endif %}>{{ t("Validity") }}</option>
+            <option value="graphs" {% if health_marker == "graphs" %}selected{% endif %}>{{ t("Graph types") }}</option>
+            <option value="validity" {% if health_marker == "validity" %}selected{% endif %}>{{ t("Graph validity") }}</option>
             <option value="same-team" {% if health_marker == "same-team" %}selected{% endif %}>{{ t("Team overlap") }}</option>
             <option value="cross-team" {% if health_marker == "cross-team" %}selected{% endif %}>{{ t("Cross-team overlap") }}</option>
           </select>

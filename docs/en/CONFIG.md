@@ -151,7 +151,7 @@ catalog:
   For validity problems, the UI explains the exact trigger:
   no branch blocks and no non-postpone end blocks (postpone-only endings do not count as completion).
 - The main page includes an additional filter `Problem markers` with options:
-  `All`, `Graphs`, `Validity`, `Team overlap`, and `Cross-team overlap`.
+  `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.
 - The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
   with ranking and per-team breakdown for all health criteria.

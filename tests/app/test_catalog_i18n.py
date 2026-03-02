@@ -135,6 +135,8 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     assert translate_ui_text("Analytics by teams", "ru") == "Аналитика по командам"
     assert translate_ui_text("Problem markers", "ru") == "Маркеры проблем"
     assert translate_ui_text("All", "ru") == "Все"
+    assert translate_ui_text("Graph types", "ru") == "Типы графов"
+    assert translate_ui_text("Graph validity", "ru") == "Валидность графов"
     assert translate_ui_text("Validity", "ru") == "Валидность"
     assert translate_ui_text("Status", "ru") == "Статус"
     assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
