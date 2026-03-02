@@ -225,6 +225,22 @@ def test_catalog_health_markers_and_problem_filter(
         assert 'data-health-marker="same-team"' in catalog_response.text
         assert 'data-health-marker="cross-team"' in catalog_response.text
         assert 'data-health-marker="gaming"' in catalog_response.text
+        assert 'class="health-marker-label adaptive-text"' in catalog_response.text
+        assert 'class="health-marker-status health-marker-status-ok"' in catalog_response.text
+        assert 'class="health-marker-status health-marker-status-problem"' in catalog_response.text
+        assert 'class="health-marker-popover"' in catalog_response.text
+        assert 'data-health-marker="graphs"' in catalog_response.text and 'tabindex="0"' in (
+            catalog_response.text
+        )
+        assert (
+            'class="validity-breakdown validity-breakdown-compact adaptive-stat-grid"'
+            in catalog_response.text
+        )
+        assert 'class="validity-breakdown-label adaptive-text adaptive-text-tight"' in (
+            catalog_response.text
+        )
+        assert "Needs attention" in catalog_response.text
+        assert "OK" in catalog_response.text
         assert "Graphs with bot" in catalog_response.text
         assert "Multichannel graphs" in catalog_response.text
         assert "Employee graphs" in catalog_response.text
@@ -259,6 +275,14 @@ def test_catalog_health_markers_and_problem_filter(
         assert htmx_filtered.status_code == 200
         assert "Active filters" in htmx_filtered.text
         assert "Problem markers: validity" in htmx_filtered.text
+
+        style_response = client.get("/static/style.css")
+        assert style_response.status_code == 200
+        assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in style_response.text
+        assert ".card-grid-limited-fill-1 .health-marker-row {" in style_response.text
+        assert "grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));" in (
+            style_response.text
+        )
 
 
 def test_catalog_detail_renders_health_section(

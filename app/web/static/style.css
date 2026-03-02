@@ -2354,15 +2354,48 @@ main {
   padding: 6px 8px;
   display: grid;
   gap: 3px;
+  min-width: 0;
+  align-content: start;
+  container-type: inline-size;
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease,
     background 0.2s ease;
 }
 
+.health-marker-drilldown {
+  position: relative;
+  cursor: help;
+}
+
+.health-marker-drilldown:hover,
+.health-marker-drilldown:focus-within {
+  z-index: 5;
+}
+
+.health-marker-drilldown:focus-visible {
+  outline: 2px solid rgba(149, 196, 255, 0.5);
+  outline-offset: 2px;
+}
+
+.adaptive-text {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+  text-wrap: balance;
+}
+
+.adaptive-text-tight {
+  line-height: 1.25;
+}
+
 .health-marker-label {
   font-size: 10px;
+  font-size: clamp(8.5px, 8.2cqw, 10px);
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+  line-height: 1.25;
 }
 
 .health-marker-value {
@@ -2371,9 +2404,59 @@ main {
   line-height: 1.1;
 }
 
+.health-marker-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.health-marker-status-ok {
+  background: rgba(146, 220, 168, 0.14);
+  color: #d2ecd7;
+}
+
+.health-marker-status-problem {
+  background: rgba(255, 122, 122, 0.18);
+  color: #ffe2e2;
+}
+
 .health-marker-graphs,
 .health-marker-gaming {
   gap: 6px;
+}
+
+.health-marker-popover {
+  position: absolute;
+  left: -1px;
+  right: -1px;
+  top: calc(100% + 8px);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(7, 12, 24, 0.96);
+  box-shadow: var(--shadow);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+}
+
+.health-marker-drilldown:hover .health-marker-popover,
+.health-marker-drilldown:focus-within .health-marker-popover {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .validity-breakdown {
@@ -2382,7 +2465,7 @@ main {
 }
 
 .validity-breakdown-compact {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
   gap: 6px;
 }
 
@@ -2394,7 +2477,10 @@ main {
 }
 
 .validity-breakdown-compact .validity-breakdown-item {
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 6px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   padding: 4px 6px;
@@ -2405,6 +2491,7 @@ main {
   font-size: 11px;
   color: var(--muted);
   line-height: 1.2;
+  min-width: 0;
 }
 
 .validity-breakdown-value {
@@ -2419,6 +2506,7 @@ main {
 
 .health-marker .validity-breakdown-label {
   font-size: 10px;
+  font-size: clamp(8px, 7.4cqw, 10px);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -2464,6 +2552,11 @@ main {
   color: inherit;
   border-left: 0;
   padding-left: 0;
+}
+
+.health-marker-popover .card-health-note {
+  margin-top: 0;
+  font-size: 10px;
 }
 
 .validity-status {
@@ -3253,6 +3346,10 @@ body.service-graph-open {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .card-grid-limited-fill-1 .health-marker-row {
+    grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));
+  }
+
   .card-grid-limited-fill-2 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3336,5 +3433,28 @@ body.service-graph-open {
   }
   .team-health-team-counters {
     justify-content: flex-start;
+  }
+}
+
+@media (hover: none) {
+  .health-marker-drilldown {
+    cursor: default;
+  }
+  .health-marker-popover {
+    position: static;
+    left: auto;
+    right: auto;
+    top: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+  }
+  .health-marker-status {
+    display: none;
   }
 }
