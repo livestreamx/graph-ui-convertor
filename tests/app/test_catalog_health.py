@@ -266,7 +266,6 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Active filters" in filtered.text
         assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
-        assert "Validity marker issue" in filtered.text
         assert "Multiple starts but no branches" in filtered.text
         assert "Detected when branch blocks = 0 and start blocks &gt; 1." in filtered.text
         assert "Start blocks" in filtered.text
@@ -366,7 +365,6 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team Z" in response.text
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
-        assert "Validity marker issue" in response.text
         assert "Multiple starts but no branches" in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text
@@ -411,7 +409,7 @@ def test_catalog_health_renders_same_start_end_validity_issue(
         assert filtered.status_code == 200
         assert "Team H Same Start End" in filtered.text
         assert "Same block used as start and end" in filtered.text
-        assert "Detected when one procedure marks the same block as both start and end." in (
+        assert "Detected when one procedure marks the same block as both start and end." not in (
             filtered.text
         )
 
