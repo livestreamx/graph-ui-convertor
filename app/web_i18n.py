@@ -183,6 +183,7 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Non-bot graphs": "Графы без бота",
     "No graph health problems": "Проблем по графам не найдено",
     "Problem threshold": "Порог проблемы",
+    "Similar markups": "Схожие разметки",
     "Closest markup in team": "Наиболее похожая разметка в команде",
     "No comparable markups in team": "В команде нет разметок для сравнения",
     "Closest markup across teams": "Наиболее похожая разметка среди других команд",

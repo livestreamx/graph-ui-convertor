@@ -29,8 +29,14 @@ class SimilarityMatch:
 @dataclass(frozen=True)
 class SimilarityHealth:
     threshold_percent: float
-    top_match: SimilarityMatch | None
+    matches: tuple[SimilarityMatch, ...]
     is_problem: bool
+
+    @property
+    def top_match(self) -> SimilarityMatch | None:
+        if not self.matches:
+            return None
+        return self.matches[0]
 
 
 @dataclass(frozen=True)
@@ -144,12 +150,14 @@ class BuildCatalogHealthReport:
                 for candidate in items
                 if candidate.scene_id != item.scene_id and candidate.team_id != item.team_id
             ]
-            same_match = _find_top_similarity_match(item, same_team_candidates, procedure_sets)
-            cross_match = _find_top_similarity_match(item, cross_team_candidates, procedure_sets)
+            same_matches = _rank_similarity_matches(item, same_team_candidates, procedure_sets)
+            cross_matches = _rank_similarity_matches(item, cross_team_candidates, procedure_sets)
+            same_match = same_matches[0] if same_matches else None
+            cross_match = cross_matches[0] if cross_matches else None
 
             same_team_similarity = SimilarityHealth(
                 threshold_percent=self._same_team_threshold_percent,
-                top_match=same_match,
+                matches=same_matches,
                 is_problem=(
                     same_match is not None
                     and same_match.overlap_percent > self._same_team_threshold_percent
@@ -157,7 +165,7 @@ class BuildCatalogHealthReport:
             )
             cross_team_similarity = SimilarityHealth(
                 threshold_percent=self._cross_team_threshold_percent,
-                top_match=cross_match,
+                matches=cross_matches,
                 is_problem=(
                     cross_match is not None
                     and cross_match.overlap_percent > self._cross_team_threshold_percent
@@ -360,18 +368,17 @@ def _resolve_team_name(items: Sequence[CatalogItem], team_id: str) -> str:
     return team_id
 
 
-def _find_top_similarity_match(
+def _rank_similarity_matches(
     item: CatalogItem,
     candidates: Sequence[CatalogItem],
     procedure_sets: Mapping[str, set[str]],
-) -> SimilarityMatch | None:
+) -> tuple[SimilarityMatch, ...]:
     if not candidates:
-        return None
+        return ()
 
     source_set = procedure_sets.get(item.scene_id, set())
     source_count = len(source_set)
-    best_match: SimilarityMatch | None = None
-    best_key: tuple[float, int, int, str] | None = None
+    scored_matches: list[tuple[tuple[float, int, int, str], SimilarityMatch]] = []
 
     for candidate in candidates:
         target_set = procedure_sets.get(candidate.scene_id, set())
@@ -395,10 +402,10 @@ def _find_top_similarity_match(
             -similarity.target_procedure_count,
             similarity.scene_id,
         )
-        if best_key is None or candidate_key > best_key:
-            best_key = candidate_key
-            best_match = similarity
-    return best_match
+        scored_matches.append((candidate_key, similarity))
+
+    scored_matches.sort(key=lambda pair: pair[0], reverse=True)
+    return tuple(similarity for _, similarity in scored_matches)
 
 
 def _procedure_id_set(item: CatalogItem) -> set[str]:

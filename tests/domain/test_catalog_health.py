@@ -206,10 +206,15 @@ def test_catalog_health_report_similarity_thresholds_and_team_ranking() -> None:
     assert health_a1.same_team_similarity.top_match is not None
     assert health_a1.same_team_similarity.top_match.scene_id == "team-a-2"
     assert health_a1.same_team_similarity.top_match.overlap_percent == 50.0
+    assert [match.scene_id for match in health_a1.same_team_similarity.matches] == ["team-a-2"]
     assert health_a1.same_team_similarity.is_problem is True
     assert health_a1.cross_team_similarity.top_match is not None
     assert health_a1.cross_team_similarity.top_match.scene_id == "team-b-1"
     assert health_a1.cross_team_similarity.top_match.overlap_percent == 25.0
+    assert [match.scene_id for match in health_a1.cross_team_similarity.matches] == [
+        "team-b-1",
+        "team-c-1",
+    ]
     assert health_a1.cross_team_similarity.is_problem is True
 
     assert report.total_problem_markups == 3
@@ -227,6 +232,109 @@ def test_catalog_health_report_similarity_thresholds_and_team_ranking() -> None:
     assert strict_a1 is not None
     assert strict_a1.same_team_similarity.is_problem is False
     assert strict_a1.cross_team_similarity.is_problem is False
+
+
+def test_catalog_health_report_ranks_similarity_matches() -> None:
+    focus = _catalog_item(
+        scene_id="focus",
+        title="Focus",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={
+            "proc_1": ["proc_2"],
+            "proc_2": ["proc_3"],
+            "proc_3": ["proc_4"],
+        },
+    )
+    same_100 = _catalog_item(
+        scene_id="same-100",
+        title="Same 100",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={
+            "proc_1": ["proc_2"],
+            "proc_2": ["proc_3"],
+            "proc_3": ["proc_4"],
+        },
+    )
+    same_75 = _catalog_item(
+        scene_id="same-75",
+        title="Same 75",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={
+            "proc_1": ["proc_2"],
+            "proc_2": ["proc_3"],
+        },
+    )
+    same_50 = _catalog_item(
+        scene_id="same-50",
+        title="Same 50",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"proc_1": ["proc_2"]},
+    )
+    same_25 = _catalog_item(
+        scene_id="same-25",
+        title="Same 25",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"proc_1": []},
+    )
+    cross_100 = _catalog_item(
+        scene_id="cross-100",
+        title="Cross 100",
+        team_id="team-b",
+        team_name="Team B",
+        procedure_graph={
+            "proc_1": ["proc_2"],
+            "proc_2": ["proc_3"],
+            "proc_3": ["proc_4"],
+        },
+    )
+    cross_75 = _catalog_item(
+        scene_id="cross-75",
+        title="Cross 75",
+        team_id="team-c",
+        team_name="Team C",
+        procedure_graph={
+            "proc_1": ["proc_2"],
+            "proc_2": ["proc_3"],
+        },
+    )
+    cross_50 = _catalog_item(
+        scene_id="cross-50",
+        title="Cross 50",
+        team_id="team-d",
+        team_name="Team D",
+        procedure_graph={"proc_1": ["proc_2"]},
+    )
+    cross_25 = _catalog_item(
+        scene_id="cross-25",
+        title="Cross 25",
+        team_id="team-e",
+        team_name="Team E",
+        procedure_graph={"proc_1": []},
+    )
+
+    report = BuildCatalogHealthReport().build(
+        [focus, same_100, same_75, same_50, same_25, cross_100, cross_75, cross_50, cross_25]
+    )
+
+    health = report.item("focus")
+    assert health is not None
+    assert [match.scene_id for match in health.same_team_similarity.matches] == [
+        "same-100",
+        "same-75",
+        "same-50",
+        "same-25",
+    ]
+    assert [match.scene_id for match in health.cross_team_similarity.matches] == [
+        "cross-100",
+        "cross-75",
+        "cross-50",
+        "cross-25",
+    ]
 
 
 def test_catalog_health_report_detects_gaming_marker_problem() -> None:
