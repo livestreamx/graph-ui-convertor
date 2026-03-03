@@ -260,6 +260,7 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Team Z Healthy" not in filtered.text
         assert "Team A Main" not in filtered.text
         assert "Active filters" in filtered.text
+        assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
         assert "Validity marker issue" in filtered.text
         assert "Start blocks" in filtered.text

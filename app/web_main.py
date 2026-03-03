@@ -333,7 +333,8 @@ def create_app(settings: AppSettings) -> FastAPI:
             health_marker_filter=health_marker_filter,
         )
         catalog_back_url = build_catalog_back_url(request)
-        template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
+        htmx_request = is_htmx(request)
+        template_name = "catalog_list.html" if htmx_request else "catalog.html"
         return render_catalog_template(
             request,
             template_name,
@@ -353,6 +354,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "team_options": team_options,
                 "group_query_base": group_query_base,
                 "catalog_back_url": catalog_back_url,
+                "include_active_filters_oob": htmx_request,
                 "health_by_scene": health_report.items_by_scene if health_report else {},
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
             },
