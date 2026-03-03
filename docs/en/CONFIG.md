@@ -149,10 +149,10 @@ catalog:
   (`OK` or `Needs attention`) to keep cards shorter. On hover/focus, those two markers expand
   into a drilldown panel with the full per-block / per-graph breakdown and problem explanation.
   Problematic markers glow by default and have hover animation.
-  For validity problems, the UI explains the exact trigger:
+  For validity problems, the UI shows the exact trigger for the first two cases:
   either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no non-postpone
-  end blocks (postpone-only endings do not count as completion), or one procedure marks the same
-  block as both start and end.
+  end blocks (postpone-only endings do not count as completion). The "same block used as start
+  and end" case is shown without an extra explanatory line.
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.

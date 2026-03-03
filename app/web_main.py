@@ -157,9 +157,7 @@ GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
         "Detected when branch blocks = 0 and end blocks except postpone = 0.",
         "Postpone end blocks do not make a flow complete.",
     ),
-    GAMING_ISSUE_SAME_START_AND_END_BLOCK: (
-        "Detected when one procedure marks the same block as both start and end.",
-    ),
+    GAMING_ISSUE_SAME_START_AND_END_BLOCK: (),
 }
 
 HEALTH_MARKER_FILTER_ALL = ""
