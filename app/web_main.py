@@ -51,6 +51,7 @@ from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, 
 from domain.services.catalog_health import (
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
+    GAMING_ISSUE_SAME_START_AND_END_BLOCK,
     GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,
     GRAPH_ISSUE_NO_BOT,
     GRAPH_ISSUE_ONLY_BOT,
@@ -145,6 +146,7 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
 GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
+    GAMING_ISSUE_SAME_START_AND_END_BLOCK: "Same block used as start and end",
 }
 
 GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
@@ -154,6 +156,9 @@ GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
         "Detected when branch blocks = 0 and end blocks except postpone = 0.",
         "Postpone end blocks do not make a flow complete.",
+    ),
+    GAMING_ISSUE_SAME_START_AND_END_BLOCK: (
+        "Detected when one procedure marks the same block as both start and end.",
     ),
 }
 

@@ -103,6 +103,7 @@ class BuildCatalogIndex:
         start_block_count = self._count_start_blocks(document)
         branch_block_count = self._count_branch_blocks(document)
         non_postpone_end_block_count, postpone_end_block_count = self._count_end_blocks(document)
+        has_start_end_overlap = self._has_start_end_overlap(document)
 
         markup_rel_path = self._relative_path(entry.path, config.markup_dir)
         excalidraw_rel_path = f"{entry.path.stem}.excalidraw"
@@ -141,6 +142,7 @@ class BuildCatalogIndex:
             branch_block_count=branch_block_count,
             non_postpone_end_block_count=non_postpone_end_block_count,
             postpone_end_block_count=postpone_end_block_count,
+            has_start_end_overlap=has_start_end_overlap,
         )
 
     def _relative_path(self, path: Path, base: Path) -> str:
@@ -333,6 +335,12 @@ class BuildCatalogIndex:
                 else:
                     non_postpone_count += 1
         return non_postpone_count, postpone_count
+
+    def _has_start_end_overlap(self, document: MarkupDocument) -> bool:
+        for procedure in document.procedures:
+            if set(procedure.start_block_ids).intersection(procedure.end_block_ids):
+                return True
+        return False
 
     def _normalize_tags(self, value: Any) -> list[str]:
         if value is None:

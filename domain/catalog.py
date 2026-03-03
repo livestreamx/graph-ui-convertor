@@ -41,6 +41,7 @@ class CatalogItem:
     branch_block_count: int = 0
     non_postpone_end_block_count: int = 0
     postpone_end_block_count: int = 0
+    has_start_end_overlap: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -67,6 +68,7 @@ class CatalogItem:
             "branch_block_count": int(self.branch_block_count),
             "non_postpone_end_block_count": int(self.non_postpone_end_block_count),
             "postpone_end_block_count": int(self.postpone_end_block_count),
+            "has_start_end_overlap": bool(self.has_start_end_overlap),
         }
 
     @classmethod
@@ -107,6 +109,7 @@ class CatalogItem:
             postpone_end_block_count=_load_non_negative_int(
                 payload.get("postpone_end_block_count")
             ),
+            has_start_end_overlap=_load_bool(payload.get("has_start_end_overlap")),
         )
 
 
@@ -190,6 +193,16 @@ def _load_non_negative_int(raw: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, value)
+
+
+def _load_bool(raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    if isinstance(raw, int | float):
+        return bool(raw)
+    if isinstance(raw, str):
+        return raw.strip().lower() in {"1", "true", "yes", "on"}
+    return False
 
 
 @dataclass(frozen=True)

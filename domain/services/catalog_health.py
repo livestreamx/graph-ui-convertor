@@ -12,6 +12,7 @@ GRAPH_ISSUE_ONLY_BOT = "only_bot_graphs"
 GRAPH_ISSUE_TOO_MANY = "too_many_graphs"
 GAMING_ISSUE_NO_BRANCH_AND_NO_END = "no_branch_and_no_end_except_postpone"
 GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH = "multiple_starts_without_branch"
+GAMING_ISSUE_SAME_START_AND_END_BLOCK = "same_block_used_for_start_and_end"
 
 
 @dataclass(frozen=True)
@@ -269,6 +270,8 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
         issue_codes.append(GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH)
     if unique_graph_count > 0 and branch_block_count == 0 and non_postpone_end_block_count == 0:
         issue_codes.append(GAMING_ISSUE_NO_BRANCH_AND_NO_END)
+    if item.has_start_end_overlap:
+        issue_codes.append(GAMING_ISSUE_SAME_START_AND_END_BLOCK)
     is_problem = bool(issue_codes)
     return GamingHealth(
         start_block_count=start_block_count,
