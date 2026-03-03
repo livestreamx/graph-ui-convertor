@@ -93,11 +93,62 @@ def test_build_catalog_index_extracts_fields(
         assert item.branch_block_count == 0
         assert item.non_postpone_end_block_count == 1
         assert item.postpone_end_block_count == 0
+        assert item.has_start_end_overlap is False
         expected_timestamp = datetime(2024, 1, 1, tzinfo=UTC).isoformat()
         assert item.updated_at == expected_timestamp
 
         index_again = builder.build(config)
         assert index_again.items[0].scene_id == item.scene_id
+    finally:
+        stubber.deactivate()
+
+
+def test_build_catalog_index_detects_start_end_overlap_in_same_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Overlap"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["shared_start_end"],
+                "end_block_ids": ["shared_start_end"],
+                "branches": {"shared_start_end": ["next"]},
+            }
+        ],
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/overlap.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        assert index.items[0].has_start_end_overlap is True
     finally:
         stubber.deactivate()
 

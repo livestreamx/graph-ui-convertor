@@ -154,12 +154,22 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
         translate_ui_text("No branches and no end blocks except postpone", "ru")
         == "Нет ветвлений и нет end-блоков, кроме postpone"
     )
+    assert (
+        translate_ui_text("Same block used as start and end", "ru")
+        == "Один и тот же блок отмечен как старт и конец"
+    )
     assert translate_ui_text("Validity marker issue", "ru") == "Проблема маркера валидности"
     assert (
         translate_ui_text(
             "Detected when branch blocks = 0 and end blocks except postpone = 0.", "ru"
         )
         == "Срабатывает, когда blocks с ветвлением = 0 и end-блоков кроме postpone = 0."
+    )
+    assert (
+        translate_ui_text(
+            "Detected when one procedure marks the same block as both start and end.", "ru"
+        )
+        == "Срабатывает, когда в одной процедуре один и тот же блок отмечен и как start, и как end."
     )
     assert (
         translate_ui_text("Postpone end blocks do not make a flow complete.", "ru")

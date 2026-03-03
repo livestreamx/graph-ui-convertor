@@ -376,6 +376,46 @@ def test_catalog_teams_health_page_and_thresholds(
         assert 'href="/catalog/teams/health?lang=en"' in catalog_response.text
 
 
+def test_catalog_health_renders_same_start_end_validity_issue(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/team_h_same_start_end.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Team H Same Start End",
+                "team_id": "team-h",
+                "team_name": "Team H",
+            },
+            "procedures": [
+                {
+                    "proc_id": "team_h_proc",
+                    "start_block_ids": ["h1"],
+                    "end_block_ids": ["h1"],
+                    "branches": {"h1": ["h2"]},
+                }
+            ],
+            "procedure_graph": {"team_h_proc": ["team_h_done"]},
+        }
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+    ) as client:
+        filtered = client.get("/catalog", params={"health_marker": "validity"})
+        assert filtered.status_code == 200
+        assert "Team H Same Start End" in filtered.text
+        assert "Same block used as start and end" in filtered.text
+        assert "Detected when one procedure marks the same block as both start and end." in (
+            filtered.text
+        )
+
+
 def test_catalog_detail_limits_similarity_lists_to_top_three(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

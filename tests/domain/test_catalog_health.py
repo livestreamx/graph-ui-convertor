@@ -4,6 +4,7 @@ from domain.catalog import CatalogItem
 from domain.services.catalog_health import (
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
+    GAMING_ISSUE_SAME_START_AND_END_BLOCK,
     GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,
     GRAPH_ISSUE_NO_BOT,
     GRAPH_ISSUE_ONLY_BOT,
@@ -23,6 +24,7 @@ def _catalog_item(
     branch_block_count: int = 1,
     non_postpone_end_block_count: int = 1,
     postpone_end_block_count: int = 0,
+    has_start_end_overlap: bool = False,
 ) -> CatalogItem:
     procedure_ids: list[str] = []
     seen: set[str] = set()
@@ -59,6 +61,7 @@ def _catalog_item(
         branch_block_count=branch_block_count,
         non_postpone_end_block_count=non_postpone_end_block_count,
         postpone_end_block_count=postpone_end_block_count,
+        has_start_end_overlap=has_start_end_overlap,
     )
 
 
@@ -390,4 +393,23 @@ def test_catalog_health_report_detects_multiple_starts_without_branches() -> Non
     assert health is not None
     assert health.gaming.is_problem is True
     assert health.gaming.issue_codes == (GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,)
+    assert report.gaming_problem_count == 1
+
+
+def test_catalog_health_report_detects_same_block_used_as_start_and_end() -> None:
+    item = _catalog_item(
+        scene_id="same-start-end",
+        title="Same start and end",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"bot_entry": ["finish"]},
+        has_start_end_overlap=True,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("same-start-end")
+    assert health is not None
+    assert health.gaming.is_problem is True
+    assert health.gaming.issue_codes == (GAMING_ISSUE_SAME_START_AND_END_BLOCK,)
     assert report.gaming_problem_count == 1
