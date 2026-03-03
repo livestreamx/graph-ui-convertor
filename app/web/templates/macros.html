@@ -1,3 +1,62 @@
+{% macro render_graph_breakdown(graph, compact=false) %}
+  <div class="validity-breakdown{% if compact %} validity-breakdown-compact adaptive-stat-grid{% endif %}">
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Graphs with bot") }}</span>
+      <span class="validity-breakdown-value">{{ graph.bot_graph_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Multichannel graphs") }}</span>
+      <span class="validity-breakdown-value">{{ graph.multi_graph_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Employee graphs") }}</span>
+      <span class="validity-breakdown-value">{{ graph.employee_graph_count }}</span>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro render_validity_breakdown(gaming, compact=false) %}
+  <div class="validity-breakdown{% if compact %} validity-breakdown-compact adaptive-stat-grid{% endif %}">
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Start blocks") }}</span>
+      <span class="validity-breakdown-value">{{ gaming.start_block_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Branches") }}</span>
+      <span class="validity-breakdown-value">{{ gaming.branch_block_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("End blocks") }}</span>
+      <span class="validity-breakdown-value">{{ gaming.non_postpone_end_block_count }}</span>
+    </div>
+    <div class="validity-breakdown-item">
+      <span class="validity-breakdown-label{% if compact %} adaptive-text adaptive-text-tight{% endif %}">{{ t("Postpone blocks") }}</span>
+      <span class="validity-breakdown-value">{{ gaming.postpone_end_block_count }}</span>
+    </div>
+  </div>
+{% endmacro %}
+
+{% macro render_validity_problem_explanation(gaming, compact=false, show_ok=false) %}
+  {% if gaming.is_problem %}
+    <div class="validity-status validity-status-problem{% if compact %} validity-status-compact{% endif %}">
+      <div class="validity-status-title">{{ t("Validity marker issue") }}</div>
+      <div>{{ t("No branches and no end blocks except postpone") }}</div>
+      <div class="validity-status-reason">{{ t("Detected when branch blocks = 0 and end blocks except postpone = 0.") }}</div>
+      <div class="validity-status-reason">{{ t("Postpone end blocks do not make a flow complete.") }}</div>
+    </div>
+  {% elif show_ok %}
+    <div class="validity-status validity-status-ok{% if compact %} validity-status-compact{% endif %}">
+      {{ t("Structure looks valid") }}
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro render_health_marker_status(is_problem) %}
+  <span class="health-marker-status {% if is_problem %}health-marker-status-problem{% else %}health-marker-status-ok{% endif %}">
+    {{ t("Needs attention") if is_problem else t("OK") }}
+  </span>
+{% endmacro %}
+
 {% macro render_group(group, group_query_base) %}
   <section class="group">
     <div class="group-header">
@@ -21,10 +80,14 @@
         {% endfor %}
       </div>
     {% else %}
-      <div class="card-grid">
+      {% set group_item_count = group.items | length %}
+      <div
+        class="card-grid card-grid-limited{% if group_item_count < 3 %} card-grid-limited-fill-{{ group_item_count }}{% endif %}"
+      >
         {% for item in group.items %}
           <article class="card">
             <div class="card-body">
+              <a class="primary-button card-open-button" href="/catalog/{{ item.scene_id }}?lang={{ lang }}{% if catalog_back_url %}&back={{ catalog_back_url | urlencode }}{% endif %}">{{ t("View") }}</a>
               <div class="card-title">{{ item.title }}</div>
               <div class="card-meta">
                 <span>
@@ -39,9 +102,75 @@
                   {% endfor %}
                 </div>
               {% endif %}
-            </div>
-            <div class="card-actions">
-              <a class="primary-button" href="/catalog/{{ item.scene_id }}?lang={{ lang }}">{{ t("View") }}</a>
+              {% set item_health = health_by_scene.get(item.scene_id) %}
+              {% if item_health %}
+                <div class="card-health-section">
+                  <div class="health-marker-row">
+                    <div
+                      class="health-marker health-marker-same-team {% if item_health.same_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                      data-health-marker="same-team"
+                    >
+                      <span class="health-marker-label adaptive-text">{{ t("Team overlap") }}</span>
+                      <span class="health-marker-value">
+                        {% if item_health.same_team_similarity.top_match %}
+                          {{ "%.1f"|format(item_health.same_team_similarity.top_match.overlap_percent) }}%
+                        {% else %}
+                          0.0%
+                        {% endif %}
+                      </span>
+                    </div>
+                    <div
+                      class="health-marker health-marker-cross-team {% if item_health.cross_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                      data-health-marker="cross-team"
+                    >
+                      <span class="health-marker-label adaptive-text">{{ t("Cross-team overlap") }}</span>
+                      <span class="health-marker-value">
+                        {% if item_health.cross_team_similarity.top_match %}
+                          {{ "%.1f"|format(item_health.cross_team_similarity.top_match.overlap_percent) }}%
+                        {% else %}
+                          0.0%
+                        {% endif %}
+                      </span>
+                    </div>
+                    <div
+                      class="health-marker health-marker-graphs health-marker-drilldown {% if item_health.graph.is_problem %}is-problem is-glow{% endif %}"
+                      data-health-marker="graphs"
+                      tabindex="0"
+                    >
+                      <span class="health-marker-label adaptive-text">{{ t("Graphs") }}</span>
+                      {{ render_health_marker_status(item_health.graph.is_problem) }}
+                      <div class="health-marker-popover">
+                        {{ render_graph_breakdown(item_health.graph, compact=true) }}
+                        {% if item_health.graph.issue_codes %}
+                          {% set issue_code = item_health.graph.issue_codes[0] %}
+                          <div class="card-health-note">
+                            {{ t(graph_issue_text_keys.get(issue_code, issue_code)) }}
+                            {% if item_health.graph.issue_codes|length > 1 %}
+                              +{{ item_health.graph.issue_codes|length - 1 }}
+                            {% endif %}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                    <div
+                      class="health-marker health-marker-gaming health-marker-drilldown {% if item_health.gaming.is_problem %}is-problem is-glow{% endif %}"
+                      data-health-marker="gaming"
+                      tabindex="0"
+                    >
+                      <span class="health-marker-label adaptive-text">{{ t("Validity") }}</span>
+                      {{ render_health_marker_status(item_health.gaming.is_problem) }}
+                      <div class="health-marker-popover">
+                        {{ render_validity_breakdown(item_health.gaming, compact=true) }}
+                        {% if item_health.gaming.is_problem %}
+                          <div class="card-health-note card-health-note-validity">
+                            {{ render_validity_problem_explanation(item_health.gaming, compact=true) }}
+                          </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              {% endif %}
             </div>
           </article>
         {% endfor %}

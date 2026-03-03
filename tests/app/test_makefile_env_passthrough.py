@@ -12,4 +12,6 @@ def test_catalog_builder_excluded_team_ids_are_forwarded_to_catalog_container() 
         makefile,
         re.S,
     )
+    assert "CJM_CATALOG__HEALTH_SAME_TEAM_OVERLAP_THRESHOLD_PERCENT" in makefile
+    assert "CJM_CATALOG__HEALTH_CROSS_TEAM_OVERLAP_THRESHOLD_PERCENT" in makefile
     assert "$(CATALOG_ENV_EXTRA) \\" in makefile

@@ -1,5 +1,9 @@
 {% from "macros.html" import render_group with context %}
 
+{% with oob=true %}
+  {% include "_catalog_active_filters.html" %}
+{% endwith %}
+
 <div class="list-meta">
   <span>{{ items | length }} {{ t("scenes") }}</span>
 </div>

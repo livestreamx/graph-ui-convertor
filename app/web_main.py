@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 from collections.abc import Callable, Mapping, Sequence
@@ -47,6 +48,16 @@ from domain.services.build_cross_team_graph_dashboard import (
     CrossTeamGraphDashboard,
 )
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, GraphLevel
+from domain.services.catalog_health import (
+    GAMING_ISSUE_NO_BRANCH_AND_NO_END,
+    GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,
+    GRAPH_ISSUE_NO_BOT,
+    GRAPH_ISSUE_ONLY_BOT,
+    GRAPH_ISSUE_TOO_MANY,
+    BuildCatalogHealthReport,
+    CatalogHealthReport,
+    CatalogItemHealth,
+)
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from domain.services.convert_markup_to_unidraw import MarkupToUnidrawConverter
@@ -99,11 +110,49 @@ class CatalogContext:
     to_procedure_graph_excalidraw: ProcedureGraphToExcalidrawConverter
     to_procedure_graph_unidraw: ProcedureGraphToUnidrawConverter
     link_templates: ExcalidrawLinkTemplates | None
+    index_state: CatalogIndexState
+    health_builder: BuildCatalogHealthReport
+    health_state: CatalogHealthState
 
 
 @dataclass
 class CatalogRefreshState:
     last_source_fingerprint: str | None = None
+
+
+@dataclass
+class CatalogIndexState:
+    path: Path | None = None
+    stamp: tuple[int, int] | None = None
+    index: CatalogIndex | None = None
+    signature: str | None = None
+
+
+@dataclass
+class CatalogHealthState:
+    index_signature: str | None = None
+    report: CatalogHealthReport | None = None
+
+
+GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
+    GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT: "Multiple graphs but no bot starts",
+    GRAPH_ISSUE_NO_BOT: "No bot graphs found",
+    GRAPH_ISSUE_ONLY_BOT: "Only bot graphs found",
+    GRAPH_ISSUE_TOO_MANY: "More than three graphs in markup",
+    GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
+}
+
+HEALTH_MARKER_FILTER_ALL = ""
+HEALTH_MARKER_FILTER_GRAPHS = "graphs"
+HEALTH_MARKER_FILTER_VALIDITY = "validity"
+HEALTH_MARKER_FILTER_SAME_TEAM = "same-team"
+HEALTH_MARKER_FILTER_CROSS_TEAM = "cross-team"
+HEALTH_MARKER_FILTER_VALUES: set[str] = {
+    HEALTH_MARKER_FILTER_GRAPHS,
+    HEALTH_MARKER_FILTER_VALIDITY,
+    HEALTH_MARKER_FILTER_SAME_TEAM,
+    HEALTH_MARKER_FILTER_CROSS_TEAM,
+}
 
 
 def create_app(settings: AppSettings) -> FastAPI:
@@ -117,12 +166,15 @@ def create_app(settings: AppSettings) -> FastAPI:
         invalidate_scene_cache(context)
         if settings.catalog.auto_build_index:
             if settings.catalog.rebuild_index_on_start:
-                context.index_builder.build(settings.catalog.to_index_config())
+                built_index = context.index_builder.build(settings.catalog.to_index_config())
+                update_catalog_health_cache(context, built_index)
             else:
                 try:
-                    index_repo.load(settings.catalog.index_path)
+                    loaded_index = index_repo.load(settings.catalog.index_path)
+                    update_catalog_health_cache(context, loaded_index)
                 except FileNotFoundError:
-                    context.index_builder.build(settings.catalog.to_index_config())
+                    built_index = context.index_builder.build(settings.catalog.to_index_config())
+                    update_catalog_health_cache(context, built_index)
             refresh_interval = settings.catalog.index_refresh_interval_seconds
             if refresh_interval > 0:
                 refresh_task = asyncio.create_task(
@@ -173,6 +225,16 @@ def create_app(settings: AppSettings) -> FastAPI:
             link_templates=link_templates,
         ),
         link_templates=link_templates,
+        index_state=CatalogIndexState(),
+        health_builder=BuildCatalogHealthReport(
+            same_team_threshold_percent=(
+                settings.catalog.health_same_team_overlap_threshold_percent
+            ),
+            cross_team_threshold_percent=(
+                settings.catalog.health_cross_team_overlap_threshold_percent
+            ),
+        ),
+        health_state=CatalogHealthState(),
     )
     app.state.context = context
 
@@ -230,9 +292,10 @@ def create_app(settings: AppSettings) -> FastAPI:
         group: list[str] = Query(default_factory=list),
         criticality_level: str | None = Query(default=None),
         team_id: str | None = Query(default=None),
+        health_marker: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
-        index_data = load_index(context)
+        index_data, health_report = load_index_bundle(context)
         if index_data is None:
             return render_catalog_template(
                 request,
@@ -248,13 +311,28 @@ def create_app(settings: AppSettings) -> FastAPI:
             filters["team_id"] = team_id
         search_tokens = normalize_search_tokens(search, q)
         filtered_items = filter_items(index_data.items, search_tokens, filters)
+        health_marker_filter = normalize_health_marker_filter(health_marker)
+        if health_marker_filter and health_report is not None:
+            filtered_items = [
+                item
+                for item in filtered_items
+                if is_item_health_problem_for_marker(
+                    health_report.item(item.scene_id), health_marker_filter
+                )
+            ]
         groups = build_group_tree(filtered_items, index_data.group_by)
         criticality_levels, team_options = build_filter_options(
             index_data.items, index_data.unknown_value
         )
         team_lookup = dict(team_options)
-        active_filters = build_active_filters(filters, team_lookup)
-        group_query_base = build_group_query_base(search_tokens, criticality_level, team_id)
+        active_filters = build_active_filters(filters, team_lookup, health_marker_filter)
+        group_query_base = build_group_query_base(
+            search_tokens,
+            criticality_level,
+            team_id,
+            health_marker_filter=health_marker_filter,
+        )
+        catalog_back_url = build_catalog_back_url(request)
         template_name = "catalog_list.html" if is_htmx(request) else "catalog.html"
         return render_catalog_template(
             request,
@@ -270,9 +348,13 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "active_filters": active_filters,
                 "criticality_level": criticality_level or "",
                 "team_id": team_id or "",
+                "health_marker": health_marker_filter,
                 "criticality_levels": criticality_levels,
                 "team_options": team_options,
                 "group_query_base": group_query_base,
+                "catalog_back_url": catalog_back_url,
+                "health_by_scene": health_report.items_by_scene if health_report else {},
+                "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
             },
         )
 
@@ -486,13 +568,40 @@ def create_app(settings: AppSettings) -> FastAPI:
             },
         )
 
+    @app.get("/catalog/teams/health", response_class=HTMLResponse)
+    def catalog_team_health(
+        request: Request,
+        context: CatalogContext = Depends(get_context),
+    ) -> HTMLResponse:
+        index_data, health_report = load_index_bundle(context)
+        if index_data is None or health_report is None:
+            return render_catalog_template(
+                request,
+                "catalog_empty.html",
+                {
+                    "settings": context.settings,
+                },
+            )
+        team_rows = build_team_health_rows(index_data.items, health_report)
+        return render_catalog_template(
+            request,
+            "catalog_team_health.html",
+            {
+                "settings": context.settings,
+                "health_report": health_report,
+                "team_rows": team_rows,
+                "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
+            },
+        )
+
     @app.get("/catalog/{scene_id}", response_class=HTMLResponse)
     def catalog_detail(
         request: Request,
         scene_id: str,
+        back: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
-        index_data = load_index(context)
+        index_data, health_report = load_index_bundle(context)
         item = find_item(index_data, scene_id) if index_data else None
         if not item:
             raise HTTPException(status_code=404, detail="Scene not found")
@@ -562,6 +671,11 @@ def create_app(settings: AppSettings) -> FastAPI:
                     procedure_open_mode = "direct"
         service_external_url = resolve_service_external_url(context, item)
         team_external_url = resolve_team_external_url(context, item)
+        item_health = health_report.item(item.scene_id) if health_report is not None else None
+        catalog_back_url = resolve_catalog_back_url(
+            back,
+            language=localizer_for_request(request).language,
+        )
         return render_catalog_template(
             request,
             "catalog_detail.html",
@@ -585,6 +699,9 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "procedure_graph_enabled": procedure_graph_enabled,
                 "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
                 "procedure_open_mode": procedure_open_mode,
+                "item_health": item_health,
+                "catalog_back_url": catalog_back_url,
+                "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
             },
         )
 
@@ -979,6 +1096,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         if token != context.settings.catalog.rebuild_token:
             raise HTTPException(status_code=403, detail="Invalid token")
         index_data = context.index_builder.build(context.settings.catalog.to_index_config())
+        update_catalog_health_cache(context, index_data)
         return ORJSONResponse({"status": "ok", "items": len(index_data.items)})
 
     proxy_upstream = settings.catalog.excalidraw_proxy_upstream
@@ -1075,7 +1193,8 @@ def refresh_catalog_index_if_needed(
     config = context.settings.catalog.to_index_config()
     if state.last_source_fingerprint is None:
         try:
-            context.index_builder.build(config)
+            rebuilt_index = context.index_builder.build(config)
+            update_catalog_health_cache(context, rebuilt_index)
         except Exception:
             logger.exception("Periodic catalog index refresh failed.")
             return
@@ -1085,7 +1204,8 @@ def refresh_catalog_index_if_needed(
     if current_fingerprint is not None and current_fingerprint == state.last_source_fingerprint:
         return
     try:
-        context.index_builder.build(config)
+        rebuilt_index = context.index_builder.build(config)
+        update_catalog_health_cache(context, rebuilt_index)
     except Exception:
         logger.exception("Periodic catalog index refresh failed.")
         return
@@ -1141,10 +1261,129 @@ def enhance_scene_payload(
 
 def load_index(context: CatalogContext) -> CatalogIndex | None:
     path = context.settings.catalog.index_path
+    stamp = read_catalog_index_stamp(path)
+    cached = context.index_state
+    if (
+        cached.index is not None
+        and cached.path == path
+        and cached.stamp is not None
+        and cached.stamp == stamp
+    ):
+        return cached.index
+    if stamp is None:
+        invalidate_catalog_index_cache(context, path=path)
+        return None
     try:
-        return context.index_repo.load(path)
+        index_data = context.index_repo.load(path)
+    except FileNotFoundError:
+        invalidate_catalog_index_cache(context, path=path)
+        return None
+    update_catalog_index_cache(context, index_data, path=path, stamp=stamp)
+    return index_data
+
+
+def load_index_bundle(
+    context: CatalogContext,
+) -> tuple[CatalogIndex | None, CatalogHealthReport | None]:
+    index_data = load_index(context)
+    if index_data is None:
+        return None, None
+    report = ensure_catalog_health_cache(context, index_data)
+    return index_data, report
+
+
+def ensure_catalog_health_cache(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+) -> CatalogHealthReport:
+    signature = resolve_catalog_index_signature(context, index_data)
+    cached = context.health_state
+    if cached.index_signature == signature and cached.report is not None:
+        return cached.report
+    report = context.health_builder.build(index_data.items)
+    cached.index_signature = signature
+    cached.report = report
+    return report
+
+
+def update_catalog_health_cache(
+    context: CatalogContext,
+    index_data: CatalogIndex | None,
+) -> None:
+    if not isinstance(index_data, CatalogIndex):
+        return
+    if not hasattr(context, "health_state") or not hasattr(context, "health_builder"):
+        return
+    update_catalog_index_cache(context, index_data)
+    signature = resolve_catalog_index_signature(context, index_data)
+    try:
+        report = context.health_builder.build(index_data.items)
+    except Exception:
+        logger.exception("Catalog health report refresh failed.")
+        return
+    context.health_state.index_signature = signature
+    context.health_state.report = report
+
+
+def build_catalog_index_signature(index_data: CatalogIndex) -> str:
+    digest_source: list[str] = []
+    for item in sorted(index_data.items, key=lambda candidate: candidate.scene_id):
+        procedure_ids = ",".join(sorted(item.procedure_ids))
+        procedure_graph_size = sum(len(targets) for targets in item.procedure_graph.values())
+        digest_source.append(
+            f"{item.scene_id}:{item.updated_at}:{procedure_ids}:{procedure_graph_size}"
+        )
+    digest = hashlib.sha256("|".join(digest_source).encode("utf-8")).hexdigest()
+    return f"{index_data.generated_at}:{len(index_data.items)}:{digest}"
+
+
+def resolve_catalog_index_signature(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+) -> str:
+    cached = context.index_state
+    if cached.index is index_data and cached.signature is not None:
+        return cached.signature
+    signature = build_catalog_index_signature(index_data)
+    if cached.index is index_data:
+        cached.signature = signature
+    return signature
+
+
+def update_catalog_index_cache(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+    *,
+    path: Path | None = None,
+    stamp: tuple[int, int] | None = None,
+) -> None:
+    index_path = path or context.settings.catalog.index_path
+    resolved_stamp = stamp if stamp is not None else read_catalog_index_stamp(index_path)
+    cached = context.index_state
+    cached.path = index_path
+    cached.stamp = resolved_stamp
+    cached.index = index_data
+    cached.signature = None
+
+
+def invalidate_catalog_index_cache(
+    context: CatalogContext,
+    *,
+    path: Path | None = None,
+) -> None:
+    cached = context.index_state
+    cached.path = path
+    cached.stamp = None
+    cached.index = None
+    cached.signature = None
+
+
+def read_catalog_index_stamp(path: Path) -> tuple[int, int] | None:
+    try:
+        stats = path.stat()
     except FileNotFoundError:
         return None
+    return (int(stats.st_mtime_ns), int(stats.st_size))
 
 
 def parse_scene_json(raw_bytes: bytes) -> dict[str, Any]:
@@ -1800,6 +2039,7 @@ def build_filter_options(
 def build_active_filters(
     filters: dict[str, str],
     team_lookup: dict[str, str],
+    health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
 ) -> list[dict[str, str]]:
     active: list[dict[str, str]] = []
     for field, value in filters.items():
@@ -1813,6 +2053,14 @@ def build_active_filters(
                 "display_value": display_value,
             }
         )
+    if health_marker_filter:
+        active.append(
+            {
+                "field": "problem_marker",
+                "value": health_marker_filter,
+                "display_value": f"health_marker_{health_marker_filter.replace('-', '_')}",
+            }
+        )
     return active
 
 
@@ -1820,6 +2068,8 @@ def build_group_query_base(
     search_tokens: Sequence[str],
     criticality_level: str | None,
     team_id: str | None,
+    *,
+    health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
 ) -> str:
     params: dict[str, str | list[str]] = {}
     if search_tokens:
@@ -1828,6 +2078,8 @@ def build_group_query_base(
         params["criticality_level"] = criticality_level
     if team_id:
         params["team_id"] = team_id
+    if health_marker_filter:
+        params["health_marker"] = health_marker_filter
     return urlencode(params, doseq=True)
 
 
@@ -1847,6 +2099,108 @@ def group_display_value(field: str, value: str, items: list[CatalogItem]) -> str
             if item.team_name and item.team_name != value:
                 return item.team_name
     return value
+
+
+def is_item_health_problem(item_health: CatalogItemHealth | None) -> bool:
+    if item_health is None:
+        return False
+    return item_health.has_problem
+
+
+def normalize_health_marker_filter(value: str | None) -> str:
+    if value is None:
+        return HEALTH_MARKER_FILTER_ALL
+    normalized = value.strip().lower()
+    if normalized in HEALTH_MARKER_FILTER_VALUES:
+        return normalized
+    return HEALTH_MARKER_FILTER_ALL
+
+
+def is_item_health_problem_for_marker(
+    item_health: CatalogItemHealth | None,
+    marker_filter: str,
+) -> bool:
+    if not marker_filter:
+        return is_item_health_problem(item_health)
+    if item_health is None:
+        return False
+    if marker_filter == HEALTH_MARKER_FILTER_GRAPHS:
+        return item_health.graph.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_VALIDITY:
+        return item_health.gaming.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_SAME_TEAM:
+        return item_health.same_team_similarity.is_problem
+    if marker_filter == HEALTH_MARKER_FILTER_CROSS_TEAM:
+        return item_health.cross_team_similarity.is_problem
+    return False
+
+
+def build_catalog_back_url(request: Request) -> str:
+    query = request.url.query
+    if query:
+        return f"/catalog?{query}"
+    return f"/catalog?lang={build_localizer(request).language}"
+
+
+def resolve_catalog_back_url(back: str | None, *, language: str) -> str:
+    default_url = f"/catalog?lang={language}"
+    if not back:
+        return default_url
+    candidate = back.strip()
+    if not candidate:
+        return default_url
+    parsed = urlparse(candidate)
+    if parsed.scheme or parsed.netloc:
+        return default_url
+    if not candidate.startswith("/catalog"):
+        return default_url
+    return candidate
+
+
+def build_team_health_rows(
+    items: Sequence[CatalogItem],
+    report: CatalogHealthReport,
+) -> list[dict[str, Any]]:
+    items_by_team: dict[str, list[CatalogItem]] = {}
+    for item in items:
+        items_by_team.setdefault(item.team_id, []).append(item)
+
+    rows: list[dict[str, Any]] = []
+    for team_summary in report.team_summaries:
+        team_items = items_by_team.get(team_summary.team_id, [])
+        item_rows: list[dict[str, Any]] = []
+        for item in team_items:
+            item_health = report.item(item.scene_id)
+            if item_health is None:
+                continue
+            problem_score = (
+                int(item_health.graph.is_problem)
+                + int(item_health.gaming.is_problem)
+                + int(item_health.same_team_similarity.is_problem)
+                + int(item_health.cross_team_similarity.is_problem)
+            )
+            item_rows.append(
+                {
+                    "item": item,
+                    "health": item_health,
+                    "problem_score": problem_score,
+                    "has_problem": item_health.has_problem,
+                }
+            )
+        item_rows.sort(
+            key=lambda row: (
+                not row["has_problem"],
+                -row["problem_score"],
+                str(row["item"].title).lower(),
+            )
+        )
+        rows.append(
+            {
+                "team": team_summary,
+                "markup_rows": item_rows,
+            }
+        )
+    return rows
 
 
 def proxy_headers(request: Request) -> dict[str, str]:

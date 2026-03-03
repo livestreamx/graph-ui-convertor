@@ -123,7 +123,7 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         assert detail_response.status_code == 200
         assert "Open Excalidraw" not in detail_response.text
         assert "Show graph" in detail_response.text
-        assert "Download .excalidraw" in detail_response.text
+        assert "Download .excalidraw" not in detail_response.text
         assert "Download .unidraw" in detail_response.text
         unidraw_link_match = re.search(
             r'class="([^"]+)"\s+href="/api/scenes/[^"]+\?format=unidraw&download=true"',
@@ -138,7 +138,7 @@ def test_catalog_hides_excalidraw_open_when_disabled(
         graph_response = context.client.get("/catalog/teams/graph", params={"team_ids": team_id})
         assert graph_response.status_code == 200
         assert "Open Excalidraw" not in graph_response.text
-        assert "Download .excalidraw" in graph_response.text
+        assert "Download .excalidraw" not in graph_response.text
         assert "Download .unidraw" in graph_response.text
 
 

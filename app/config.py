@@ -94,6 +94,8 @@ class CatalogSettings(BaseModel):
     unidraw_proxy_prefix: str = "/unidraw"
     unidraw_max_url_length: int = 8000
     rebuild_token: str | None = None
+    health_same_team_overlap_threshold_percent: float = 40.0
+    health_cross_team_overlap_threshold_percent: float = 20.0
     ui_text_overrides: dict[str, str] = Field(default_factory=dict)
     builder_excluded_team_ids: Annotated[list[str], NoDecode] = Field(default_factory=list)
     procedure_link_path: LinkPath | None = Field(

@@ -110,6 +110,7 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
 
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
+    assert translate_ui_text("Markup ID", "ru") == "ID разметки"
     assert translate_ui_text("Service ID", "ru") == "ID услуги"
     assert translate_ui_text("Block-level diagram", "ru") == "Диаграмма уровня блоков"
     assert translate_ui_text("Show graph", "ru") == "Показать граф"
@@ -129,3 +130,48 @@ def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Postpones", "ru") == "Отложенные"
     assert translate_ui_text("none", "ru") == "нет"
     assert translate_ui_text("Service block graph", "ru") == "Граф блоков услуги"
+
+
+def test_catalog_health_texts_are_localized_in_russian() -> None:
+    assert translate_ui_text("Analytics by teams", "ru") == "Аналитика по командам"
+    assert translate_ui_text("Problem markers", "ru") == "Маркеры проблем"
+    assert translate_ui_text("All", "ru") == "Все"
+    assert translate_ui_text("Graph types", "ru") == "Типы графов"
+    assert translate_ui_text("Graph validity", "ru") == "Валидность графов"
+    assert translate_ui_text("Validity", "ru") == "Валидность"
+    assert translate_ui_text("Status", "ru") == "Статус"
+    assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
+    assert translate_ui_text("Start blocks", "ru") == "Стартовые блоки"
+    assert (
+        translate_ui_text("No branches and no end blocks except postpone", "ru")
+        == "Нет ветвлений и нет end-блоков, кроме postpone"
+    )
+    assert translate_ui_text("Validity marker issue", "ru") == "Проблема маркера валидности"
+    assert (
+        translate_ui_text(
+            "Detected when branch blocks = 0 and end blocks except postpone = 0.", "ru"
+        )
+        == "Срабатывает, когда blocks с ветвлением = 0 и end-блоков кроме postpone = 0."
+    )
+    assert (
+        translate_ui_text("Postpone end blocks do not make a flow complete.", "ru")
+        == "Postpone end-блоки не считаются завершением сценария."
+    )
+    assert translate_ui_text("End blocks", "ru") == "End-блоки"
+    assert translate_ui_text("Postpone blocks", "ru") == "Postpone-блоки"
+    assert translate_ui_text("Needs attention", "ru") == "Требует внимания"
+    assert translate_ui_text("OK", "ru") == "ОК"
+    assert translate_ui_text("Structure looks valid", "ru") == "Структура выглядит валидной"
+    assert (
+        translate_ui_text("Multiple graphs but no bot starts", "ru")
+        == "Несколько графов, но нет bot/multi стартов"
+    )
+    assert translate_ui_text("No bot graphs found", "ru") == "Графы с ботом не найдены"
+    assert translate_ui_text("Only bot graphs found", "ru") == "Только графы с ботом"
+    assert (
+        translate_ui_text("More than three graphs in markup", "ru")
+        == "В разметке больше трёх графов"
+    )
+    assert translate_ui_text("Cross-team overlap", "ru") == "Кросс-командное пересечение"
+    assert translate_ui_text("Employee graphs", "ru") == "Графы сотрудника"
+    assert translate_ui_text("Markup health markers", "ru") == "Маркеры здоровья разметки"

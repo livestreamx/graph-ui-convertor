@@ -1377,10 +1377,10 @@
                 <a class="primary-button" target="_blank" href="{{ procedure_excalidraw_open_url }}">
                   {{ t("Open Excalidraw") }}
                 </a>
+                <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&format=excalidraw&download=true">
+                  {{ t("Download .excalidraw") }}
+                </a>
               {% endif %}
-              <a class="ghost-button" href="/api/teams/graph?{{ procedure_team_query }}&format=excalidraw&download=true">
-                {{ t("Download .excalidraw") }}
-              </a>
               <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ procedure_team_query }}&format=unidraw&download=true">
                 {{ t("Download .unidraw") }}
               </a>
@@ -1404,10 +1404,10 @@
                 <a class="primary-button" target="_blank" href="{{ service_excalidraw_open_url }}">
                   {{ t("Open Excalidraw") }}
                 </a>
+                <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&format=excalidraw&download=true">
+                  {{ t("Download .excalidraw") }}
+                </a>
               {% endif %}
-              <a class="ghost-button" href="/api/teams/graph?{{ service_team_query }}&format=excalidraw&download=true">
-                {{ t("Download .excalidraw") }}
-              </a>
               <a class="ghost-button unidraw-button" href="/api/teams/graph?{{ service_team_query }}&format=unidraw&download=true">
                 {{ t("Download .unidraw") }}
               </a>
