@@ -2303,7 +2303,13 @@ main {
   border-radius: 14px;
   padding: 16px;
   position: relative;
+  z-index: 0;
   animation: fadeUp 0.5s ease both;
+}
+
+.card:hover,
+.card:focus-within {
+  z-index: 10;
 }
 
 .card-body {

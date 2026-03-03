@@ -278,6 +278,9 @@ def test_catalog_health_markers_and_problem_filter(
 
         style_response = client.get("/static/style.css")
         assert style_response.status_code == 200
+        assert ".card:hover," in style_response.text
+        assert ".card:focus-within {" in style_response.text
+        assert "z-index: 10;" in style_response.text
         assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in style_response.text
         assert ".card-grid-limited-fill-1 .health-marker-row {" in style_response.text
         assert "grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));" in (
