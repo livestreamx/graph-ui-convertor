@@ -143,6 +143,14 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
     assert translate_ui_text("Start blocks", "ru") == "Стартовые блоки"
     assert (
+        translate_ui_text("Multiple starts but no branches", "ru")
+        == "Несколько стартов, но нет ветвлений"
+    )
+    assert (
+        translate_ui_text("Detected when branch blocks = 0 and start blocks > 1.", "ru")
+        == "Срабатывает, когда blocks с ветвлением = 0 и стартовых блоков > 1."
+    )
+    assert (
         translate_ui_text("No branches and no end blocks except postpone", "ru")
         == "Нет ветвлений и нет end-блоков, кроме postpone"
     )

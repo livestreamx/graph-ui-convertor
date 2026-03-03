@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from domain.catalog import CatalogItem
 from domain.services.catalog_health import (
+    GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
     GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,
     GRAPH_ISSUE_NO_BOT,
@@ -260,3 +261,25 @@ def test_catalog_health_report_detects_gaming_marker_problem() -> None:
     assert problematic_health.gaming.issue_codes == (GAMING_ISSUE_NO_BRANCH_AND_NO_END,)
     assert report.gaming_problem_count == 1
     assert report.total_problem_markups == 2
+
+
+def test_catalog_health_report_detects_multiple_starts_without_branches() -> None:
+    item = _catalog_item(
+        scene_id="multiple-starts-no-branch",
+        title="Multiple starts without branches",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"bot_entry": ["finish"]},
+        start_block_count=2,
+        branch_block_count=0,
+        non_postpone_end_block_count=1,
+        postpone_end_block_count=0,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("multiple-starts-no-branch")
+    assert health is not None
+    assert health.gaming.is_problem is True
+    assert health.gaming.issue_codes == (GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,)
+    assert report.gaming_problem_count == 1

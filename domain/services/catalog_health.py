@@ -11,6 +11,7 @@ GRAPH_ISSUE_NO_BOT = "no_bot_graphs"
 GRAPH_ISSUE_ONLY_BOT = "only_bot_graphs"
 GRAPH_ISSUE_TOO_MANY = "too_many_graphs"
 GAMING_ISSUE_NO_BRANCH_AND_NO_END = "no_branch_and_no_end_except_postpone"
+GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH = "multiple_starts_without_branch"
 
 
 @dataclass(frozen=True)
@@ -255,16 +256,18 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
     branch_block_count = max(0, int(item.branch_block_count))
     non_postpone_end_block_count = max(0, int(item.non_postpone_end_block_count))
     postpone_end_block_count = max(0, int(item.postpone_end_block_count))
-    is_problem = (
-        unique_graph_count > 0 and branch_block_count == 0 and non_postpone_end_block_count == 0
-    )
-    issue_codes = (GAMING_ISSUE_NO_BRANCH_AND_NO_END,) if is_problem else ()
+    issue_codes: list[str] = []
+    if branch_block_count == 0 and start_block_count > 1:
+        issue_codes.append(GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH)
+    if unique_graph_count > 0 and branch_block_count == 0 and non_postpone_end_block_count == 0:
+        issue_codes.append(GAMING_ISSUE_NO_BRANCH_AND_NO_END)
+    is_problem = bool(issue_codes)
     return GamingHealth(
         start_block_count=start_block_count,
         branch_block_count=branch_block_count,
         non_postpone_end_block_count=non_postpone_end_block_count,
         postpone_end_block_count=postpone_end_block_count,
-        issue_codes=issue_codes,
+        issue_codes=tuple(issue_codes),
         is_problem=is_problem,
     )
 

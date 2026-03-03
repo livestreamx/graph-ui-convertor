@@ -150,7 +150,8 @@ catalog:
   into a drilldown panel with the full per-block / per-graph breakdown and problem explanation.
   Problematic markers glow by default and have hover animation.
   For validity problems, the UI explains the exact trigger:
-  no branch blocks and no non-postpone end blocks (postpone-only endings do not count as completion).
+  either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no non-postpone
+  end blocks (postpone-only endings do not count as completion).
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.

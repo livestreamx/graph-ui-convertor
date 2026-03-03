@@ -51,8 +51,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["a1"],
-                    "end_block_ids": ["a2"],
-                    "branches": {"a1": ["a2"]},
+                    "end_block_ids": ["a2", "a2_alt"],
+                    "branches": {"a1": ["a2", "a2_alt"]},
                 },
                 {
                     "proc_id": "shared_proc_2",
@@ -74,8 +74,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["b1"],
-                    "end_block_ids": ["b2"],
-                    "branches": {"b1": ["b2"]},
+                    "end_block_ids": ["b2", "b2_alt"],
+                    "branches": {"b1": ["b2", "b2_alt"]},
                 },
                 {
                     "proc_id": "shared_proc_2",
@@ -97,8 +97,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["c1"],
-                    "end_block_ids": ["c2"],
-                    "branches": {"c1": ["c2"]},
+                    "end_block_ids": ["c2", "c2_alt"],
+                    "branches": {"c1": ["c2", "c2_alt"]},
                 },
                 {
                     "proc_id": "team_b_unique",
@@ -120,8 +120,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "bot_team_z",
                     "start_block_ids": ["z1"],
-                    "end_block_ids": ["z2"],
-                    "branches": {"z1": ["z2"]},
+                    "end_block_ids": ["z2", "z2_alt"],
+                    "branches": {"z1": ["z2", "z2_alt"]},
                 },
                 {
                     "proc_id": "team_z_employee",
@@ -145,9 +145,9 @@ def build_catalog_health_context(
             "procedures": [
                 {
                     "proc_id": "bot_team_g",
-                    "start_block_ids": ["g1"],
+                    "start_block_ids": ["g1", "g1_alt"],
                     "end_block_ids": ["g2::postpone"],
-                    "branches": {"g1": ["g2"]},
+                    "branches": {"g1": ["g2"], "g1_alt": ["g2"]},
                 }
             ],
             "procedure_graph": {"bot_team_g": ["bot_team_g_postpone"]},
@@ -263,6 +263,8 @@ def test_catalog_health_markers_and_problem_filter(
         assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
         assert "Validity marker issue" in filtered.text
+        assert "Multiple starts but no branches" in filtered.text
+        assert "Detected when branch blocks = 0 and start blocks &gt; 1." in filtered.text
         assert "Start blocks" in filtered.text
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
@@ -361,6 +363,7 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
         assert "Validity marker issue" in response.text
+        assert "Multiple starts but no branches" in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text
 

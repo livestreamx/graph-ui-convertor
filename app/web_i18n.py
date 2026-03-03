@@ -188,6 +188,8 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Closest markup across teams": "Наиболее похожая разметка среди других команд",
     "No comparable markups across teams": "Нет разметок для сравнения в других командах",
     "Start blocks": "Стартовые блоки",
+    "Multiple starts but no branches": "Несколько стартов, но нет ветвлений",
+    "Detected when branch blocks = 0 and start blocks > 1.": "Срабатывает, когда blocks с ветвлением = 0 и стартовых блоков > 1.",
     "No branches and no end blocks except postpone": "Нет ветвлений и нет end-блоков, кроме postpone",
     "Validity marker issue": "Проблема маркера валидности",
     "Detected when branch blocks = 0 and end blocks except postpone = 0.": "Срабатывает, когда blocks с ветвлением = 0 и end-блоков кроме postpone = 0.",

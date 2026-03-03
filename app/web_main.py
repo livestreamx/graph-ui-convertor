@@ -49,6 +49,7 @@ from domain.services.build_cross_team_graph_dashboard import (
 )
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, GraphLevel
 from domain.services.catalog_health import (
+    GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
     GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT,
     GRAPH_ISSUE_NO_BOT,
@@ -139,7 +140,21 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
     GRAPH_ISSUE_NO_BOT: "No bot graphs found",
     GRAPH_ISSUE_ONLY_BOT: "Only bot graphs found",
     GRAPH_ISSUE_TOO_MANY: "More than three graphs in markup",
+}
+
+GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
+    GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
+}
+
+GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
+    GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: (
+        "Detected when branch blocks = 0 and start blocks > 1.",
+    ),
+    GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
+        "Detected when branch blocks = 0 and end blocks except postpone = 0.",
+        "Postpone end blocks do not make a flow complete.",
+    ),
 }
 
 HEALTH_MARKER_FILTER_ALL = ""
@@ -357,6 +372,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "include_active_filters_oob": htmx_request,
                 "health_by_scene": health_report.items_by_scene if health_report else {},
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
+                "gaming_issue_text_keys": GAMING_ISSUE_TEXT_KEYS,
+                "gaming_issue_reason_text_keys": GAMING_ISSUE_REASON_TEXT_KEYS,
             },
         )
 
@@ -593,6 +610,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "health_report": health_report,
                 "team_rows": team_rows,
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
+                "gaming_issue_text_keys": GAMING_ISSUE_TEXT_KEYS,
+                "gaming_issue_reason_text_keys": GAMING_ISSUE_REASON_TEXT_KEYS,
             },
         )
 
@@ -704,6 +723,8 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "item_health": item_health,
                 "catalog_back_url": catalog_back_url,
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
+                "gaming_issue_text_keys": GAMING_ISSUE_TEXT_KEYS,
+                "gaming_issue_reason_text_keys": GAMING_ISSUE_REASON_TEXT_KEYS,
             },
         )
 
