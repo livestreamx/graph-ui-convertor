@@ -110,6 +110,7 @@ class CatalogContext:
     to_procedure_graph_excalidraw: ProcedureGraphToExcalidrawConverter
     to_procedure_graph_unidraw: ProcedureGraphToUnidrawConverter
     link_templates: ExcalidrawLinkTemplates | None
+    index_state: CatalogIndexState
     health_builder: BuildCatalogHealthReport
     health_state: CatalogHealthState
 
@@ -117,6 +118,14 @@ class CatalogContext:
 @dataclass
 class CatalogRefreshState:
     last_source_fingerprint: str | None = None
+
+
+@dataclass
+class CatalogIndexState:
+    path: Path | None = None
+    stamp: tuple[int, int] | None = None
+    index: CatalogIndex | None = None
+    signature: str | None = None
 
 
 @dataclass
@@ -216,6 +225,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             link_templates=link_templates,
         ),
         link_templates=link_templates,
+        index_state=CatalogIndexState(),
         health_builder=BuildCatalogHealthReport(
             same_team_threshold_percent=(
                 settings.catalog.health_same_team_overlap_threshold_percent
@@ -1251,10 +1261,25 @@ def enhance_scene_payload(
 
 def load_index(context: CatalogContext) -> CatalogIndex | None:
     path = context.settings.catalog.index_path
-    try:
-        return context.index_repo.load(path)
-    except FileNotFoundError:
+    stamp = read_catalog_index_stamp(path)
+    cached = context.index_state
+    if (
+        cached.index is not None
+        and cached.path == path
+        and cached.stamp is not None
+        and cached.stamp == stamp
+    ):
+        return cached.index
+    if stamp is None:
+        invalidate_catalog_index_cache(context, path=path)
         return None
+    try:
+        index_data = context.index_repo.load(path)
+    except FileNotFoundError:
+        invalidate_catalog_index_cache(context, path=path)
+        return None
+    update_catalog_index_cache(context, index_data, path=path, stamp=stamp)
+    return index_data
 
 
 def load_index_bundle(
@@ -1271,7 +1296,7 @@ def ensure_catalog_health_cache(
     context: CatalogContext,
     index_data: CatalogIndex,
 ) -> CatalogHealthReport:
-    signature = build_catalog_index_signature(index_data)
+    signature = resolve_catalog_index_signature(context, index_data)
     cached = context.health_state
     if cached.index_signature == signature and cached.report is not None:
         return cached.report
@@ -1289,7 +1314,8 @@ def update_catalog_health_cache(
         return
     if not hasattr(context, "health_state") or not hasattr(context, "health_builder"):
         return
-    signature = build_catalog_index_signature(index_data)
+    update_catalog_index_cache(context, index_data)
+    signature = resolve_catalog_index_signature(context, index_data)
     try:
         report = context.health_builder.build(index_data.items)
     except Exception:
@@ -1309,6 +1335,55 @@ def build_catalog_index_signature(index_data: CatalogIndex) -> str:
         )
     digest = hashlib.sha256("|".join(digest_source).encode("utf-8")).hexdigest()
     return f"{index_data.generated_at}:{len(index_data.items)}:{digest}"
+
+
+def resolve_catalog_index_signature(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+) -> str:
+    cached = context.index_state
+    if cached.index is index_data and cached.signature is not None:
+        return cached.signature
+    signature = build_catalog_index_signature(index_data)
+    if cached.index is index_data:
+        cached.signature = signature
+    return signature
+
+
+def update_catalog_index_cache(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+    *,
+    path: Path | None = None,
+    stamp: tuple[int, int] | None = None,
+) -> None:
+    index_path = path or context.settings.catalog.index_path
+    resolved_stamp = stamp if stamp is not None else read_catalog_index_stamp(index_path)
+    cached = context.index_state
+    cached.path = index_path
+    cached.stamp = resolved_stamp
+    cached.index = index_data
+    cached.signature = None
+
+
+def invalidate_catalog_index_cache(
+    context: CatalogContext,
+    *,
+    path: Path | None = None,
+) -> None:
+    cached = context.index_state
+    cached.path = path
+    cached.stamp = None
+    cached.index = None
+    cached.signature = None
+
+
+def read_catalog_index_stamp(path: Path) -> tuple[int, int] | None:
+    try:
+        stats = path.stat()
+    except FileNotFoundError:
+        return None
+    return (int(stats.st_mtime_ns), int(stats.st_size))
 
 
 def parse_scene_json(raw_bytes: bytes) -> dict[str, Any]:
