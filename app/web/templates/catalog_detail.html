@@ -1013,12 +1013,19 @@
             </ul>
           </div>
           <div class="health-detail-footer">
-            {% if item_health.same_team_similarity.top_match %}
+            {% if item_health.same_team_similarity.matches %}
               <div class="health-detail-note health-detail-note-column">
-                <span class="health-detail-note-label">{{ t("Closest markup in team") }}:</span>
-                <a class="meta-link" href="/catalog/{{ item_health.same_team_similarity.top_match.scene_id }}?lang={{ lang }}">
-                  <span class="meta-link-text">{{ item_health.same_team_similarity.top_match.title }}</span>
-                </a>
+                <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                {% for match in item_health.same_team_similarity.matches[:3] %}
+                  <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
+                    <span class="team-graph-graph-entities health-detail-team-entities">
+                      <span class="team-graph-graph-entity team-graph-graph-entity-sm">
+                        <span class="team-graph-graph-entity-team">{{ match.team_name }}</span>
+                        <span class="team-graph-graph-entity-service">{{ match.title }}</span>
+                      </span>
+                    </span>
+                  </a>
+                {% endfor %}
               </div>
             {% else %}
               <div class="health-detail-note">{{ t("No comparable markups in team") }}</div>
@@ -1052,17 +1059,19 @@
             </ul>
           </div>
           <div class="health-detail-footer">
-            {% if item_health.cross_team_similarity.top_match %}
+            {% if item_health.cross_team_similarity.matches %}
               <div class="health-detail-note health-detail-note-column">
-                <span class="health-detail-note-label">{{ t("Closest markup across teams") }}:</span>
-                <a class="health-detail-entity-link" href="/catalog/{{ item_health.cross_team_similarity.top_match.scene_id }}?lang={{ lang }}">
-                  <span class="team-graph-graph-entities health-detail-team-entities">
-                    <span class="team-graph-graph-entity team-graph-graph-entity-sm">
-                      <span class="team-graph-graph-entity-team">{{ item_health.cross_team_similarity.top_match.team_name }}</span>
-                      <span class="team-graph-graph-entity-service">{{ item_health.cross_team_similarity.top_match.title }}</span>
+                <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                {% for match in item_health.cross_team_similarity.matches[:3] %}
+                  <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
+                    <span class="team-graph-graph-entities health-detail-team-entities">
+                      <span class="team-graph-graph-entity team-graph-graph-entity-sm">
+                        <span class="team-graph-graph-entity-team">{{ match.team_name }}</span>
+                        <span class="team-graph-graph-entity-service">{{ match.title }}</span>
+                      </span>
                     </span>
-                  </span>
-                </a>
+                  </a>
+                {% endfor %}
               </div>
             {% else %}
               <div class="health-detail-note">{{ t("No comparable markups across teams") }}</div>

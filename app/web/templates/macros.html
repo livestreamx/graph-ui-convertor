@@ -40,9 +40,12 @@
   {% if gaming.is_problem %}
     <div class="validity-status validity-status-problem{% if compact %} validity-status-compact{% endif %}">
       <div class="validity-status-title">{{ t("Validity marker issue") }}</div>
-      <div>{{ t("No branches and no end blocks except postpone") }}</div>
-      <div class="validity-status-reason">{{ t("Detected when branch blocks = 0 and end blocks except postpone = 0.") }}</div>
-      <div class="validity-status-reason">{{ t("Postpone end blocks do not make a flow complete.") }}</div>
+      {% for issue_code in gaming.issue_codes %}
+        <div>{{ t(gaming_issue_text_keys.get(issue_code, issue_code)) }}</div>
+        {% for reason_text in gaming_issue_reason_text_keys.get(issue_code, ()) %}
+          <div class="validity-status-reason">{{ t(reason_text) }}</div>
+        {% endfor %}
+      {% endfor %}
     </div>
   {% elif show_ok %}
     <div class="validity-status validity-status-ok{% if compact %} validity-status-compact{% endif %}">

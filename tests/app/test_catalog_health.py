@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,6 +23,7 @@ def build_catalog_health_context(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
+    extra_objects: Mapping[str, dict[str, Any]] | None = None,
     settings_overrides: Mapping[str, object] | None = None,
 ) -> Iterator[TestClient]:
     excalidraw_in_dir = tmp_path / "excalidraw_in"
@@ -39,7 +41,7 @@ def build_catalog_health_context(
     ):
         path.mkdir(parents=True)
 
-    objects = {
+    objects: dict[str, dict[str, Any]] = {
         "markup/team_a_main.json": {
             "markup_type": "service",
             "finedog_unit_meta": {
@@ -51,8 +53,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["a1"],
-                    "end_block_ids": ["a2"],
-                    "branches": {"a1": ["a2"]},
+                    "end_block_ids": ["a2", "a2_alt"],
+                    "branches": {"a1": ["a2", "a2_alt"]},
                 },
                 {
                     "proc_id": "shared_proc_2",
@@ -74,8 +76,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["b1"],
-                    "end_block_ids": ["b2"],
-                    "branches": {"b1": ["b2"]},
+                    "end_block_ids": ["b2", "b2_alt"],
+                    "branches": {"b1": ["b2", "b2_alt"]},
                 },
                 {
                     "proc_id": "shared_proc_2",
@@ -97,8 +99,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "shared_proc",
                     "start_block_ids": ["c1"],
-                    "end_block_ids": ["c2"],
-                    "branches": {"c1": ["c2"]},
+                    "end_block_ids": ["c2", "c2_alt"],
+                    "branches": {"c1": ["c2", "c2_alt"]},
                 },
                 {
                     "proc_id": "team_b_unique",
@@ -120,8 +122,8 @@ def build_catalog_health_context(
                 {
                     "proc_id": "bot_team_z",
                     "start_block_ids": ["z1"],
-                    "end_block_ids": ["z2"],
-                    "branches": {"z1": ["z2"]},
+                    "end_block_ids": ["z2", "z2_alt"],
+                    "branches": {"z1": ["z2", "z2_alt"]},
                 },
                 {
                     "proc_id": "team_z_employee",
@@ -145,14 +147,16 @@ def build_catalog_health_context(
             "procedures": [
                 {
                     "proc_id": "bot_team_g",
-                    "start_block_ids": ["g1"],
+                    "start_block_ids": ["g1", "g1_alt"],
                     "end_block_ids": ["g2::postpone"],
-                    "branches": {"g1": ["g2"]},
+                    "branches": {"g1": ["g2"], "g1_alt": ["g2"]},
                 }
             ],
             "procedure_graph": {"bot_team_g": ["bot_team_g_postpone"]},
         },
     }
+    if extra_objects:
+        objects.update(dict(extra_objects))
 
     client, stubber = stub_s3_catalog(
         monkeypatch=monkeypatch,
@@ -260,8 +264,11 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Team Z Healthy" not in filtered.text
         assert "Team A Main" not in filtered.text
         assert "Active filters" in filtered.text
+        assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
         assert "Validity marker issue" in filtered.text
+        assert "Multiple starts but no branches" in filtered.text
+        assert "Detected when branch blocks = 0 and start blocks &gt; 1." in filtered.text
         assert "Start blocks" in filtered.text
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
@@ -304,8 +311,7 @@ def test_catalog_detail_renders_health_section(
         assert response.status_code == 200
         assert "Markup ID" in response.text
         assert "Markup health markers" in response.text
-        assert "Closest markup in team" in response.text
-        assert "Closest markup across teams" in response.text
+        assert response.text.count("Similar markups") == 2
         assert "Problem threshold" in response.text
         assert "Validity" in response.text
         assert "Start blocks" in response.text
@@ -321,6 +327,7 @@ def test_catalog_detail_renders_health_section(
         assert response.text.find("Graphs") < response.text.find("Validity")
         assert response.text.count('class="health-detail-final-status ') == 4
         assert response.text.count('class="health-detail-footer"') == 4
+        assert response.text.count('class="health-detail-entity-link"') == 4
         assert 'class="health-detail-final-status is-ok"' in response.text
         assert f'href="/catalog/{cross_team_scene_id}?lang=en"' in response.text
 
@@ -360,9 +367,300 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
         assert "Validity marker issue" in response.text
+        assert "Multiple starts but no branches" in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text
 
         catalog_response = client.get("/catalog")
         assert catalog_response.status_code == 200
         assert 'href="/catalog/teams/health?lang=en"' in catalog_response.text
+
+
+def test_catalog_detail_limits_similarity_lists_to_top_three(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/focus.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Service",
+                "team_id": "focus-team",
+                "team_name": "Focus Team",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["f1"],
+                    "end_block_ids": ["f2"],
+                    "branches": {"f1": ["f2"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["f3"],
+                    "end_block_ids": ["f4"],
+                    "branches": {"f3": ["f4"]},
+                },
+                {
+                    "proc_id": "proc_3",
+                    "start_block_ids": ["f5"],
+                    "end_block_ids": ["f6"],
+                    "branches": {"f5": ["f6"]},
+                },
+                {
+                    "proc_id": "proc_4",
+                    "start_block_ids": ["f7"],
+                    "end_block_ids": ["f8"],
+                    "branches": {"f7": ["f8"]},
+                },
+            ],
+            "procedure_graph": {
+                "proc_1": ["proc_2"],
+                "proc_2": ["proc_3"],
+                "proc_3": ["proc_4"],
+            },
+        },
+        "markup/focus_same_100.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Same 100",
+                "team_id": "focus-team",
+                "team_name": "Focus Team",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["s11"],
+                    "end_block_ids": ["s12"],
+                    "branches": {"s11": ["s12"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["s13"],
+                    "end_block_ids": ["s14"],
+                    "branches": {"s13": ["s14"]},
+                },
+                {
+                    "proc_id": "proc_3",
+                    "start_block_ids": ["s15"],
+                    "end_block_ids": ["s16"],
+                    "branches": {"s15": ["s16"]},
+                },
+                {
+                    "proc_id": "proc_4",
+                    "start_block_ids": ["s17"],
+                    "end_block_ids": ["s18"],
+                    "branches": {"s17": ["s18"]},
+                },
+            ],
+            "procedure_graph": {
+                "proc_1": ["proc_2"],
+                "proc_2": ["proc_3"],
+                "proc_3": ["proc_4"],
+            },
+        },
+        "markup/focus_same_75.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Same 75",
+                "team_id": "focus-team",
+                "team_name": "Focus Team",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["s21"],
+                    "end_block_ids": ["s22"],
+                    "branches": {"s21": ["s22"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["s23"],
+                    "end_block_ids": ["s24"],
+                    "branches": {"s23": ["s24"]},
+                },
+                {
+                    "proc_id": "proc_3",
+                    "start_block_ids": ["s25"],
+                    "end_block_ids": ["s26"],
+                    "branches": {"s25": ["s26"]},
+                },
+            ],
+            "procedure_graph": {
+                "proc_1": ["proc_2"],
+                "proc_2": ["proc_3"],
+            },
+        },
+        "markup/focus_same_50.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Same 50",
+                "team_id": "focus-team",
+                "team_name": "Focus Team",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["s31"],
+                    "end_block_ids": ["s32"],
+                    "branches": {"s31": ["s32"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["s33"],
+                    "end_block_ids": ["s34"],
+                    "branches": {"s33": ["s34"]},
+                },
+            ],
+            "procedure_graph": {"proc_1": ["proc_2"]},
+        },
+        "markup/focus_same_25.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Same 25",
+                "team_id": "focus-team",
+                "team_name": "Focus Team",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["s41"],
+                    "end_block_ids": ["s42"],
+                    "branches": {"s41": ["s42"]},
+                },
+            ],
+            "procedure_graph": {"proc_1": []},
+        },
+        "markup/focus_cross_100.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Cross 100",
+                "team_id": "cross-team-1",
+                "team_name": "Cross Team 1",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["c11"],
+                    "end_block_ids": ["c12"],
+                    "branches": {"c11": ["c12"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["c13"],
+                    "end_block_ids": ["c14"],
+                    "branches": {"c13": ["c14"]},
+                },
+                {
+                    "proc_id": "proc_3",
+                    "start_block_ids": ["c15"],
+                    "end_block_ids": ["c16"],
+                    "branches": {"c15": ["c16"]},
+                },
+                {
+                    "proc_id": "proc_4",
+                    "start_block_ids": ["c17"],
+                    "end_block_ids": ["c18"],
+                    "branches": {"c17": ["c18"]},
+                },
+            ],
+            "procedure_graph": {
+                "proc_1": ["proc_2"],
+                "proc_2": ["proc_3"],
+                "proc_3": ["proc_4"],
+            },
+        },
+        "markup/focus_cross_75.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Cross 75",
+                "team_id": "cross-team-2",
+                "team_name": "Cross Team 2",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["c21"],
+                    "end_block_ids": ["c22"],
+                    "branches": {"c21": ["c22"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["c23"],
+                    "end_block_ids": ["c24"],
+                    "branches": {"c23": ["c24"]},
+                },
+                {
+                    "proc_id": "proc_3",
+                    "start_block_ids": ["c25"],
+                    "end_block_ids": ["c26"],
+                    "branches": {"c25": ["c26"]},
+                },
+            ],
+            "procedure_graph": {
+                "proc_1": ["proc_2"],
+                "proc_2": ["proc_3"],
+            },
+        },
+        "markup/focus_cross_50.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Cross 50",
+                "team_id": "cross-team-3",
+                "team_name": "Cross Team 3",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["c31"],
+                    "end_block_ids": ["c32"],
+                    "branches": {"c31": ["c32"]},
+                },
+                {
+                    "proc_id": "proc_2",
+                    "start_block_ids": ["c33"],
+                    "end_block_ids": ["c34"],
+                    "branches": {"c33": ["c34"]},
+                },
+            ],
+            "procedure_graph": {"proc_1": ["proc_2"]},
+        },
+        "markup/focus_cross_25.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Focus Cross 25",
+                "team_id": "cross-team-4",
+                "team_name": "Cross Team 4",
+            },
+            "procedures": [
+                {
+                    "proc_id": "proc_1",
+                    "start_block_ids": ["c41"],
+                    "end_block_ids": ["c42"],
+                    "branches": {"c41": ["c42"]},
+                },
+            ],
+            "procedure_graph": {"proc_1": []},
+        },
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+    ) as client:
+        scene_id = _scene_id_by_title(client, "Focus Service")
+        response = client.get(f"/catalog/{scene_id}")
+
+        assert response.status_code == 200
+        assert response.text.count('class="health-detail-entity-link"') == 6
+        assert "Focus Same 100" in response.text
+        assert "Focus Same 75" in response.text
+        assert "Focus Same 50" in response.text
+        assert "Focus Same 25" not in response.text
+        assert "Focus Cross 100" in response.text
+        assert "Focus Cross 75" in response.text
+        assert "Focus Cross 50" in response.text
+        assert "Focus Cross 25" not in response.text
