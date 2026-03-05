@@ -146,8 +146,11 @@ catalog:
 - Catalog cards show four health markers:
   graph composition quality, validity, top same-team `procedure_id` overlap, and top cross-team overlap.
   On the main page, the `Graphs` and `Validity` markers show only a compact status by default
-  (`OK` or `Needs attention`) to keep cards shorter. On hover/focus, those two markers expand
-  into a drilldown panel with the full per-block / per-graph breakdown and problem explanation.
+  (`OK` or `Needs attention`) to keep cards shorter.
+  `Team overlap` and `Cross-team overlap` keep the compact top-overlap value on the card.
+  On hover/focus, all four markers expand into a drilldown panel.
+  `Graphs`/`Validity` show per-block/per-graph breakdown and problem explanation.
+  `Team overlap`/`Cross-team overlap` show threshold and top similar markups.
   Problematic markers glow by default and have hover animation.
   For validity problems, the UI shows the exact trigger for the first two cases:
   either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no non-postpone

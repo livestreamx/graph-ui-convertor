@@ -236,6 +236,12 @@ def test_catalog_health_markers_and_problem_filter(
         assert 'data-health-marker="graphs"' in catalog_response.text and 'tabindex="0"' in (
             catalog_response.text
         )
+        assert 'class="health-marker health-marker-same-team health-marker-drilldown ' in (
+            catalog_response.text
+        )
+        assert 'class="health-marker health-marker-cross-team health-marker-drilldown ' in (
+            catalog_response.text
+        )
         assert (
             'class="validity-breakdown validity-breakdown-compact adaptive-stat-grid"'
             in catalog_response.text
@@ -245,6 +251,7 @@ def test_catalog_health_markers_and_problem_filter(
         )
         assert "Needs attention" in catalog_response.text
         assert "OK" in catalog_response.text
+        assert "Similar markups" in catalog_response.text
         assert "Graphs with bot" in catalog_response.text
         assert "Multichannel graphs" in catalog_response.text
         assert "Employee graphs" in catalog_response.text
@@ -335,6 +342,7 @@ def test_catalog_detail_renders_health_section(
         assert "Markup ID" in response.text
         assert "Markup health markers" in response.text
         assert response.text.count("Similar markups") == 2
+        assert response.text.count('class="health-detail-note-count"') == 2
         assert "Problem threshold" in response.text
         assert "Validity" in response.text
         assert "Start blocks" in response.text
@@ -351,6 +359,8 @@ def test_catalog_detail_renders_health_section(
         assert response.text.count('class="health-detail-final-status ') == 4
         assert response.text.count('class="health-detail-footer"') == 4
         assert response.text.count('class="health-detail-entity-link"') == 4
+        assert "No comparable markups in team" not in response.text
+        assert "No comparable markups across teams" not in response.text
         assert 'class="health-detail-final-status is-ok"' in response.text
         assert f'href="/catalog/{cross_team_scene_id}?lang=en"' in response.text
 

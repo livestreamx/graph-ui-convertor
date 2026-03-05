@@ -1015,7 +1015,10 @@
           <div class="health-detail-footer">
             {% if item_health.same_team_similarity.matches %}
               <div class="health-detail-note health-detail-note-column">
-                <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                <div class="health-detail-note-head">
+                  <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                  <span class="health-detail-note-count">{{ item_health.same_team_similarity.matches|length }}</span>
+                </div>
                 {% for match in item_health.same_team_similarity.matches[:3] %}
                   <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
                     <span class="team-graph-graph-entities health-detail-team-entities">
@@ -1027,8 +1030,6 @@
                   </a>
                 {% endfor %}
               </div>
-            {% else %}
-              <div class="health-detail-note">{{ t("No comparable markups in team") }}</div>
             {% endif %}
             <div class="health-detail-final-status {% if item_health.same_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
               <span class="health-detail-final-status-label">{{ t("Status") }}</span>
@@ -1061,7 +1062,10 @@
           <div class="health-detail-footer">
             {% if item_health.cross_team_similarity.matches %}
               <div class="health-detail-note health-detail-note-column">
-                <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                <div class="health-detail-note-head">
+                  <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
+                  <span class="health-detail-note-count">{{ item_health.cross_team_similarity.matches|length }}</span>
+                </div>
                 {% for match in item_health.cross_team_similarity.matches[:3] %}
                   <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
                     <span class="team-graph-graph-entities health-detail-team-entities">
@@ -1073,8 +1077,6 @@
                   </a>
                 {% endfor %}
               </div>
-            {% else %}
-              <div class="health-detail-note">{{ t("No comparable markups across teams") }}</div>
             {% endif %}
             <div class="health-detail-final-status {% if item_health.cross_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
               <span class="health-detail-final-status-label">{{ t("Status") }}</span>

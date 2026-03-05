@@ -171,6 +171,15 @@ HEALTH_MARKER_FILTER_VALUES: set[str] = {
     HEALTH_MARKER_FILTER_SAME_TEAM,
     HEALTH_MARKER_FILTER_CROSS_TEAM,
 }
+MARKUP_TYPE_GROUP_ORDER = (
+    "system_service_search",
+    "service",
+    "system_task_processor",
+    "system_default",
+)
+MARKUP_TYPE_GROUP_ORDER_INDEX = {
+    markup_type: index for index, markup_type in enumerate(MARKUP_TYPE_GROUP_ORDER)
+}
 
 
 def create_app(settings: AppSettings) -> FastAPI:
@@ -1968,7 +1977,10 @@ def build_group_tree(items: list[CatalogItem], fields: list[str]) -> list[Catalo
         key = group_value_for_field(item, field)
         buckets.setdefault(key, []).append(item)
     groups: list[CatalogGroup] = []
-    for value in sorted(buckets.keys()):
+    grouped_values = sorted(buckets.keys())
+    if field == "markup_type":
+        grouped_values = sorted(buckets.keys(), key=markup_type_group_sort_key)
+    for value in grouped_values:
         bucket_items = buckets[value]
         children = build_group_tree(bucket_items, fields[1:]) if len(fields) > 1 else []
         display_value = group_display_value(field, value, bucket_items)
@@ -1983,6 +1995,14 @@ def build_group_tree(items: list[CatalogItem], fields: list[str]) -> list[Catalo
             )
         )
     return groups
+
+
+def markup_type_group_sort_key(value: str) -> tuple[int, int, str]:
+    normalized = str(value or "").strip().lower()
+    order = MARKUP_TYPE_GROUP_ORDER_INDEX.get(normalized)
+    if order is None:
+        return (1, len(MARKUP_TYPE_GROUP_ORDER), normalized)
+    return (0, order, normalized)
 
 
 def is_htmx(request: Request) -> bool:

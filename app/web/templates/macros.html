@@ -109,8 +109,9 @@
                 <div class="card-health-section">
                   <div class="health-marker-row">
                     <div
-                      class="health-marker health-marker-same-team {% if item_health.same_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                      class="health-marker health-marker-same-team health-marker-drilldown {% if item_health.same_team_similarity.is_problem %}is-problem is-glow{% endif %}"
                       data-health-marker="same-team"
+                      tabindex="0"
                     >
                       <span class="health-marker-label adaptive-text">{{ t("Team overlap") }}</span>
                       <span class="health-marker-value">
@@ -120,10 +121,22 @@
                           0.0%
                         {% endif %}
                       </span>
+                      <div class="health-marker-popover">
+                        <div class="validity-breakdown validity-breakdown-compact adaptive-stat-grid">
+                          <div class="validity-breakdown-item">
+                            <span class="validity-breakdown-label adaptive-text adaptive-text-tight">{{ t("Similar markups") }}</span>
+                            <span class="validity-breakdown-value">{{ item_health.same_team_similarity.matches|length }}</span>
+                          </div>
+                        </div>
+                        {% if not item_health.same_team_similarity.matches %}
+                          <div class="card-health-note">{{ t("No comparable markups in team") }}</div>
+                        {% endif %}
+                      </div>
                     </div>
                     <div
-                      class="health-marker health-marker-cross-team {% if item_health.cross_team_similarity.is_problem %}is-problem is-glow{% endif %}"
+                      class="health-marker health-marker-cross-team health-marker-drilldown {% if item_health.cross_team_similarity.is_problem %}is-problem is-glow{% endif %}"
                       data-health-marker="cross-team"
+                      tabindex="0"
                     >
                       <span class="health-marker-label adaptive-text">{{ t("Cross-team overlap") }}</span>
                       <span class="health-marker-value">
@@ -133,6 +146,17 @@
                           0.0%
                         {% endif %}
                       </span>
+                      <div class="health-marker-popover">
+                        <div class="validity-breakdown validity-breakdown-compact adaptive-stat-grid">
+                          <div class="validity-breakdown-item">
+                            <span class="validity-breakdown-label adaptive-text adaptive-text-tight">{{ t("Similar markups") }}</span>
+                            <span class="validity-breakdown-value">{{ item_health.cross_team_similarity.matches|length }}</span>
+                          </div>
+                        </div>
+                        {% if not item_health.cross_team_similarity.matches %}
+                          <div class="card-health-note">{{ t("No comparable markups across teams") }}</div>
+                        {% endif %}
+                      </div>
                     </div>
                     <div
                       class="health-marker health-marker-graphs health-marker-drilldown {% if item_health.graph.is_problem %}is-problem is-glow{% endif %}"
