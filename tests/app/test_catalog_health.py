@@ -279,6 +279,8 @@ def test_catalog_health_markers_and_problem_filter(
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
         assert f'href="/catalog/{scene_id}?lang=en' in filtered.text
+        assert 'class="card-title-link"' in filtered.text
+        assert ">Team G Gaming Problem</a>" in filtered.text
 
         htmx_filtered = client.get(
             "/catalog",
@@ -299,6 +301,7 @@ def test_catalog_health_markers_and_problem_filter(
         assert "grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));" in (
             style_response.text
         )
+        assert ".card-title-link:visited" in style_response.text
 
 
 def test_catalog_active_filter_remove_links_preserve_other_filters(
