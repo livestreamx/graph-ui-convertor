@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import render_graph_breakdown, render_validity_breakdown, render_validity_problem_explanation with context %}
+{% from "macros.html" import render_graph_breakdown, render_validity_breakdown, render_validity_problem_explanation, render_validity_issue_blocks with context %}
 
 {% block content %}
   <section class="detail-header">
@@ -1136,6 +1136,7 @@
           </div>
           <div class="health-detail-footer">
             {{ render_validity_problem_explanation(item_health.gaming, show_ok=true) }}
+            {{ render_validity_issue_blocks(item_health.gaming, validity_issue_blocks) }}
             <div class="health-detail-final-status {% if item_health.gaming.is_problem %}is-problem{% else %}is-ok{% endif %}">
               <span class="health-detail-final-status-label">{{ t("Status") }}</span>
               <span class="health-detail-final-status-value">

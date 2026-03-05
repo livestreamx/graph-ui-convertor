@@ -136,6 +136,13 @@ class CatalogHealthState:
     report: CatalogHealthReport | None = None
 
 
+@dataclass(frozen=True)
+class ValidityIssueBlockRef:
+    procedure_id: str
+    block_id: str
+    block_external_url: str | None
+
+
 GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
     GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT: "Multiple graphs but no bot starts",
     GRAPH_ISSUE_NO_BOT: "No bot graphs found",
@@ -347,6 +354,11 @@ def create_app(settings: AppSettings) -> FastAPI:
                     health_report.item(item.scene_id), health_marker_filter
                 )
             ]
+        validity_issue_blocks_by_scene = build_validity_issue_blocks_by_scene(
+            context,
+            filtered_items,
+            health_report=health_report,
+        )
         groups = build_group_tree(filtered_items, index_data.group_by)
         criticality_levels, team_options = build_filter_options(
             index_data.items, index_data.unknown_value
@@ -391,6 +403,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
                 "gaming_issue_text_keys": GAMING_ISSUE_TEXT_KEYS,
                 "gaming_issue_reason_text_keys": GAMING_ISSUE_REASON_TEXT_KEYS,
+                "validity_issue_blocks_by_scene": validity_issue_blocks_by_scene,
             },
         )
 
@@ -710,6 +723,11 @@ def create_app(settings: AppSettings) -> FastAPI:
         service_external_url = resolve_service_external_url(context, item)
         team_external_url = resolve_team_external_url(context, item)
         item_health = health_report.item(item.scene_id) if health_report is not None else None
+        validity_issue_blocks = (
+            build_validity_issue_blocks_by_scene(context, [item]).get(item.scene_id, {})
+            if item_health is not None and item_health.gaming.is_problem
+            else {}
+        )
         catalog_back_url = resolve_catalog_back_url(
             back,
             language=localizer_for_request(request).language,
@@ -738,6 +756,7 @@ def create_app(settings: AppSettings) -> FastAPI:
                 "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
                 "procedure_open_mode": procedure_open_mode,
                 "item_health": item_health,
+                "validity_issue_blocks": validity_issue_blocks,
                 "catalog_back_url": catalog_back_url,
                 "graph_issue_text_keys": GRAPH_ISSUE_TEXT_KEYS,
                 "gaming_issue_text_keys": GAMING_ISSUE_TEXT_KEYS,
@@ -1463,6 +1482,29 @@ def resolve_procedure_external_url(context: CatalogContext, procedure_id: str | 
     return context.link_templates.procedure_link(normalized)
 
 
+def resolve_block_external_url(
+    context: CatalogContext,
+    block_id: str | None,
+    procedure_id: str | None = None,
+) -> str | None:
+    if not context.link_templates:
+        return None
+    if not isinstance(block_id, str):
+        return None
+    normalized_block_id = block_id.strip()
+    if not normalized_block_id:
+        return None
+    normalized_procedure_id = None
+    if isinstance(procedure_id, str):
+        stripped = procedure_id.strip()
+        if stripped:
+            normalized_procedure_id = stripped
+    return context.link_templates.block_link(
+        normalized_block_id,
+        procedure_id=normalized_procedure_id,
+    )
+
+
 def resolve_team_external_url(context: CatalogContext, item: CatalogItem) -> str | None:
     if not context.link_templates:
         return None
@@ -1765,6 +1807,108 @@ def load_markup_documents(
         cache[item.markup_rel_path] = markup
         documents.append(markup)
     return documents
+
+
+def build_validity_issue_blocks_by_scene(
+    context: CatalogContext,
+    items: Sequence[CatalogItem],
+    *,
+    health_report: CatalogHealthReport | None = None,
+) -> dict[str, dict[str, tuple[ValidityIssueBlockRef, ...]]]:
+    if not items:
+        return {}
+    result: dict[str, dict[str, tuple[ValidityIssueBlockRef, ...]]] = {}
+    for item in items:
+        if health_report is not None:
+            health = health_report.item(item.scene_id)
+            if health is None or not health.gaming.is_problem:
+                continue
+        issue_map = collect_validity_issue_block_refs(context, item)
+        if issue_map:
+            result[item.scene_id] = issue_map
+    return result
+
+
+def collect_validity_issue_block_refs(
+    context: CatalogContext,
+    item: CatalogItem,
+) -> dict[str, tuple[ValidityIssueBlockRef, ...]]:
+    by_issue: dict[str, list[ValidityIssueBlockRef]] = {
+        GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: [],
+        GAMING_ISSUE_SAME_START_AND_END_BLOCK: [],
+    }
+    seen: set[tuple[str, str, str]] = set()
+
+    procedure_ids = sorted(
+        set(item.procedure_start_blocks)
+        | set(item.procedure_end_blocks)
+        | set(item.procedure_branch_counts),
+        key=str.lower,
+    )
+    for procedure_id in procedure_ids:
+        if not procedure_id:
+            continue
+        start_ids = tuple(item.procedure_start_blocks.get(procedure_id, ()))
+        end_ids = set(item.procedure_end_blocks.get(procedure_id, ()))
+        branch_count = int(item.procedure_branch_counts.get(procedure_id, 0))
+        if branch_count == 0 and len(start_ids) > 1:
+            for block_id in start_ids:
+                _append_validity_issue_block_ref(
+                    by_issue[GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH],
+                    seen,
+                    issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
+                    procedure_id=procedure_id,
+                    block_id=block_id,
+                    block_external_url=resolve_block_external_url(
+                        context,
+                        block_id,
+                        procedure_id=procedure_id,
+                    ),
+                )
+        overlap_ids = sorted(end_ids.intersection(start_ids), key=str.lower)
+        for block_id in overlap_ids:
+            _append_validity_issue_block_ref(
+                by_issue[GAMING_ISSUE_SAME_START_AND_END_BLOCK],
+                seen,
+                issue_code=GAMING_ISSUE_SAME_START_AND_END_BLOCK,
+                procedure_id=procedure_id,
+                block_id=block_id,
+                block_external_url=resolve_block_external_url(
+                    context,
+                    block_id,
+                    procedure_id=procedure_id,
+                ),
+            )
+
+    result: dict[str, tuple[ValidityIssueBlockRef, ...]] = {}
+    for issue_code, values in by_issue.items():
+        if not values:
+            continue
+        values.sort(key=lambda entry: (entry.procedure_id.lower(), entry.block_id.lower()))
+        result[issue_code] = tuple(values)
+    return result
+
+
+def _append_validity_issue_block_ref(
+    target: list[ValidityIssueBlockRef],
+    seen: set[tuple[str, str, str]],
+    *,
+    issue_code: str,
+    procedure_id: str,
+    block_id: str,
+    block_external_url: str | None,
+) -> None:
+    dedup_key = (issue_code, procedure_id, block_id)
+    if dedup_key in seen:
+        return
+    seen.add(dedup_key)
+    target.append(
+        ValidityIssueBlockRef(
+            procedure_id=procedure_id,
+            block_id=block_id,
+            block_external_url=block_external_url,
+        )
+    )
 
 
 def build_team_query(

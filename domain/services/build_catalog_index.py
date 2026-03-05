@@ -97,6 +97,9 @@ class BuildCatalogIndex:
             team_name = config.unknown_value
         markup_meta = self._extract_markup_meta(raw)
         procedure_blocks = self._extract_procedure_blocks(document)
+        procedure_start_blocks = self._extract_procedure_start_blocks(document)
+        procedure_end_blocks = self._extract_procedure_end_blocks(document)
+        procedure_branch_counts = self._extract_procedure_branch_counts(document)
         procedure_graph = self._extract_procedure_graph(document)
         procedure_ids = self._collect_procedure_ids(procedure_blocks, procedure_graph)
         block_ids = self._collect_block_ids(procedure_blocks)
@@ -137,6 +140,9 @@ class BuildCatalogIndex:
             procedure_ids=procedure_ids,
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
+            procedure_start_blocks=procedure_start_blocks,
+            procedure_end_blocks=procedure_end_blocks,
+            procedure_branch_counts=procedure_branch_counts,
             procedure_graph=procedure_graph,
             start_block_count=start_block_count,
             branch_block_count=branch_block_count,
@@ -237,6 +243,49 @@ class BuildCatalogIndex:
                 continue
             block_ids = sorted(procedure.block_ids(), key=str.lower)
             result[procedure_id] = block_ids
+        return result
+
+    def _extract_procedure_start_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:
+        result: dict[str, list[str]] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id or procedure_id in result:
+                continue
+            start_blocks = sorted(
+                {
+                    block_id
+                    for block_id in (str(raw).strip() for raw in procedure.start_block_ids)
+                    if block_id
+                },
+                key=str.lower,
+            )
+            result[procedure_id] = start_blocks
+        return result
+
+    def _extract_procedure_end_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:
+        result: dict[str, list[str]] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id or procedure_id in result:
+                continue
+            end_blocks = sorted(
+                {
+                    block_id
+                    for block_id in (str(raw).strip() for raw in procedure.end_block_ids)
+                    if block_id
+                },
+                key=str.lower,
+            )
+            result[procedure_id] = end_blocks
+        return result
+
+    def _extract_procedure_branch_counts(self, document: MarkupDocument) -> dict[str, int]:
+        result: dict[str, int] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id or procedure_id in result:
+                continue
+            result[procedure_id] = len(procedure.branches)
         return result
 
     def _collect_block_ids(self, procedure_blocks: Mapping[str, list[str]]) -> list[str]:

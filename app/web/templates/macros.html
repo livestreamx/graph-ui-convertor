@@ -53,6 +53,39 @@
   {% endif %}
 {% endmacro %}
 
+{% macro render_validity_issue_blocks(gaming, validity_issue_blocks=None, compact=false) %}
+  {% if gaming.is_problem and validity_issue_blocks %}
+    <div class="validity-issue-blocks{% if compact %} validity-issue-blocks-compact{% endif %}">
+      {% for issue_code in gaming.issue_codes %}
+        {% set block_refs = validity_issue_blocks.get(issue_code, ()) %}
+        {% if block_refs %}
+          <div class="validity-issue-block-group">
+            <div class="validity-issue-block-list">
+              {% set visible_block_refs = block_refs[:4] if compact else block_refs %}
+              {% for ref in visible_block_refs %}
+                {% if ref.block_external_url %}
+                  <a class="validity-issue-block-pill" href="{{ ref.block_external_url }}" target="_blank" rel="noreferrer">
+                    <span class="validity-issue-block-pill-main">{{ ref.block_id }}</span>
+                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_id }}</span>
+                  </a>
+                {% else %}
+                  <span class="validity-issue-block-pill">
+                    <span class="validity-issue-block-pill-main">{{ ref.block_id }}</span>
+                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_id }}</span>
+                  </span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% if compact and block_refs|length > 4 %}
+              <div class="validity-issue-block-more">+{{ block_refs|length - 4 }} {{ t("more blocks") }}</div>
+            {% endif %}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endmacro %}
+
 {% macro render_health_marker_status(is_problem) %}
   <span class="health-marker-status {% if is_problem %}health-marker-status-problem{% else %}health-marker-status-ok{% endif %}">
     {{ t("Needs attention") if is_problem else t("OK") }}
@@ -108,6 +141,7 @@
                 </div>
               {% endif %}
               {% set item_health = health_by_scene.get(item.scene_id) %}
+              {% set item_validity_issue_blocks = validity_issue_blocks_by_scene.get(item.scene_id, {}) %}
               {% if item_health %}
                 <div class="card-health-section">
                   <div class="health-marker-row">

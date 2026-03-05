@@ -152,6 +152,9 @@ catalog:
   `Graphs`/`Validity` show per-block/per-graph breakdown and problem explanation.
   `Team overlap`/`Cross-team overlap` show threshold and top similar markups.
   Problematic markers glow by default and have hover animation.
+  For validity issues where exact blocks are known (`multiple starts but no branches`,
+  `same block used as start and end`), marker cards now include concrete block IDs grouped by issue.
+  If `CJM_CATALOG__BLOCK_LINK_PATH` is configured, each block is rendered as an external link.
   For validity problems, the UI shows the exact trigger for the first two cases:
   either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no non-postpone
   end blocks (postpone-only endings do not count as completion). The "same block used as start

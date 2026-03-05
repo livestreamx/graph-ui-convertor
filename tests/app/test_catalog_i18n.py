@@ -171,6 +171,7 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     )
     assert translate_ui_text("End blocks", "ru") == "End-блоки"
     assert translate_ui_text("Postpone blocks", "ru") == "Postpone-блоки"
+    assert translate_ui_text("more blocks", "ru") == "еще блоков"
     assert translate_ui_text("Needs attention", "ru") == "Требует внимания"
     assert translate_ui_text("OK", "ru") == "ОК"
     assert translate_ui_text("Structure looks valid", "ru") == "Структура выглядит валидной"

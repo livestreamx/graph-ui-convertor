@@ -446,9 +446,56 @@ def test_catalog_health_renders_same_start_end_validity_issue(
         assert filtered.status_code == 200
         assert "Team H Same Start End" in filtered.text
         assert "Same block used as start and end" in filtered.text
+        assert filtered.text.count("Same block used as start and end") == 1
+        assert "h1" not in filtered.text
+        assert "team_h_proc" not in filtered.text
         assert "Detected when one procedure marks the same block as both start and end." not in (
             filtered.text
         )
+
+
+def test_catalog_health_validity_issue_blocks_render_external_links(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/team_h_same_start_end.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Team H Same Start End",
+                "team_id": "team-h",
+                "team_name": "Team H",
+            },
+            "procedures": [
+                {
+                    "proc_id": "team_h_proc",
+                    "start_block_ids": ["h1"],
+                    "end_block_ids": ["h1"],
+                    "branches": {"h1": ["h2"]},
+                }
+            ],
+            "procedure_graph": {"team_h_proc": ["team_h_done"]},
+        }
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+        settings_overrides={
+            "block_link_path": "https://external.example.com/blocks/{block_id}?proc={procedure_id}"
+        },
+    ) as client:
+        filtered = client.get("/catalog", params={"health_marker": "validity"})
+        assert filtered.status_code == 200
+        assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' not in filtered.text
+
+        scene_id = _scene_id_by_title(client, "Team H Same Start End")
+        detail = client.get(f"/catalog/{scene_id}")
+        assert detail.status_code == 200
+        assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' in detail.text
 
 
 def test_catalog_detail_limits_similarity_lists_to_top_three(

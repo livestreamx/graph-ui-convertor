@@ -199,6 +199,7 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "End blocks except postpone": "End-блоки кроме postpone",
     "Postpone end blocks": "End-блоки postpone",
     "Postpone blocks": "Postpone-блоки",
+    "more blocks": "еще блоков",
     "Needs attention": "Требует внимания",
     "OK": "ОК",
     "Structure looks valid": "Структура выглядит валидной",

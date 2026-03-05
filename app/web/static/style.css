@@ -2649,6 +2649,64 @@ main {
   font-size: 11px;
 }
 
+.validity-issue-blocks {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.validity-issue-blocks-compact {
+  margin-top: 8px;
+  gap: 6px;
+}
+
+.validity-issue-block-group {
+  display: grid;
+  gap: 6px;
+}
+
+.validity-issue-block-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.validity-issue-block-pill {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding: 5px 7px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 140, 140, 0.42);
+  background: rgba(255, 130, 130, 0.1);
+  text-decoration: none;
+}
+
+a.validity-issue-block-pill:hover {
+  border-color: rgba(255, 168, 168, 0.7);
+  background: rgba(255, 130, 130, 0.16);
+}
+
+.validity-issue-block-pill-main {
+  color: #ffe4e4;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.validity-issue-block-pill-meta {
+  color: #ffbbbb;
+  font-size: 10px;
+  line-height: 1.2;
+  opacity: 0.95;
+}
+
+.validity-issue-block-more {
+  color: #ffc0c0;
+  font-size: 10px;
+}
+
 @keyframes healthMarkerGlow {
   0%,
   100% {
