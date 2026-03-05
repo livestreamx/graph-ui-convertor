@@ -185,6 +185,8 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "No graph health problems": "Проблем по графам не найдено",
     "Problem threshold": "Порог проблемы",
     "Similar markups": "Схожие разметки",
+    "Show {count} more markups": "Показать еще {count} разметок",
+    "Show fewer markups": "Показать меньше разметок",
     "Closest markup in team": "Наиболее похожая разметка в команде",
     "No comparable markups in team": "В команде нет разметок для сравнения",
     "Closest markup across teams": "Наиболее похожая разметка среди других команд",

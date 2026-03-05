@@ -498,7 +498,7 @@ def test_catalog_health_validity_issue_blocks_render_external_links(
         assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' in detail.text
 
 
-def test_catalog_detail_limits_similarity_lists_to_top_three(
+def test_catalog_detail_shows_top_three_similarity_and_expandable_rest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
@@ -777,12 +777,20 @@ def test_catalog_detail_limits_similarity_lists_to_top_three(
         response = client.get(f"/catalog/{scene_id}")
 
         assert response.status_code == 200
-        assert response.text.count('class="health-detail-entity-link"') == 6
+        assert response.text.count('class="health-detail-more"') == 2
+        assert response.text.count("more markups") == 2
+        assert response.text.count("Show fewer markups") == 2
         assert "Focus Same 100" in response.text
         assert "Focus Same 75" in response.text
         assert "Focus Same 50" in response.text
-        assert "Focus Same 25" not in response.text
+        assert "Focus Same 25" in response.text
         assert "Focus Cross 100" in response.text
         assert "Focus Cross 75" in response.text
         assert "Focus Cross 50" in response.text
-        assert "Focus Cross 25" not in response.text
+        assert "Focus Cross 25" in response.text
+        assert response.text.find("Focus Same 100") < response.text.find("Focus Same 75")
+        assert response.text.find("Focus Same 75") < response.text.find("Focus Same 50")
+        assert response.text.find("Focus Same 50") < response.text.find("Focus Same 25")
+        assert response.text.find("Focus Cross 100") < response.text.find("Focus Cross 75")
+        assert response.text.find("Focus Cross 75") < response.text.find("Focus Cross 50")
+        assert response.text.find("Focus Cross 50") < response.text.find("Focus Cross 25")

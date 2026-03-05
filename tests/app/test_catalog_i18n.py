@@ -187,5 +187,7 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     )
     assert translate_ui_text("Cross-team overlap", "ru") == "Кросс-командное пересечение"
     assert translate_ui_text("Similar markups", "ru") == "Схожие разметки"
+    assert translate_ui_text("Show {count} more markups", "ru") == "Показать еще {count} разметок"
+    assert translate_ui_text("Show fewer markups", "ru") == "Показать меньше разметок"
     assert translate_ui_text("Employee graphs", "ru") == "Графы сотрудника"
     assert translate_ui_text("Markup health markers", "ru") == "Маркеры здоровья разметки"

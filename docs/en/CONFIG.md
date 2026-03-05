@@ -150,7 +150,8 @@ catalog:
   `Team overlap` and `Cross-team overlap` keep the compact top-overlap value on the card.
   On hover/focus, all four markers expand into a drilldown panel.
   `Graphs`/`Validity` show per-block/per-graph breakdown and problem explanation.
-  `Team overlap`/`Cross-team overlap` show threshold and top similar markups.
+  `Team overlap`/`Cross-team overlap` show threshold, top 3 similar markups, and a
+  `Show {count} more markups` action to expand the remaining matches.
   Problematic markers glow by default and have hover animation.
   For validity issues where exact blocks are known (`multiple starts but no branches`,
   `same block used as start and end`), marker cards now include concrete block IDs grouped by issue.

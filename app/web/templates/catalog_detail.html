@@ -1014,12 +1014,13 @@
           </div>
           <div class="health-detail-footer">
             {% if item_health.same_team_similarity.matches %}
+              {% set same_team_matches = item_health.same_team_similarity.matches|sort(attribute='overlap_percent', reverse=true) %}
               <div class="health-detail-note health-detail-note-column">
                 <div class="health-detail-note-head">
                   <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
                   <span class="health-detail-note-count">{{ item_health.same_team_similarity.matches|length }}</span>
                 </div>
-                {% for match in item_health.same_team_similarity.matches[:3] %}
+                {% for match in same_team_matches[:3] %}
                   <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
                     <span class="team-graph-graph-entities health-detail-team-entities">
                       <span class="team-graph-graph-entity team-graph-graph-entity-sm">
@@ -1029,6 +1030,28 @@
                     </span>
                   </a>
                 {% endfor %}
+                {% if same_team_matches|length > 3 %}
+                  <details class="health-detail-more">
+                    <summary class="health-detail-more-toggle">
+                      <span class="health-detail-more-label-closed">
+                        {{ t("Show {count} more markups", count=same_team_matches|length - 3) }}
+                      </span>
+                      <span class="health-detail-more-label-open">{{ t("Show fewer markups") }}</span>
+                    </summary>
+                    <div class="health-detail-more-list">
+                      {% for match in same_team_matches[3:] %}
+                        <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
+                          <span class="team-graph-graph-entities health-detail-team-entities">
+                            <span class="team-graph-graph-entity team-graph-graph-entity-sm">
+                              <span class="team-graph-graph-entity-team">{{ match.team_name }}</span>
+                              <span class="team-graph-graph-entity-service">{{ match.title }}</span>
+                            </span>
+                          </span>
+                        </a>
+                      {% endfor %}
+                    </div>
+                  </details>
+                {% endif %}
               </div>
             {% endif %}
             <div class="health-detail-final-status {% if item_health.same_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
@@ -1061,12 +1084,13 @@
           </div>
           <div class="health-detail-footer">
             {% if item_health.cross_team_similarity.matches %}
+              {% set cross_team_matches = item_health.cross_team_similarity.matches|sort(attribute='overlap_percent', reverse=true) %}
               <div class="health-detail-note health-detail-note-column">
                 <div class="health-detail-note-head">
                   <span class="health-detail-note-label">{{ t("Similar markups") }}:</span>
                   <span class="health-detail-note-count">{{ item_health.cross_team_similarity.matches|length }}</span>
                 </div>
-                {% for match in item_health.cross_team_similarity.matches[:3] %}
+                {% for match in cross_team_matches[:3] %}
                   <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
                     <span class="team-graph-graph-entities health-detail-team-entities">
                       <span class="team-graph-graph-entity team-graph-graph-entity-sm">
@@ -1076,6 +1100,28 @@
                     </span>
                   </a>
                 {% endfor %}
+                {% if cross_team_matches|length > 3 %}
+                  <details class="health-detail-more">
+                    <summary class="health-detail-more-toggle">
+                      <span class="health-detail-more-label-closed">
+                        {{ t("Show {count} more markups", count=cross_team_matches|length - 3) }}
+                      </span>
+                      <span class="health-detail-more-label-open">{{ t("Show fewer markups") }}</span>
+                    </summary>
+                    <div class="health-detail-more-list">
+                      {% for match in cross_team_matches[3:] %}
+                        <a class="health-detail-entity-link" href="/catalog/{{ match.scene_id }}?lang={{ lang }}">
+                          <span class="team-graph-graph-entities health-detail-team-entities">
+                            <span class="team-graph-graph-entity team-graph-graph-entity-sm">
+                              <span class="team-graph-graph-entity-team">{{ match.team_name }}</span>
+                              <span class="team-graph-graph-entity-service">{{ match.title }}</span>
+                            </span>
+                          </span>
+                        </a>
+                      {% endfor %}
+                    </div>
+                  </details>
+                {% endif %}
               </div>
             {% endif %}
             <div class="health-detail-final-status {% if item_health.cross_team_similarity.is_problem %}is-problem{% else %}is-ok{% endif %}">
