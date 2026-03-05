@@ -31,6 +31,7 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Press Enter to add a filter token. Tokens are combined with AND and search by title, tags, markup type, procedure_id, and block_id.": "Нажмите Enter, чтобы добавить фильтр. Токены объединяются через И и ищут по названию, тегам, типу разметки, procedure_id и block_id.",
     "Remove filter": "Удалить фильтр",
     "Criticality level": "Уровень критичности",
+    "Type": "Тип",
     "All levels": "Все уровни",
     "Team": "Команда",
     "All teams": "Все команды",

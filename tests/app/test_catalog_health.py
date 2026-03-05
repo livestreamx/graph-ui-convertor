@@ -294,6 +294,30 @@ def test_catalog_health_markers_and_problem_filter(
         )
 
 
+def test_catalog_active_filter_remove_links_preserve_other_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+    ) as client:
+        response = client.get(
+            "/catalog",
+            params=[("search", "team"), ("team_id", "team-g"), ("health_marker", "validity")],
+        )
+        assert response.status_code == 200
+        assert response.text.count('class="filter-pill-remove"') == 2
+        assert 'href="/catalog?lang=en&amp;search=team&amp;health_marker=validity"' in response.text
+        assert 'href="/catalog?lang=en&amp;search=team&amp;team_id=team-g"' in response.text
+        assert (
+            'hx-get="/catalog?lang=en&amp;search=team&amp;health_marker=validity"' in response.text
+        )
+        assert 'hx-get="/catalog?lang=en&amp;search=team&amp;team_id=team-g"' in response.text
+
+
 def test_catalog_detail_renders_health_section(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

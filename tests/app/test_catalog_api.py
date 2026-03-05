@@ -288,7 +288,7 @@ def test_catalog_ui_text_overrides(
         app_settings_factory=app_settings_factory,
         settings_overrides={
             "ui_text_overrides": {
-                "markup_type": "Kind",
+                "Type": "Kind",
                 "service": "Svc",
             }
         },

@@ -111,6 +111,7 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
     assert translate_ui_text("Markup ID", "ru") == "ID разметки"
+    assert translate_ui_text("Type", "ru") == "Тип"
     assert translate_ui_text("Service ID", "ru") == "ID услуги"
     assert translate_ui_text("Block-level diagram", "ru") == "Диаграмма уровня блоков"
     assert translate_ui_text("Show graph", "ru") == "Показать граф"

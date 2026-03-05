@@ -156,6 +156,8 @@ catalog:
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.
+- Active filter pills now have a clickable `×` action that removes only that specific filter
+  while preserving all other active filters and search tokens.
 - The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
   with ranking and per-team breakdown for all health criteria.
 - On desktop, catalog list groups still cap the grid at three cards per row, but groups with only

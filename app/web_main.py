@@ -343,7 +343,12 @@ def create_app(settings: AppSettings) -> FastAPI:
             index_data.items, index_data.unknown_value
         )
         team_lookup = dict(team_options)
-        active_filters = build_active_filters(filters, team_lookup, health_marker_filter)
+        active_filters = build_active_filters(
+            filters,
+            team_lookup,
+            search_tokens,
+            health_marker_filter,
+        )
         group_query_base = build_group_query_base(
             search_tokens,
             criticality_level,
@@ -2065,6 +2070,7 @@ def build_filter_options(
 def build_active_filters(
     filters: dict[str, str],
     team_lookup: dict[str, str],
+    search_tokens: Sequence[str],
     health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
 ) -> list[dict[str, str]]:
     active: list[dict[str, str]] = []
@@ -2072,22 +2078,60 @@ def build_active_filters(
         display_value = value
         if field == "team_id":
             display_value = team_lookup.get(value, value)
+        remaining_filters = {name: current for name, current in filters.items() if name != field}
+        remove_query = build_catalog_filters_query(
+            search_tokens,
+            remaining_filters,
+            health_marker_filter=health_marker_filter,
+        )
         active.append(
             {
                 "field": field,
                 "value": value,
                 "display_value": display_value,
+                "remove_query": remove_query,
             }
         )
     if health_marker_filter:
+        remove_query = build_catalog_filters_query(
+            search_tokens,
+            filters,
+            health_marker_filter=HEALTH_MARKER_FILTER_ALL,
+        )
         active.append(
             {
                 "field": "problem_marker",
                 "value": health_marker_filter,
                 "display_value": f"health_marker_{health_marker_filter.replace('-', '_')}",
+                "remove_query": remove_query,
             }
         )
     return active
+
+
+def build_catalog_filters_query(
+    search_tokens: Sequence[str],
+    filters: Mapping[str, str],
+    *,
+    health_marker_filter: str = HEALTH_MARKER_FILTER_ALL,
+) -> str:
+    params: dict[str, str | list[str]] = {}
+    if search_tokens:
+        params["search"] = list(search_tokens)
+    group_values: list[str] = []
+    for field, value in filters.items():
+        if field == "criticality_level":
+            params["criticality_level"] = value
+            continue
+        if field == "team_id":
+            params["team_id"] = value
+            continue
+        group_values.append(f"{field}:{value}")
+    if group_values:
+        params["group"] = group_values
+    if health_marker_filter:
+        params["health_marker"] = health_marker_filter
+    return urlencode(params, doseq=True)
 
 
 def build_group_query_base(

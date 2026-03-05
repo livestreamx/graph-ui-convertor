@@ -25,6 +25,7 @@ def _catalog_item(
     non_postpone_end_block_count: int = 1,
     postpone_end_block_count: int = 0,
     has_start_end_overlap: bool = False,
+    markup_type: str = "service",
 ) -> CatalogItem:
     procedure_ids: list[str] = []
     seen: set[str] = set()
@@ -42,13 +43,13 @@ def _catalog_item(
         title=title,
         tags=[],
         updated_at="2026-02-01T00:00:00+00:00",
-        markup_type="service",
+        markup_type=markup_type,
         finedog_unit_id=scene_id,
         criticality_level="low",
         team_id=team_id,
         team_name=team_name,
-        group_values={"markup_type": "service"},
-        fields={"markup_type": "service", "team_id": team_id, "team_name": team_name},
+        group_values={"markup_type": markup_type},
+        fields={"markup_type": markup_type, "team_id": team_id, "team_name": team_name},
         markup_meta={},
         markup_rel_path=f"markup/{scene_id}.json",
         excalidraw_rel_path=f"{scene_id}.excalidraw",
@@ -413,3 +414,21 @@ def test_catalog_health_report_detects_same_block_used_as_start_and_end() -> Non
     assert health.gaming.is_problem is True
     assert health.gaming.issue_codes == (GAMING_ISSUE_SAME_START_AND_END_BLOCK,)
     assert report.gaming_problem_count == 1
+
+
+def test_catalog_health_report_skips_bot_multi_validity_checks_for_task_processor() -> None:
+    item = _catalog_item(
+        scene_id="task-processor-without-bot-or-multi",
+        title="Task processor without bot or multi",
+        team_id="team-a",
+        team_name="Team A",
+        markup_type="system_task_processor",
+        procedure_graph={"entry": ["finish"]},
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("task-processor-without-bot-or-multi")
+    assert health is not None
+    assert health.graph.issue_codes == ()
+    assert health.graph.is_problem is False
