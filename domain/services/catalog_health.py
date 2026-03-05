@@ -242,12 +242,14 @@ def _build_graph_health(item: CatalogItem) -> GraphHealth:
     issue_codes: list[str] = []
     if unique_graph_count > 3:
         issue_codes.append(GRAPH_ISSUE_TOO_MANY)
-    if unique_graph_count >= 2 and bot_or_multi_start_graph_count == 0:
-        issue_codes.append(GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT)
-    elif bot_or_multi_start_graph_count == 0:
-        issue_codes.append(GRAPH_ISSUE_NO_BOT)
-    elif unique_graph_count > 0 and bot_or_multi_start_graph_count == unique_graph_count:
-        issue_codes.append(GRAPH_ISSUE_ONLY_BOT)
+    skip_bot_multi_validity_checks = _skip_bot_multi_validity_checks(item)
+    if not skip_bot_multi_validity_checks:
+        if unique_graph_count >= 2 and bot_or_multi_start_graph_count == 0:
+            issue_codes.append(GRAPH_ISSUE_MULTIPLE_WITHOUT_BOT)
+        elif bot_or_multi_start_graph_count == 0:
+            issue_codes.append(GRAPH_ISSUE_NO_BOT)
+        elif unique_graph_count > 0 and bot_or_multi_start_graph_count == unique_graph_count:
+            issue_codes.append(GRAPH_ISSUE_ONLY_BOT)
 
     return GraphHealth(
         unique_graph_count=unique_graph_count,
@@ -498,3 +500,7 @@ def _is_bot_or_multi(value: str) -> bool:
 
 def _has_substring(value: str, needle: str) -> bool:
     return needle in str(value).lower()
+
+
+def _skip_bot_multi_validity_checks(item: CatalogItem) -> bool:
+    return str(item.markup_type or "").strip().lower() == "system_task_processor"

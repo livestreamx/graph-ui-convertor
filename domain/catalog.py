@@ -36,6 +36,9 @@ class CatalogItem:
     procedure_ids: list[str] = field(default_factory=list)
     block_ids: list[str] = field(default_factory=list)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_start_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_end_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_branch_counts: dict[str, int] = field(default_factory=dict)
     procedure_graph: dict[str, list[str]] = field(default_factory=dict)
     start_block_count: int = 0
     branch_block_count: int = 0
@@ -63,6 +66,15 @@ class CatalogItem:
             "procedure_ids": list(self.procedure_ids),
             "block_ids": list(self.block_ids),
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
+            "procedure_start_blocks": {
+                key: list(value) for key, value in self.procedure_start_blocks.items()
+            },
+            "procedure_end_blocks": {
+                key: list(value) for key, value in self.procedure_end_blocks.items()
+            },
+            "procedure_branch_counts": {
+                key: int(value) for key, value in self.procedure_branch_counts.items()
+            },
             "procedure_graph": {key: list(value) for key, value in self.procedure_graph.items()},
             "start_block_count": int(self.start_block_count),
             "branch_block_count": int(self.branch_block_count),
@@ -74,6 +86,11 @@ class CatalogItem:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
         procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_start_blocks = _load_procedure_blocks(payload.get("procedure_start_blocks"))
+        procedure_end_blocks = _load_procedure_blocks(payload.get("procedure_end_blocks"))
+        procedure_branch_counts = _load_non_negative_int_mapping(
+            payload.get("procedure_branch_counts")
+        )
         procedure_graph = _load_procedure_graph(payload.get("procedure_graph"))
         procedure_ids = _load_string_list(payload.get("procedure_ids"))
         block_ids = _load_string_list(payload.get("block_ids"))
@@ -100,6 +117,9 @@ class CatalogItem:
             procedure_ids=procedure_ids,
             block_ids=block_ids,
             procedure_blocks=procedure_blocks,
+            procedure_start_blocks=procedure_start_blocks,
+            procedure_end_blocks=procedure_end_blocks,
+            procedure_branch_counts=procedure_branch_counts,
             procedure_graph=procedure_graph,
             start_block_count=_load_non_negative_int(payload.get("start_block_count")),
             branch_block_count=_load_non_negative_int(payload.get("branch_block_count")),
@@ -193,6 +213,18 @@ def _load_non_negative_int(raw: Any) -> int:
     except (TypeError, ValueError):
         return 0
     return max(0, value)
+
+
+def _load_non_negative_int_mapping(raw: Any) -> dict[str, int]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, int] = {}
+    for key, value in raw.items():
+        text_key = str(key).strip()
+        if not text_key:
+            continue
+        normalized[text_key] = _load_non_negative_int(value)
+    return normalized
 
 
 def _load_bool(raw: Any) -> bool:

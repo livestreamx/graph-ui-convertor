@@ -1,0 +1,38 @@
+{
+  "markup_type": "system_task_processor",
+  "finedog_unit_id": "svc-task-processor-same-start-end",
+  "finedog_unit_meta": {
+    "service_name": "Task Processor Same Start End",
+    "criticality_level": "C2",
+    "team_id": "team-task-platform",
+    "team_name": "Task Platform"
+  },
+  "procedures": [
+    {
+      "proc_id": "task_processor_main",
+      "proc_name": "Task processor main flow",
+      "start_block_ids": ["tp_entry"],
+      "end_block_ids": ["tp_entry"],
+      "branches": {
+        "tp_entry": ["tp_dispatch"],
+        "tp_dispatch": ["tp_done", "tp_retry"],
+        "tp_retry": ["tp_done"]
+      },
+      "block_id_to_block_name": {
+        "tp_entry": "Receive task",
+        "tp_dispatch": "Dispatch handler",
+        "tp_done": "Complete task",
+        "tp_retry": "Retry task"
+      }
+    }
+  ],
+  "procedure_graph": {
+    "task_processor_main": ["task_processor_done"],
+    "task_processor_done": []
+  },
+  "block_graph": {
+    "tp_entry": ["tp_dispatch"],
+    "tp_dispatch": ["tp_done", "tp_retry"],
+    "tp_retry": ["tp_done"]
+  }
+}

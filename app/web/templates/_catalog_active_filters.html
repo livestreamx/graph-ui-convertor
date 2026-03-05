@@ -3,11 +3,36 @@
     <div class="filter-label">{{ t("Active filters") }}</div>
     <div class="filter-row">
       {% for filter in active_filters %}
+        {% set remove_href = "/catalog?lang=" ~ lang %}
+        {% if filter.remove_query %}
+          {% set remove_href = remove_href ~ "&" ~ filter.remove_query %}
+        {% endif %}
         <span class="filter-pill">
-          {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
+          <span class="filter-pill-text">
+            {{ filter.field | humanize_text }}: {{ filter.display_value | humanize_text }}
+          </span>
+          <a
+            class="filter-pill-remove"
+            href="{{ remove_href }}"
+            aria-label="{{ t('Remove filter') }}"
+            title="{{ t('Remove filter') }}"
+            hx-get="{{ remove_href }}"
+            hx-target="#catalog-list"
+            hx-push-url="true"
+          >
+            ×
+          </a>
         </span>
       {% endfor %}
-      <a class="ghost-button" href="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}">{{ t("Clear filters") }}</a>
+      <a
+        class="ghost-button"
+        href="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}"
+        hx-get="/catalog?lang={{ lang }}{% for token in search_tokens %}&search={{ token | urlencode }}{% endfor %}"
+        hx-target="#catalog-list"
+        hx-push-url="true"
+      >
+        {{ t("Clear filters") }}
+      </a>
     </div>
   {% endif %}
 </div>

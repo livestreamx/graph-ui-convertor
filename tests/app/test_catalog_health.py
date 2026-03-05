@@ -236,6 +236,12 @@ def test_catalog_health_markers_and_problem_filter(
         assert 'data-health-marker="graphs"' in catalog_response.text and 'tabindex="0"' in (
             catalog_response.text
         )
+        assert 'class="health-marker health-marker-same-team health-marker-drilldown ' in (
+            catalog_response.text
+        )
+        assert 'class="health-marker health-marker-cross-team health-marker-drilldown ' in (
+            catalog_response.text
+        )
         assert (
             'class="validity-breakdown validity-breakdown-compact adaptive-stat-grid"'
             in catalog_response.text
@@ -245,6 +251,7 @@ def test_catalog_health_markers_and_problem_filter(
         )
         assert "Needs attention" in catalog_response.text
         assert "OK" in catalog_response.text
+        assert "Similar markups" in catalog_response.text
         assert "Graphs with bot" in catalog_response.text
         assert "Multichannel graphs" in catalog_response.text
         assert "Employee graphs" in catalog_response.text
@@ -272,6 +279,8 @@ def test_catalog_health_markers_and_problem_filter(
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
         assert f'href="/catalog/{scene_id}?lang=en' in filtered.text
+        assert 'class="card-title-link"' in filtered.text
+        assert ">Team G Gaming Problem</a>" in filtered.text
 
         htmx_filtered = client.get(
             "/catalog",
@@ -292,6 +301,31 @@ def test_catalog_health_markers_and_problem_filter(
         assert "grid-template-columns: repeat(auto-fit, minmax(126px, 1fr));" in (
             style_response.text
         )
+        assert ".card-title-link:visited" in style_response.text
+
+
+def test_catalog_active_filter_remove_links_preserve_other_filters(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+    ) as client:
+        response = client.get(
+            "/catalog",
+            params=[("search", "team"), ("team_id", "team-g"), ("health_marker", "validity")],
+        )
+        assert response.status_code == 200
+        assert response.text.count('class="filter-pill-remove"') == 2
+        assert 'href="/catalog?lang=en&amp;search=team&amp;health_marker=validity"' in response.text
+        assert 'href="/catalog?lang=en&amp;search=team&amp;team_id=team-g"' in response.text
+        assert (
+            'hx-get="/catalog?lang=en&amp;search=team&amp;health_marker=validity"' in response.text
+        )
+        assert 'hx-get="/catalog?lang=en&amp;search=team&amp;team_id=team-g"' in response.text
 
 
 def test_catalog_detail_renders_health_section(
@@ -311,6 +345,7 @@ def test_catalog_detail_renders_health_section(
         assert "Markup ID" in response.text
         assert "Markup health markers" in response.text
         assert response.text.count("Similar markups") == 2
+        assert response.text.count('class="health-detail-note-count"') == 2
         assert "Problem threshold" in response.text
         assert "Validity" in response.text
         assert "Start blocks" in response.text
@@ -327,6 +362,8 @@ def test_catalog_detail_renders_health_section(
         assert response.text.count('class="health-detail-final-status ') == 4
         assert response.text.count('class="health-detail-footer"') == 4
         assert response.text.count('class="health-detail-entity-link"') == 4
+        assert "No comparable markups in team" not in response.text
+        assert "No comparable markups across teams" not in response.text
         assert 'class="health-detail-final-status is-ok"' in response.text
         assert f'href="/catalog/{cross_team_scene_id}?lang=en"' in response.text
 
@@ -409,12 +446,59 @@ def test_catalog_health_renders_same_start_end_validity_issue(
         assert filtered.status_code == 200
         assert "Team H Same Start End" in filtered.text
         assert "Same block used as start and end" in filtered.text
+        assert filtered.text.count("Same block used as start and end") == 1
+        assert "h1" not in filtered.text
+        assert "team_h_proc" not in filtered.text
         assert "Detected when one procedure marks the same block as both start and end." not in (
             filtered.text
         )
 
 
-def test_catalog_detail_limits_similarity_lists_to_top_three(
+def test_catalog_health_validity_issue_blocks_render_external_links(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/team_h_same_start_end.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Team H Same Start End",
+                "team_id": "team-h",
+                "team_name": "Team H",
+            },
+            "procedures": [
+                {
+                    "proc_id": "team_h_proc",
+                    "start_block_ids": ["h1"],
+                    "end_block_ids": ["h1"],
+                    "branches": {"h1": ["h2"]},
+                }
+            ],
+            "procedure_graph": {"team_h_proc": ["team_h_done"]},
+        }
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+        settings_overrides={
+            "block_link_path": "https://external.example.com/blocks/{block_id}?proc={procedure_id}"
+        },
+    ) as client:
+        filtered = client.get("/catalog", params={"health_marker": "validity"})
+        assert filtered.status_code == 200
+        assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' not in filtered.text
+
+        scene_id = _scene_id_by_title(client, "Team H Same Start End")
+        detail = client.get(f"/catalog/{scene_id}")
+        assert detail.status_code == 200
+        assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' in detail.text
+
+
+def test_catalog_detail_shows_top_three_similarity_and_expandable_rest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     app_settings_factory: Callable[..., AppSettings],
@@ -693,12 +777,20 @@ def test_catalog_detail_limits_similarity_lists_to_top_three(
         response = client.get(f"/catalog/{scene_id}")
 
         assert response.status_code == 200
-        assert response.text.count('class="health-detail-entity-link"') == 6
+        assert response.text.count('class="health-detail-more"') == 2
+        assert response.text.count("more markups") == 2
+        assert response.text.count("Show fewer markups") == 2
         assert "Focus Same 100" in response.text
         assert "Focus Same 75" in response.text
         assert "Focus Same 50" in response.text
-        assert "Focus Same 25" not in response.text
+        assert "Focus Same 25" in response.text
         assert "Focus Cross 100" in response.text
         assert "Focus Cross 75" in response.text
         assert "Focus Cross 50" in response.text
-        assert "Focus Cross 25" not in response.text
+        assert "Focus Cross 25" in response.text
+        assert response.text.find("Focus Same 100") < response.text.find("Focus Same 75")
+        assert response.text.find("Focus Same 75") < response.text.find("Focus Same 50")
+        assert response.text.find("Focus Same 50") < response.text.find("Focus Same 25")
+        assert response.text.find("Focus Cross 100") < response.text.find("Focus Cross 75")
+        assert response.text.find("Focus Cross 75") < response.text.find("Focus Cross 50")
+        assert response.text.find("Focus Cross 50") < response.text.find("Focus Cross 25")

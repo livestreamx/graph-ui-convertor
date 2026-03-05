@@ -146,9 +146,16 @@ catalog:
 - Catalog cards show four health markers:
   graph composition quality, validity, top same-team `procedure_id` overlap, and top cross-team overlap.
   On the main page, the `Graphs` and `Validity` markers show only a compact status by default
-  (`OK` or `Needs attention`) to keep cards shorter. On hover/focus, those two markers expand
-  into a drilldown panel with the full per-block / per-graph breakdown and problem explanation.
+  (`OK` or `Needs attention`) to keep cards shorter.
+  `Team overlap` and `Cross-team overlap` keep the compact top-overlap value on the card.
+  On hover/focus, all four markers expand into a drilldown panel.
+  `Graphs`/`Validity` show per-block/per-graph breakdown and problem explanation.
+  `Team overlap`/`Cross-team overlap` show threshold, top 3 similar markups, and a
+  `Show {count} more markups` action to expand the remaining matches.
   Problematic markers glow by default and have hover animation.
+  For validity issues where exact blocks are known (`multiple starts but no branches`,
+  `same block used as start and end`), marker cards now include concrete block IDs grouped by issue.
+  If `CJM_CATALOG__BLOCK_LINK_PATH` is configured, each block is rendered as an external link.
   For validity problems, the UI shows the exact trigger for the first two cases:
   either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no non-postpone
   end blocks (postpone-only endings do not count as completion). The "same block used as start
@@ -156,6 +163,8 @@ catalog:
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.
+- Active filter pills now have a clickable `×` action that removes only that specific filter
+  while preserving all other active filters and search tokens.
 - The main page includes a secondary action `Analytics by teams`, which opens `/catalog/teams/health`
   with ranking and per-team breakdown for all health criteria.
 - On desktop, catalog list groups still cap the grid at three cards per row, but groups with only

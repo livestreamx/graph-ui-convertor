@@ -111,6 +111,7 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:
     assert translate_ui_text("Markup information", "ru") == "Информация по разметке"
     assert translate_ui_text("Markup ID", "ru") == "ID разметки"
+    assert translate_ui_text("Type", "ru") == "Тип"
     assert translate_ui_text("Service ID", "ru") == "ID услуги"
     assert translate_ui_text("Block-level diagram", "ru") == "Диаграмма уровня блоков"
     assert translate_ui_text("Show graph", "ru") == "Показать граф"
@@ -170,6 +171,7 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     )
     assert translate_ui_text("End blocks", "ru") == "End-блоки"
     assert translate_ui_text("Postpone blocks", "ru") == "Postpone-блоки"
+    assert translate_ui_text("more blocks", "ru") == "еще блоков"
     assert translate_ui_text("Needs attention", "ru") == "Требует внимания"
     assert translate_ui_text("OK", "ru") == "ОК"
     assert translate_ui_text("Structure looks valid", "ru") == "Структура выглядит валидной"
@@ -185,5 +187,7 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     )
     assert translate_ui_text("Cross-team overlap", "ru") == "Кросс-командное пересечение"
     assert translate_ui_text("Similar markups", "ru") == "Схожие разметки"
+    assert translate_ui_text("Show {count} more markups", "ru") == "Показать еще {count} разметок"
+    assert translate_ui_text("Show fewer markups", "ru") == "Показать меньше разметок"
     assert translate_ui_text("Employee graphs", "ru") == "Графы сотрудника"
     assert translate_ui_text("Markup health markers", "ru") == "Маркеры здоровья разметки"
