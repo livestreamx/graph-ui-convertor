@@ -6,6 +6,7 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import END_TYPE_COLORS, END_TYPE_TURN_OUT, MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_end_type_roundtrip_and_service_name() -> None:
@@ -231,3 +232,98 @@ def test_default_end_marker_color_is_applied() -> None:
     ]
     assert end_markers
     assert all(element.get("backgroundColor") == END_TYPE_COLORS["exit"] for element in end_markers)
+
+
+def test_branch_end_roundtrip_preserves_return_to_parent_semantics() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["end"]},
+            }
+        ],
+    }
+
+    markup = MarkupDocument.model_validate(payload)
+    procedure = markup.procedures[0]
+    assert procedure.end_block_ids == ["b"]
+    assert procedure.return_block_ids == ["b"]
+
+    serialized = markup.to_markup_dict()
+    procedures = cast(list[dict[str, Any]], serialized["procedures"])
+    assert procedures[0]["end_block_ids"] == []
+    assert procedures[0]["branches"] == {"a": ["b"], "b": ["end"]}
+
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    return_marker_ovals = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    assert not return_marker_ovals
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    reconstructed_proc = reconstructed.procedures[0]
+    assert reconstructed_proc.return_block_ids == ["b"]
+    reconstructed_procedures = cast(
+        list[dict[str, Any]], reconstructed.to_markup_dict()["procedures"]
+    )
+    assert reconstructed_procedures[0]["branches"] == {
+        "a": ["b"],
+        "b": ["end"],
+    }
+
+    return_marker_labels = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    return_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("source_block_id") == "b"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+
+    assert [element.get("text") for element in return_marker_labels] == ["RETURN"]
+    assert not return_edges
+
+
+def test_return_visuals_use_plain_block_and_text_only_marker() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    child_finish_block = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("procedure_id")
+        == "task_processor_child"
+        and element.get("customData", {}).get("cjm", {}).get("block_id") == "child_finish"
+    )
+    return_marker_ovals = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    return_block_graph_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("source_block_id") == "child_finish"
+        and element.get("customData", {}).get("cjm", {}).get("target_block_id") == "tp_resume"
+    ]
+
+    assert child_finish_block.get("strokeStyle") != "dashed"
+    assert not return_marker_ovals
+    assert return_block_graph_edges
+    assert all(edge.get("strokeStyle") != "dashed" for edge in return_block_graph_edges)

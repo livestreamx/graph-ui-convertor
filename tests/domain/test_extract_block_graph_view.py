@@ -136,3 +136,26 @@ def test_extract_block_graph_view_skips_unrelated_nodes_and_branch_artifacts() -
     assert node_ids == {"p1::a", "p1::b"}
     assert edge_ids == {"edge-block-graph"}
     assert graph_payload["meta"] == {"node_count": 2, "edge_count": 1}
+
+
+def test_extract_block_graph_view_marks_return_to_parent_blocks_separately() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["end"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    scene_payload = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup).to_dict()
+
+    graph_payload = extract_block_graph_view(scene_payload)
+
+    nodes = {node["id"]: node for node in graph_payload["nodes"]}
+    assert nodes["p1::b"]["returns_to_parent"] is True
+    assert nodes["p1::b"]["end_block_type"] == ""
+    assert graph_payload["meta"]["edge_count"] == 1

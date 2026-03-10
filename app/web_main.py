@@ -140,6 +140,8 @@ class CatalogHealthState:
 class ValidityIssueBlockRef:
     procedure_id: str
     block_id: str
+    procedure_name: str
+    block_name: str
     block_external_url: str | None
 
 
@@ -152,7 +154,7 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
 
 GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
-    GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
+    GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no graph-completing end blocks",
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: "Same block used as start and end",
 }
 
@@ -161,8 +163,8 @@ GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
         "Detected when branch blocks = 0 and start blocks > 1.",
     ),
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
-        "Detected when branch blocks = 0 and end blocks except postpone = 0.",
-        "Postpone end blocks do not make a flow complete.",
+        "Detected when branch blocks = 0 and graph-completing end blocks = 0.",
+        "Return-to-parent and postpone end blocks do not make a flow complete.",
     ),
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: (),
 }
@@ -1838,6 +1840,8 @@ def collect_validity_issue_block_refs(
         GAMING_ISSUE_SAME_START_AND_END_BLOCK: [],
     }
     seen: set[tuple[str, str, str]] = set()
+    procedure_names = item.procedure_names
+    block_names = item.procedure_block_names
 
     procedure_ids = sorted(
         set(item.procedure_start_blocks)
@@ -1859,6 +1863,8 @@ def collect_validity_issue_block_refs(
                     issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
                     procedure_id=procedure_id,
                     block_id=block_id,
+                    procedure_name=procedure_names.get(procedure_id, procedure_id),
+                    block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
                     block_external_url=resolve_block_external_url(
                         context,
                         block_id,
@@ -1873,6 +1879,8 @@ def collect_validity_issue_block_refs(
                 issue_code=GAMING_ISSUE_SAME_START_AND_END_BLOCK,
                 procedure_id=procedure_id,
                 block_id=block_id,
+                procedure_name=procedure_names.get(procedure_id, procedure_id),
+                block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
                 block_external_url=resolve_block_external_url(
                     context,
                     block_id,
@@ -1896,6 +1904,8 @@ def _append_validity_issue_block_ref(
     issue_code: str,
     procedure_id: str,
     block_id: str,
+    procedure_name: str,
+    block_name: str,
     block_external_url: str | None,
 ) -> None:
     dedup_key = (issue_code, procedure_id, block_id)
@@ -1906,6 +1916,8 @@ def _append_validity_issue_block_ref(
         ValidityIssueBlockRef(
             procedure_id=procedure_id,
             block_id=block_id,
+            procedure_name=procedure_name,
+            block_name=block_name,
             block_external_url=block_external_url,
         )
     )

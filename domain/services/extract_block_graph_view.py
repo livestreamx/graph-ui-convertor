@@ -44,6 +44,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
             continue
         label = block_labels.get((procedure_id, block_id)) or block_id
         source_procedure_id = _as_text(metadata.get("source_procedure_id")) or procedure_id
+        returns_to_parent = metadata.get("return_to_parent") is True
         block_nodes_by_id[node_id] = {
             "id": node_id,
             "procedure_id": procedure_id,
@@ -51,7 +52,8 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
             "block_id": block_id,
             "label": label,
             "is_initial": metadata.get("block_graph_initial") is True,
-            "end_block_type": _as_text(metadata.get("end_block_type")),
+            "end_block_type": "" if returns_to_parent else _as_text(metadata.get("end_block_type")),
+            "returns_to_parent": returns_to_parent,
         }
 
     raw_edges: list[dict[str, Any]] = []
@@ -137,6 +139,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
                 or source_block_id,
                 "is_initial": False,
                 "end_block_type": "",
+                "returns_to_parent": False,
             }
         target_node = block_nodes_by_id.get(target_node_id)
         if target_node is None:
@@ -149,6 +152,7 @@ def extract_block_graph_view(scene_payload: dict[str, Any]) -> dict[str, Any]:
                 or target_block_id,
                 "is_initial": False,
                 "end_block_type": "",
+                "returns_to_parent": False,
             }
 
         nodes_by_id[source_node_id] = source_node

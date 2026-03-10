@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -80,6 +80,23 @@ def merge_end_types(existing: str | None, new: str) -> str:
     return new
 
 
+def is_return_to_parent_block(procedure: Procedure, block_id: str) -> bool:
+    return block_id in set(procedure.return_block_ids)
+
+
+def is_completion_end_block(procedure: Procedure, block_id: str) -> bool:
+    if is_return_to_parent_block(procedure, block_id):
+        return False
+    end_type = normalize_end_type(procedure.end_block_types.get(block_id)) or END_TYPE_DEFAULT
+    return end_type != "postpone"
+
+
+def procedure_end_kind(procedure: Procedure, block_id: str) -> str:
+    if is_return_to_parent_block(procedure, block_id):
+        return "return"
+    return normalize_end_type(procedure.end_block_types.get(block_id)) or END_TYPE_DEFAULT
+
+
 class Procedure(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
@@ -95,6 +112,7 @@ class Procedure(BaseModel):
     start_block_ids: list[str] = Field(default_factory=list)
     end_block_ids: list[str] = Field(default_factory=list)
     end_block_types: dict[str, str] = Field(default_factory=dict)
+    return_block_ids: list[str] = Field(default_factory=list, exclude=True)
     branches: dict[str, list[str]] = Field(default_factory=dict)
     block_id_to_block_name: dict[str, str] = Field(default_factory=dict)
 
@@ -105,6 +123,7 @@ class Procedure(BaseModel):
             return data
         end_block_ids = list(data.get("end_block_ids") or [])
         raw_end_block_types = dict(data.get("end_block_types") or {})
+        raw_return_block_ids = list(data.get("return_block_ids") or [])
         end_block_types: dict[str, str] = {}
         for block_id, end_type in raw_end_block_types.items():
             normalized = normalize_end_type(end_type)
@@ -112,40 +131,62 @@ class Procedure(BaseModel):
                 end_block_types[str(block_id)] = normalized
         normalized_end_ids: list[str] = []
         seen_end_ids: set[str] = set()
+        return_block_ids: list[str] = []
+        seen_return_block_ids: set[str] = set()
+
+        def add_end_block(block_id: str) -> None:
+            if block_id in seen_end_ids:
+                return
+            normalized_end_ids.append(block_id)
+            seen_end_ids.add(block_id)
+
+        def add_return_block(block_id: str) -> None:
+            add_end_block(block_id)
+            if block_id in seen_return_block_ids:
+                return
+            return_block_ids.append(block_id)
+            seen_return_block_ids.add(block_id)
 
         for raw in end_block_ids:
             raw_value = str(raw)
             has_suffix = END_BLOCK_SEPARATOR in raw_value
             block_id, end_type = split_end_block_id(raw_value)
-            if block_id not in seen_end_ids:
-                normalized_end_ids.append(block_id)
-                seen_end_ids.add(block_id)
+            add_end_block(block_id)
             normalized = normalize_end_type(end_type) or END_TYPE_DEFAULT
             if normalized != END_TYPE_DEFAULT or has_suffix:
                 end_block_types[block_id] = merge_end_types(
                     end_block_types.get(block_id), normalized
                 )
+        for raw in raw_return_block_ids:
+            block_id = str(raw).strip()
+            if not block_id:
+                continue
+            add_return_block(block_id)
+            end_block_types.setdefault(block_id, END_TYPE_DEFAULT)
 
         branches = data.get("branches") or {}
         cleaned_branches: dict[str, list[str]] = {}
         for source, targets in branches.items():
+            source_id = str(source).strip()
+            if not source_id:
+                continue
             if not isinstance(targets, list):
                 continue
             cleaned_targets: list[str] = []
             for target in targets:
                 if isinstance(target, str) and target.lower() == "end":
-                    if source not in seen_end_ids:
-                        normalized_end_ids.append(source)
-                        seen_end_ids.add(source)
-                    end_block_types[source] = merge_end_types(
-                        end_block_types.get(source), END_TYPE_DEFAULT
+                    add_return_block(source_id)
+                    end_block_types[source_id] = merge_end_types(
+                        end_block_types.get(source_id), END_TYPE_DEFAULT
                     )
                     continue
                 cleaned_targets.append(target)
             if cleaned_targets:
-                cleaned_branches[source] = cleaned_targets
+                cleaned_branches[source_id] = cleaned_targets
 
         data["end_block_ids"] = normalized_end_ids
+        if return_block_ids:
+            data["return_block_ids"] = return_block_ids
         data["branches"] = cleaned_branches
         if end_block_types:
             data["end_block_types"] = end_block_types
@@ -168,9 +209,24 @@ class Procedure(BaseModel):
         payload: dict[str, object] = {
             "proc_id": self.procedure_id,
             "start_block_ids": _sorted_unique(list(self.start_block_ids)),
-            "end_block_ids": _merge_end_block_ids(list(self.end_block_ids), self.end_block_types),
+            "end_block_ids": _merge_end_block_ids(
+                [
+                    block_id
+                    for block_id in self.end_block_ids
+                    if block_id not in self.return_block_ids
+                ],
+                self.end_block_types,
+            ),
             "branches": _sorted_branches(self.branches),
         }
+        if self.return_block_ids:
+            branches = dict(cast(dict[str, list[str]], payload["branches"]))
+            for block_id in self.return_block_ids:
+                targets = list(branches.get(block_id, []))
+                if "end" not in targets:
+                    targets.append("end")
+                branches[block_id] = sorted(set(targets))
+            payload["branches"] = branches
         if self.procedure_name:
             payload["proc_name"] = self.procedure_name
         if self.block_id_to_block_name:

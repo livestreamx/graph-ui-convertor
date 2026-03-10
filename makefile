@@ -39,6 +39,7 @@ S3_BUCKET ?= cjm-markup
 S3_PREFIX ?= markup/
 S3_DATA_DIR ?= data/s3
 S3_SEED_SOURCE ?= $(MARKUP_DIR)
+DEMO_MARKUP_SOURCE ?= examples/markup
 
 # ---- Docs / diagrams ----
 C4_DIRS ?= docs/en/c4 docs/ru/c4
@@ -98,7 +99,8 @@ help:
 	@echo "  make convert-to-unidraw - convert markup json -> unidraw json"
 	@echo "  make convert-from-ui  - convert excalidraw json -> markup json"
 	@echo "  make c4-render        - render C4 diagrams to $(C4_OUT_DIRS)"
-	@echo "  make demo             - seed S3 + start UIs (on-demand conversion)"
+	@echo "  make demo-prepare-data - sync demo markup and regenerate local scenes"
+	@echo "  make demo             - prepare data, seed S3 + start UIs"
 	@echo "  make demo-smoke       - verify demo services are responding"
 	@echo "  make down             - stop demo services"
 	@echo "    (set ALLOW_DOCKER_FAILURE=0 to fail if Docker/Colima unavailable)"
@@ -262,6 +264,17 @@ s3-seed:
 		--source "$$SOURCE" \
 		--path-style
 
+.PHONY: demo-prepare-data
+demo-prepare-data: dirs
+	@echo "Preparing demo data from $(DEMO_MARKUP_SOURCE) ..."
+	@$(VENV_PYTHON) scripts/prepare_demo_data.py \
+		--source-dir "$(DEMO_MARKUP_SOURCE)" \
+		--markup-dir "$(MARKUP_DIR)" \
+		--excalidraw-dir "$(EXCALIDRAW_IN_DIR)" \
+		--unidraw-dir "$(UNIDRAW_IN_DIR)"
+	@$(MAKE) convert-to-excalidraw
+	@$(MAKE) convert-to-unidraw
+
 # -------- Catalog UI (Docker) --------
 
 .PHONY: catalog-up
@@ -328,7 +341,7 @@ c4-render:
 	@echo "C4 diagrams rendered to $(C4_OUT_DIRS)"
 
 .PHONY: demo
-demo: s3-up s3-seed excalidraw-up catalog-up demo-smoke
+demo: demo-prepare-data s3-up s3-seed excalidraw-up catalog-up demo-smoke
 	@echo ""
 	@echo "Next steps (manual in UI):"
 	@echo "  1) Open $(CATALOG_URL)/catalog"

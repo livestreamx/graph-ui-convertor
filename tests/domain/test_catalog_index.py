@@ -153,6 +153,59 @@ def test_build_catalog_index_detects_start_end_overlap_in_same_block(
         stubber.deactivate()
 
 
+def test_build_catalog_index_excludes_return_to_parent_end_from_completion_counts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Return Flow"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["end"]},
+            }
+        ],
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/return-flow.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        item = index.items[0]
+        assert item.procedure_end_blocks == {"p1": ["b"]}
+        assert item.non_postpone_end_block_count == 0
+        assert item.postpone_end_block_count == 0
+    finally:
+        stubber.deactivate()
+
+
 def test_build_catalog_index_falls_back_to_legacy_scene_id_when_finedog_unit_id_missing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

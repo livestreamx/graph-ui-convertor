@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from adapters.layout.grid import GridLayoutEngine
+from adapters.layout.procedure_graph import ProcedureGraphLayoutEngine
 from domain.models import MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from domain.services.convert_procedure_graph_to_excalidraw import (
+    ProcedureGraphToExcalidrawConverter,
+)
 from tests.helpers.markup_fixtures import load_markup_fixture
 
 
@@ -596,3 +600,64 @@ def test_multiple_dependencies_stack_vertically() -> None:
     frames = {frame.procedure_id: frame for frame in plan.frames}
     assert frames["child_one"].origin.x == frames["child_two"].origin.x
     assert frames["child_one"].origin.y != frames["child_two"].origin.y
+
+
+def test_return_subprocedure_is_placed_below_parent_flow_in_corner_cases() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+
+    plan = GridLayoutEngine().build_plan(markup)
+    frames = {frame.procedure_id: frame for frame in plan.frames}
+    blocks = {(block.procedure_id, block.block_id): block for block in plan.blocks}
+
+    main = frames["task_processor_main"]
+    child = frames["task_processor_child"]
+    overlap = frames["task_processor_same_start_end"]
+
+    assert child.origin.y >= main.origin.y + main.size.height
+    assert child.origin.x < main.origin.x + main.size.width
+    assert overlap.origin.y >= child.origin.y + child.size.height
+    assert (
+        blocks[("task_processor_main", "tp_child_call")].position.y
+        > blocks[("task_processor_main", "tp_retry")].position.y
+    )
+    assert (
+        blocks[("task_processor_main", "tp_resume")].position.y
+        > blocks[("task_processor_main", "tp_retry")].position.y
+    )
+    assert (
+        blocks[("task_processor_main", "tp_resume")].position.x
+        > blocks[("task_processor_child", "child_entry")].position.x
+    )
+
+    assert len(plan.separators) == 1
+    separator_y = plan.separators[0].start.y
+    first_component_bottom = max(
+        child.origin.y + child.size.height,
+        plan.scenarios[0].origin.y + plan.scenarios[0].size.height,
+        plan.scenarios[0].procedures_origin.y + plan.scenarios[0].procedures_size.height,
+    )
+    second_component_top = min(overlap.origin.y, plan.scenarios[1].origin.y)
+    assert separator_y > first_component_bottom
+    assert separator_y < second_component_top
+
+
+def test_procedure_graph_marks_return_only_procedure_as_intermediate() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+
+    excal = ProcedureGraphToExcalidrawConverter(ProcedureGraphLayoutEngine()).convert(markup)
+
+    child_frames = [
+        element
+        for element in excal.elements
+        if element.get("type") == "frame"
+        and element.get("customData", {}).get("cjm", {}).get("procedure_id")
+        == "task_processor_child"
+    ]
+    assert child_frames
+    assert child_frames[0].get("strokeStyle") == "dashed"
+    assert child_frames[0].get("strokeColor") == "#3f8cff"
+    assert not any(
+        element.get("customData", {}).get("cjm", {}).get("role") == "procedure_stat"
+        and element.get("customData", {}).get("cjm", {}).get("stat_type") == "return"
+        for element in excal.elements
+    )

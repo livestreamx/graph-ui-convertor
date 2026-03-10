@@ -5,7 +5,7 @@ from hashlib import sha1
 from typing import Any, Literal
 
 from domain.markup_type_labels import humanize_markup_type_for_brackets
-from domain.models import MarkupDocument, Procedure, merge_end_types
+from domain.models import MarkupDocument, Procedure, is_completion_end_block, merge_end_types
 from domain.services.shared_node_merge_rules import (
     ServiceNodeState,
     build_service_node_state,
@@ -918,12 +918,14 @@ class BuildTeamProcedureGraph:
                 service_graph.setdefault(node_id, set())
                 component_counts[node_id] = len(component_ids)
                 stats = {"start": 0, "branch": 0, "end": 0, "postpone": 0}
+                return_count = 0
                 for proc_id in component_ids:
                     proc = procedure_lookup.get(proc_id)
                     if proc is None:
                         continue
                     stats["start"] += len(proc.start_block_ids)
                     stats["branch"] += sum(len(targets) for targets in proc.branches.values())
+                    return_count += len(proc.return_block_ids)
                     stats["postpone"] += sum(
                         1
                         for block_id in proc.end_block_ids
@@ -932,8 +934,10 @@ class BuildTeamProcedureGraph:
                     stats["end"] += sum(
                         1
                         for block_id in proc.end_block_ids
-                        if proc.end_block_types.get(block_id) != "postpone"
+                        if is_completion_end_block(proc, block_id)
                     )
+                if return_count > 0:
+                    stats["return"] = return_count
                 component_stats[node_id] = stats
                 for proc_id in component_ids:
                     service_nodes_by_procedure.setdefault(proc_id, []).append(node_id)
@@ -1025,7 +1029,8 @@ class BuildTeamProcedureGraph:
                 "is_intersection": False,
                 "procedure_count": component_counts.get(service_node_id, 1),
                 "graph_stats": component_stats.get(
-                    service_node_id, {"start": 0, "branch": 0, "end": 0, "postpone": 0}
+                    service_node_id,
+                    {"start": 0, "branch": 0, "end": 0, "postpone": 0},
                 ),
                 "services": [service_payload],
             }
@@ -1145,6 +1150,7 @@ class BuildTeamProcedureGraph:
             "start_block_ids": list(proc.start_block_ids),
             "end_block_ids": list(proc.end_block_ids),
             "end_block_types": dict(proc.end_block_types),
+            "return_block_ids": list(proc.return_block_ids),
             "branches": {key: list(values) for key, values in proc.branches.items()},
             "block_id_to_block_name": dict(proc.block_id_to_block_name),
         }
@@ -1166,6 +1172,10 @@ class BuildTeamProcedureGraph:
         for block_id, end_type in proc.end_block_types.items():
             end_block_types[block_id] = merge_end_types(end_block_types.get(block_id), end_type)
         merged["end_block_types"] = end_block_types
+
+        return_ids = set(merged.get("return_block_ids", []) or [])
+        return_ids.update(proc.return_block_ids)
+        merged["return_block_ids"] = sorted(return_ids)
 
         branches = {key: set(values) for key, values in (merged.get("branches", {}) or {}).items()}
         for source, targets in proc.branches.items():

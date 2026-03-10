@@ -33,6 +33,9 @@ EXCALIDRAW_PORT=5010 make demo
 # Catalog: http://localhost:8080/catalog
 ```
 
+`make demo` перед запуском сервисов синхронизирует `examples/markup` в
+`data/markup` и заново генерирует `data/excalidraw_in` / `data/unidraw_in`.
+
 ### 4. Обратная конвертация Excalidraw в markup
 
 ```bash

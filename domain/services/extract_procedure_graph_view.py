@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from domain.models import END_TYPE_DEFAULT, MarkupDocument
+from domain.models import MarkupDocument, is_completion_end_block, procedure_end_kind
 
 
 def extract_procedure_graph_view(document: MarkupDocument) -> dict[str, Any]:
@@ -83,16 +83,20 @@ def _build_procedure_stats(document: MarkupDocument) -> dict[str, dict[str, obje
         start_count = len({str(block_id) for block_id in procedure.start_block_ids})
         branch_count = sum(len(set(targets)) for targets in procedure.branches.values())
         end_type_counts: dict[str, int] = {}
+        end_count = 0
+        postpone_count = 0
         for block_id in procedure.end_block_ids:
-            end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
-            end_type_counts[end_type] = end_type_counts.get(end_type, 0) + 1
-        postpone_count = _as_int(end_type_counts.get("postpone", 0))
-        total_end_count = sum(end_type_counts.values())
+            end_kind = procedure_end_kind(procedure, block_id)
+            end_type_counts[end_kind] = end_type_counts.get(end_kind, 0) + 1
+            if end_kind == "postpone":
+                postpone_count += 1
+            elif is_completion_end_block(procedure, block_id):
+                end_count += 1
         stats[procedure.procedure_id] = {
             "procedure_count": 1,
             "start_count": start_count,
             "branch_count": branch_count,
-            "end_count": max(0, total_end_count - postpone_count),
+            "end_count": end_count,
             "postpone_count": postpone_count,
             "end_type_counts": dict(sorted(end_type_counts.items())),
         }
@@ -131,7 +135,14 @@ def _resolve_node_stats(
         branch_count = _as_int(graph_stats.get("branch"))
 
     postpone_from_end_types = _as_int(end_type_counts.get("postpone", 0))
-    end_from_end_types = max(0, sum(end_type_counts.values()) - postpone_from_end_types)
+    end_from_end_types = max(
+        0,
+        sum(
+            count
+            for end_type, count in end_type_counts.items()
+            if end_type not in {"postpone", "return"}
+        ),
+    )
 
     if end_count <= 0:
         end_count = end_from_end_types

@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from domain.catalog import CatalogIndex, CatalogIndexConfig, CatalogItem, MarkupSourceItem
-from domain.models import END_TYPE_DEFAULT, MarkupDocument
+from domain.models import MarkupDocument, is_completion_end_block
 from domain.ports.catalog import CatalogIndexRepository, MarkupCatalogSource
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
@@ -97,6 +97,8 @@ class BuildCatalogIndex:
             team_name = config.unknown_value
         markup_meta = self._extract_markup_meta(raw)
         procedure_blocks = self._extract_procedure_blocks(document)
+        procedure_names = self._extract_procedure_names(document)
+        procedure_block_names = self._extract_procedure_block_names(document)
         procedure_start_blocks = self._extract_procedure_start_blocks(document)
         procedure_end_blocks = self._extract_procedure_end_blocks(document)
         procedure_branch_counts = self._extract_procedure_branch_counts(document)
@@ -139,6 +141,8 @@ class BuildCatalogIndex:
             unidraw_rel_path=unidraw_rel_path,
             procedure_ids=procedure_ids,
             block_ids=block_ids,
+            procedure_names=procedure_names,
+            procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
@@ -243,6 +247,35 @@ class BuildCatalogIndex:
                 continue
             block_ids = sorted(procedure.block_ids(), key=str.lower)
             result[procedure_id] = block_ids
+        return result
+
+    def _extract_procedure_names(self, document: MarkupDocument) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            procedure_name = str(procedure.procedure_name or "").strip()
+            if not procedure_id or not procedure_name:
+                continue
+            result[procedure_id] = procedure_name
+        return result
+
+    def _extract_procedure_block_names(
+        self,
+        document: MarkupDocument,
+    ) -> dict[str, dict[str, str]]:
+        result: dict[str, dict[str, str]] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id:
+                continue
+            block_names: dict[str, str] = {}
+            for block_id, block_name in procedure.block_id_to_block_name.items():
+                block_id_text = str(block_id).strip()
+                block_name_text = str(block_name).strip()
+                if not block_id_text or not block_name_text:
+                    continue
+                block_names[block_id_text] = block_name_text
+            result[procedure_id] = block_names
         return result
 
     def _extract_procedure_start_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:
@@ -378,10 +411,10 @@ class BuildCatalogIndex:
         postpone_count = 0
         for procedure in document.procedures:
             for block_id in procedure.end_block_ids:
-                end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
+                end_type = procedure.end_block_types.get(block_id)
                 if str(end_type).strip().lower() == "postpone":
                     postpone_count += 1
-                else:
+                elif is_completion_end_block(procedure, block_id):
                     non_postpone_count += 1
         return non_postpone_count, postpone_count
 

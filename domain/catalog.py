@@ -35,6 +35,8 @@ class CatalogItem:
     unidraw_rel_path: str
     procedure_ids: list[str] = field(default_factory=list)
     block_ids: list[str] = field(default_factory=list)
+    procedure_names: dict[str, str] = field(default_factory=dict)
+    procedure_block_names: dict[str, dict[str, str]] = field(default_factory=dict)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_start_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_end_blocks: dict[str, list[str]] = field(default_factory=dict)
@@ -65,6 +67,11 @@ class CatalogItem:
             "unidraw_rel_path": self.unidraw_rel_path,
             "procedure_ids": list(self.procedure_ids),
             "block_ids": list(self.block_ids),
+            "procedure_names": dict(self.procedure_names),
+            "procedure_block_names": {
+                procedure_id: dict(block_names)
+                for procedure_id, block_names in self.procedure_block_names.items()
+            },
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
             "procedure_start_blocks": {
                 key: list(value) for key, value in self.procedure_start_blocks.items()
@@ -86,6 +93,8 @@ class CatalogItem:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
         procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_names = _load_string_mapping(payload.get("procedure_names"))
+        procedure_block_names = _load_procedure_block_names(payload.get("procedure_block_names"))
         procedure_start_blocks = _load_procedure_blocks(payload.get("procedure_start_blocks"))
         procedure_end_blocks = _load_procedure_blocks(payload.get("procedure_end_blocks"))
         procedure_branch_counts = _load_non_negative_int_mapping(
@@ -116,6 +125,8 @@ class CatalogItem:
             unidraw_rel_path=str(payload.get("unidraw_rel_path", "")),
             procedure_ids=procedure_ids,
             block_ids=block_ids,
+            procedure_names=procedure_names,
+            procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
@@ -157,6 +168,32 @@ def _load_procedure_blocks(raw: Any) -> dict[str, list[str]]:
             continue
         normalized_blocks = _load_string_list(block_values)
         normalized[procedure_text] = normalized_blocks
+    return normalized
+
+
+def _load_string_mapping(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, str] = {}
+    for key, value in raw.items():
+        text_key = str(key).strip()
+        text_value = str(value).strip()
+        if not text_key or not text_value:
+            continue
+        normalized[text_key] = text_value
+    return normalized
+
+
+def _load_procedure_block_names(raw: Any) -> dict[str, dict[str, str]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, dict[str, str]] = {}
+    for procedure_id, block_names in raw.items():
+        procedure_text = str(procedure_id).strip()
+        if not procedure_text:
+            continue
+        loaded_names = _load_string_mapping(block_names)
+        normalized[procedure_text] = loaded_names
     return normalized
 
 

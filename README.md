@@ -23,6 +23,9 @@ make demo
 make convert-from-ui
 ```
 
+`make demo` automatically syncs `examples/markup` into `data/markup` and regenerates
+`data/excalidraw_in` / `data/unidraw_in` before starting the demo services.
+
 For local Catalog UI without full demo stack:
 
 ```bash

@@ -1806,10 +1806,15 @@
                   ? node.end_type_counts
                   : {};
               const postponeFromEndTypes = countFrom(endTypeCounts?.postpone, 0);
-              const endFromEndTypes = Object.values(endTypeCounts).reduce(
-                (total, rawCount) => total + countFrom(rawCount, 0),
+              const endFromEndTypes = Object.entries(endTypeCounts).reduce(
+                (total, [endType, rawCount]) => {
+                  if (String(endType) === "postpone" || String(endType) === "return") {
+                    return total;
+                  }
+                  return total + countFrom(rawCount, 0);
+                },
                 0,
-              ) - postponeFromEndTypes;
+              );
               const procedureCount = countFrom(node?.procedure_count, 1);
               const startCount = countFrom(node?.start_count, 0);
               const branchCount = countFrom(node?.branch_count, 0);

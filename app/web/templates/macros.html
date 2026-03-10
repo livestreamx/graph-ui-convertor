@@ -65,13 +65,13 @@
               {% for ref in visible_block_refs %}
                 {% if ref.block_external_url %}
                   <a class="validity-issue-block-pill" href="{{ ref.block_external_url }}" target="_blank" rel="noreferrer">
-                    <span class="validity-issue-block-pill-main">{{ ref.block_id }}</span>
-                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_id }}</span>
+                    <span class="validity-issue-block-pill-main">{{ ref.block_name }}</span>
+                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_name }}</span>
                   </a>
                 {% else %}
                   <span class="validity-issue-block-pill">
-                    <span class="validity-issue-block-pill-main">{{ ref.block_id }}</span>
-                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_id }}</span>
+                    <span class="validity-issue-block-pill-main">{{ ref.block_name }}</span>
+                    <span class="validity-issue-block-pill-meta">{{ ref.procedure_name }}</span>
                   </span>
                 {% endif %}
               {% endfor %}

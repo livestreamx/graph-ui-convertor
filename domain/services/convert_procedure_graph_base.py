@@ -12,9 +12,11 @@ from domain.models import (
     MarkupDocument,
     MarkupTypeColumnPlacement,
     Point,
+    Procedure,
     ScenarioPlacement,
     ServiceZonePlacement,
     Size,
+    is_completion_end_block,
 )
 from domain.services.convert_markup_base import (
     MERGE_ALERT_COLOR,
@@ -23,6 +25,8 @@ from domain.services.convert_markup_base import (
     MarkupToDiagramConverter,
     Metadata,
 )
+
+INTERMEDIATE_PROCEDURE_COLOR = "#eef7ff"
 
 
 class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
@@ -37,6 +41,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             for proc in document.procedures
             if proc.procedure_name
         }
+        procedure_lookup = {proc.procedure_id: proc for proc in document.procedures}
         self._build_service_zone_rectangles(plan.service_zones, registry, base_metadata)
         merge_numbers = self._merge_number_lookup(plan.scenarios)
         frame_ids = self._build_procedure_frames(
@@ -45,6 +50,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             registry,
             base_metadata,
             proc_name_lookup,
+            procedure_lookup,
             merge_numbers,
         )
         self._build_procedure_stats(document, plan.frames, frame_ids, registry, base_metadata)
@@ -198,6 +204,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
         registry: ElementRegistry,
         base_metadata: Metadata,
         proc_name_lookup: dict[str, str],
+        procedure_lookup: dict[str, Procedure],
         merge_numbers: dict[str, list[int]] | None = None,
     ) -> dict[str, str]:
         frame_ids: dict[str, str] = {}
@@ -246,6 +253,17 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
             if isinstance(source_procedure_id, str) and source_procedure_id:
                 frame_meta["source_procedure_id"] = source_procedure_id
             color = meta.get("procedure_color")
+            proc = procedure_lookup.get(frame.procedure_id)
+            if (
+                not isinstance(color, str)
+                and isinstance(proc, Procedure)
+                and proc.return_block_ids
+                and not any(
+                    is_completion_end_block(proc, block_id) for block_id in proc.end_block_ids
+                )
+            ):
+                color = INTERMEDIATE_PROCEDURE_COLOR
+                frame_meta["is_intermediate_procedure"] = True
             if isinstance(color, str) and color:
                 frame_meta["procedure_color"] = color
             is_intersection = meta.get("is_intersection") is True
@@ -574,9 +592,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 if proc.end_block_types.get(block_id) == "postpone"
             )
             end_count = sum(
-                1
-                for block_id in proc.end_block_ids
-                if proc.end_block_types.get(block_id) != "postpone"
+                1 for block_id in proc.end_block_ids if is_completion_end_block(proc, block_id)
             )
             branch_count = sum(len(targets) for targets in proc.branches.values())
             stats = [
