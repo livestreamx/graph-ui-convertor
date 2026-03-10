@@ -154,6 +154,9 @@ class MarkupToUnidrawConverter(MarkupToDiagramConverter):
         background = metadata.get("procedure_color")
         if isinstance(background, str) and background:
             style["fc"] = background
+        if metadata.get("is_intermediate_procedure") is True:
+            style["sc"] = "#3f8cff"
+            style["strokeStyle"] = "dashed"
         return self._base_element(
             element_id=element_id,
             type_name="frame",

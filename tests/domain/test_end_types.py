@@ -6,6 +6,7 @@ from adapters.layout.grid import GridLayoutEngine
 from domain.models import END_TYPE_COLORS, END_TYPE_TURN_OUT, MarkupDocument
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_end_type_roundtrip_and_service_name() -> None:
@@ -257,14 +258,14 @@ def test_branch_end_roundtrip_preserves_return_to_parent_semantics() -> None:
     assert procedures[0]["branches"] == {"a": ["b"], "b": ["end"]}
 
     excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
-    return_markers = [
+    return_marker_ovals = [
         element
         for element in excal.elements
         if element.get("type") == "ellipse"
         and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
         and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
     ]
-    assert len(return_markers) == 1
+    assert not return_marker_ovals
 
     reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
     reconstructed_proc = reconstructed.procedures[0]
@@ -276,3 +277,53 @@ def test_branch_end_roundtrip_preserves_return_to_parent_semantics() -> None:
         "a": ["b"],
         "b": ["end"],
     }
+
+    return_marker_labels = [
+        element
+        for element in excal.elements
+        if element.get("type") == "text"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    return_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("source_block_id") == "b"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+
+    assert [element.get("text") for element in return_marker_labels] == ["RETURN"]
+    assert not return_edges
+
+
+def test_return_visuals_use_plain_block_and_text_only_marker() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    child_finish_block = next(
+        element
+        for element in excal.elements
+        if element.get("type") == "rectangle"
+        and element.get("customData", {}).get("cjm", {}).get("procedure_id")
+        == "task_processor_child"
+        and element.get("customData", {}).get("cjm", {}).get("block_id") == "child_finish"
+    )
+    return_marker_ovals = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    return_block_graph_edges = [
+        element
+        for element in excal.elements
+        if element.get("type") == "arrow"
+        and element.get("customData", {}).get("cjm", {}).get("source_block_id") == "child_finish"
+        and element.get("customData", {}).get("cjm", {}).get("target_block_id") == "tp_resume"
+    ]
+
+    assert child_finish_block.get("strokeStyle") != "dashed"
+    assert not return_marker_ovals
+    assert return_block_graph_edges
+    assert all(edge.get("strokeStyle") != "dashed" for edge in return_block_graph_edges)

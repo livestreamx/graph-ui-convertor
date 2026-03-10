@@ -17,6 +17,7 @@ from domain.models import (
     ScenarioPlacement,
     SeparatorPlacement,
     Size,
+    is_completion_end_block,
     normalize_end_type,
 )
 from domain.ports.layout import LayoutEngine
@@ -68,6 +69,14 @@ class NodeInfo:
     end_type: str | None = None
 
 
+@dataclass(frozen=True)
+class ReturnSubprocedureSpec:
+    procedure_id: str
+    parent_procedure_id: str
+    call_source_block_ids: tuple[str, ...]
+    return_target_block_ids: tuple[str, ...]
+
+
 class GridLayoutEngine(LayoutEngine):
     def __init__(self, config: LayoutConfig | None = None) -> None:
         self.config = config or LayoutConfig()
@@ -76,7 +85,6 @@ class GridLayoutEngine(LayoutEngine):
         frames: list[FramePlacement] = []
         blocks: list[BlockPlacement] = []
         markers: list[MarkerPlacement] = []
-        separator_ys: list[float] = []
         scenarios: list[ScenarioPlacement] = []
 
         block_graph_nodes = self._block_graph_nodes(document) if document.block_graph else set()
@@ -111,23 +119,49 @@ class GridLayoutEngine(LayoutEngine):
                     if child not in adjacency[parent]:
                         adjacency[parent].append(child)
         sizing: dict[str, Size] = {}
+        block_level_cache: dict[str, dict[str, int]] = {}
         layout_edges_by_proc = self._layout_edges_by_proc(
             document, procedures, owned_blocks_by_proc
         )
         end_block_row_offsets = self._end_block_row_offsets(
             document, procedures, owned_blocks_by_proc
         )
+        return_specs = self._return_subprocedure_specs(
+            document=document,
+            procedures=procedures,
+            owned_blocks_by_proc=owned_blocks_by_proc,
+        )
+        return_target_row_offsets = self._return_target_row_offsets(
+            document,
+            procedures,
+            owned_blocks_by_proc,
+        )
+        for proc_id, offsets in return_target_row_offsets.items():
+            proc_offsets = end_block_row_offsets.setdefault(proc_id, {})
+            for block_id, offset in offsets.items():
+                proc_offsets[block_id] = max(proc_offsets.get(block_id, 0.0), offset)
+        intermediate_call_blocks = self._intermediate_procedure_call_blocks(return_specs)
+        return_target_level_constraints = self._return_target_level_constraints(
+            procedures=procedures,
+            owned_blocks_by_proc=owned_blocks_by_proc,
+            layout_edges_by_proc=layout_edges_by_proc,
+            end_block_row_offsets=end_block_row_offsets,
+            return_specs=return_specs,
+        )
         cross_proc_edges = self._cross_procedure_edges(document, procedures, owned_blocks_by_proc)
 
         # Pre-compute frame sizes using left-to-right levels inside each procedure.
         for procedure in procedures:
-            _, max_level, row_counts, _, _, _ = self._compute_block_levels(
+            node_levels, max_level, row_counts, _, _, _ = self._compute_block_levels(
                 procedure,
                 owned_blocks_by_proc.get(procedure.procedure_id),
                 layout_edges_by_proc.get(procedure.procedure_id),
                 set(procedure.branches.keys()),
                 end_block_row_offsets.get(procedure.procedure_id),
+                return_target_level_constraints.get(procedure.procedure_id),
+                intermediate_call_blocks.get(procedure.procedure_id),
             )
+            block_level_cache[procedure.procedure_id] = node_levels
             cols = max_level + 1
             rows = max(row_counts.values() or [1])
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
@@ -223,10 +257,19 @@ class GridLayoutEngine(LayoutEngine):
             else:
                 component_height = 0.0
             if idx < len(components) - 1:
-                separator_ys.append(origin_y + component_height + component_gap / 2)
                 origin_y += component_height + component_gap
             else:
                 origin_y += component_height + proc_gap_y
+
+        frames = self._reposition_return_subprocedures(
+            frames=frames,
+            document=document,
+            procedures=procedures,
+            owned_blocks_by_proc=owned_blocks_by_proc,
+            block_level_cache=block_level_cache,
+            order_index=order_index,
+            return_specs=return_specs,
+        )
 
         procedure_map = {proc.procedure_id: proc for proc in procedures}
         for frame in frames:
@@ -240,6 +283,8 @@ class GridLayoutEngine(LayoutEngine):
                 layout_edges_by_proc.get(frame_proc.procedure_id),
                 set(frame_proc.branches.keys()),
                 end_block_row_offsets.get(frame_proc.procedure_id),
+                return_target_level_constraints.get(frame_proc.procedure_id),
+                intermediate_call_blocks.get(frame_proc.procedure_id),
             )
             start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
             level_rows: dict[int, float] = {lvl: 0.0 for lvl in range(max_level + 1)}
@@ -307,20 +352,16 @@ class GridLayoutEngine(LayoutEngine):
         if blocks and markers:
             self._adjust_start_markers_for_edges(document, blocks, markers)
 
-        separators: list[SeparatorPlacement] = []
-        if frames and separator_ys:
-            min_x = min(frame.origin.x for frame in frames)
-            max_x = max(frame.origin.x + frame.size.width for frame in frames)
-            x_start = min_x - self.config.separator_margin_x
-            x_end = max_x + self.config.separator_margin_x
-            separators = [
-                SeparatorPlacement(
-                    start=Point(x_start, y),
-                    end=Point(x_end, y),
-                )
-                for y in separator_ys
-            ]
+        if frames:
+            return_block_lookup = {
+                (proc.procedure_id, block_id)
+                for proc in document.procedures
+                for block_id in proc.return_block_ids
+            }
+            frames = self._fit_frames_to_contents(frames, blocks, markers, return_block_lookup)
 
+        separators: list[SeparatorPlacement] = []
+        scenarios: list[ScenarioPlacement] = []
         if frames:
             scenarios = self._build_scenarios(
                 components,
@@ -331,6 +372,7 @@ class GridLayoutEngine(LayoutEngine):
                 layout_edges_by_proc,
                 order_index,
             )
+            separators = self._separator_placements(components, frames, scenarios)
 
         return LayoutPlan(
             frames=frames,
@@ -339,6 +381,315 @@ class GridLayoutEngine(LayoutEngine):
             separators=separators,
             scenarios=scenarios,
         )
+
+    def _reposition_return_subprocedures(
+        self,
+        *,
+        frames: list[FramePlacement],
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+        block_level_cache: Mapping[str, Mapping[str, int]],
+        order_index: Mapping[str, int],
+        return_specs: Mapping[str, ReturnSubprocedureSpec] | None = None,
+    ) -> list[FramePlacement]:
+        if return_specs is None:
+            return_specs = self._return_subprocedure_specs(
+                document=document,
+                procedures=procedures,
+                owned_blocks_by_proc=owned_blocks_by_proc,
+            )
+        if not return_specs:
+            return frames
+
+        frame_lookup = {frame.procedure_id: frame for frame in frames}
+        start_extra = self.config.marker_size.width + self.config.gap_x * 0.8
+        anchor_shift = self.config.block_size.width * 0.15
+        specs_by_parent: dict[str, list[ReturnSubprocedureSpec]] = {}
+        for spec in return_specs.values():
+            specs_by_parent.setdefault(spec.parent_procedure_id, []).append(spec)
+
+        parent_items = sorted(
+            specs_by_parent.items(),
+            key=lambda item: (
+                frame_lookup.get(
+                    item[0], FramePlacement(item[0], Point(0.0, 0.0), Size(0.0, 0.0))
+                ).origin.y,
+                order_index.get(item[0], 0),
+                item[0],
+            ),
+        )
+        for parent_proc_id, specs in parent_items:
+            parent_frame = frame_lookup.get(parent_proc_id)
+            if parent_frame is None:
+                continue
+            next_y = parent_frame.origin.y + parent_frame.size.height + self.config.lane_gap
+            parent_levels = block_level_cache.get(parent_proc_id, {})
+            ordered_specs = sorted(
+                specs,
+                key=lambda spec: (
+                    min(
+                        (parent_levels.get(block_id, 0) for block_id in spec.call_source_block_ids),
+                        default=0,
+                    ),
+                    order_index.get(spec.procedure_id, 0),
+                    spec.procedure_id,
+                ),
+            )
+            for spec in ordered_specs:
+                child_frame = frame_lookup.get(spec.procedure_id)
+                if child_frame is None:
+                    continue
+                anchor_level = min(
+                    (parent_levels.get(block_id, 0) for block_id in spec.call_source_block_ids),
+                    default=0,
+                )
+                desired_x = (
+                    parent_frame.origin.x
+                    + self.config.padding
+                    + start_extra
+                    + anchor_level * (self.config.block_size.width + self.config.gap_x)
+                    + anchor_shift
+                )
+                desired_y = max(child_frame.origin.y, next_y)
+                frame_lookup[spec.procedure_id] = FramePlacement(
+                    procedure_id=child_frame.procedure_id,
+                    origin=Point(desired_x, desired_y),
+                    size=child_frame.size,
+                )
+                next_y = desired_y + child_frame.size.height + self.config.gap_y
+
+        adjusted_frames = [frame_lookup.get(frame.procedure_id, frame) for frame in frames]
+        return self._resolve_vertical_frame_overlaps(
+            adjusted_frames,
+            min_gap=self.config.lane_gap,
+        )
+
+    def _return_subprocedure_specs(
+        self,
+        *,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> dict[str, ReturnSubprocedureSpec]:
+        if not document.block_graph:
+            return {}
+
+        procedure_lookup = {proc.procedure_id: proc for proc in procedures}
+        resolved_edges = self._resolved_block_graph_edges(
+            document,
+            procedures,
+            owned_blocks_by_proc,
+        )
+        incoming_by_proc: dict[str, list[ResolvedBlockGraphEdge]] = {}
+        return_edges_by_proc: dict[str, list[ResolvedBlockGraphEdge]] = {}
+        for edge in resolved_edges:
+            if edge.source_procedure_id == edge.target_procedure_id:
+                continue
+            incoming_by_proc.setdefault(edge.target_procedure_id, []).append(edge)
+            source_proc = procedure_lookup.get(edge.source_procedure_id)
+            if source_proc is None:
+                continue
+            if edge.source_block_id in source_proc.return_block_ids:
+                return_edges_by_proc.setdefault(edge.source_procedure_id, []).append(edge)
+
+        specs: dict[str, ReturnSubprocedureSpec] = {}
+        for proc in procedures:
+            if not proc.return_block_ids:
+                continue
+            if any(is_completion_end_block(proc, block_id) for block_id in proc.end_block_ids):
+                continue
+            incoming_edges = incoming_by_proc.get(proc.procedure_id, [])
+            outgoing_return_edges = return_edges_by_proc.get(proc.procedure_id, [])
+            incoming_parents = {edge.source_procedure_id for edge in incoming_edges}
+            return_parents = {edge.target_procedure_id for edge in outgoing_return_edges}
+            if len(incoming_parents) != 1 or incoming_parents != return_parents:
+                continue
+            parent_procedure_id = next(iter(incoming_parents))
+            call_source_block_ids = tuple(
+                sorted(
+                    {
+                        edge.source_block_id
+                        for edge in incoming_edges
+                        if edge.source_procedure_id == parent_procedure_id
+                    }
+                )
+            )
+            return_target_block_ids = tuple(
+                sorted(
+                    {
+                        edge.target_block_id
+                        for edge in outgoing_return_edges
+                        if edge.target_procedure_id == parent_procedure_id
+                    }
+                )
+            )
+            if not call_source_block_ids or not return_target_block_ids:
+                continue
+            specs[proc.procedure_id] = ReturnSubprocedureSpec(
+                procedure_id=proc.procedure_id,
+                parent_procedure_id=parent_procedure_id,
+                call_source_block_ids=call_source_block_ids,
+                return_target_block_ids=return_target_block_ids,
+            )
+        return specs
+
+    def _intermediate_procedure_call_blocks(
+        self,
+        return_specs: Mapping[str, ReturnSubprocedureSpec],
+    ) -> dict[str, set[str]]:
+        call_blocks: dict[str, set[str]] = {}
+        for spec in return_specs.values():
+            call_blocks.setdefault(spec.parent_procedure_id, set()).update(
+                spec.call_source_block_ids
+            )
+        return call_blocks
+
+    def _return_target_level_constraints(
+        self,
+        *,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+        layout_edges_by_proc: Mapping[str, Mapping[str, list[str]]],
+        end_block_row_offsets: Mapping[str, Mapping[str, float]],
+        return_specs: Mapping[str, ReturnSubprocedureSpec],
+    ) -> dict[str, dict[str, int]]:
+        if not return_specs:
+            return {}
+
+        procedure_lookup = {proc.procedure_id: proc for proc in procedures}
+        cached_levels: dict[str, dict[str, int]] = {}
+        constraints: dict[str, dict[str, int]] = {}
+
+        for spec in return_specs.values():
+            parent_proc = procedure_lookup.get(spec.parent_procedure_id)
+            if parent_proc is None:
+                continue
+            parent_levels = cached_levels.get(parent_proc.procedure_id)
+            if parent_levels is None:
+                parent_levels, _max_level, _row_counts, _order, _row_positions, _node_info = (
+                    self._compute_block_levels(
+                        parent_proc,
+                        owned_blocks_by_proc.get(parent_proc.procedure_id),
+                        layout_edges_by_proc.get(parent_proc.procedure_id),
+                        set(parent_proc.branches.keys()),
+                        end_block_row_offsets.get(parent_proc.procedure_id),
+                    )
+                )
+                cached_levels[parent_proc.procedure_id] = parent_levels
+            call_level = max(
+                (parent_levels.get(block_id, 0) for block_id in spec.call_source_block_ids),
+                default=0,
+            )
+            min_target_level = call_level + 2
+            for block_id in spec.return_target_block_ids:
+                proc_constraints = constraints.setdefault(parent_proc.procedure_id, {})
+                proc_constraints[block_id] = max(
+                    proc_constraints.get(block_id, 0), min_target_level
+                )
+
+        return constraints
+
+    def _resolve_vertical_frame_overlaps(
+        self,
+        frames: list[FramePlacement],
+        *,
+        min_gap: float,
+    ) -> list[FramePlacement]:
+        ordered = sorted(
+            frames, key=lambda frame: (frame.origin.y, frame.origin.x, frame.procedure_id)
+        )
+        placed: list[FramePlacement] = []
+        remapped: dict[str, FramePlacement] = {}
+        for frame in ordered:
+            y = frame.origin.y
+            while True:
+                conflicts = [
+                    other
+                    for other in placed
+                    if self._frames_overlap_horizontally(frame, other)
+                    and not (
+                        y + frame.size.height + min_gap <= other.origin.y
+                        or other.origin.y + other.size.height + min_gap <= y
+                    )
+                ]
+                if not conflicts:
+                    break
+                y = max(other.origin.y + other.size.height + min_gap for other in conflicts)
+            shifted = FramePlacement(
+                procedure_id=frame.procedure_id,
+                origin=Point(frame.origin.x, y),
+                size=frame.size,
+            )
+            placed.append(shifted)
+            remapped[frame.procedure_id] = shifted
+        return [remapped.get(frame.procedure_id, frame) for frame in frames]
+
+    def _frames_overlap_horizontally(self, left: FramePlacement, right: FramePlacement) -> bool:
+        return not (
+            left.origin.x + left.size.width <= right.origin.x
+            or right.origin.x + right.size.width <= left.origin.x
+        )
+
+    def _frames_overlap_vertically(self, top: FramePlacement, bottom: FramePlacement) -> bool:
+        return not (
+            top.origin.y + top.size.height <= bottom.origin.y
+            or bottom.origin.y + bottom.size.height <= top.origin.y
+        )
+
+    def _separator_placements(
+        self,
+        components: Sequence[set[str]],
+        frames: Sequence[FramePlacement],
+        scenarios: Sequence[ScenarioPlacement],
+    ) -> list[SeparatorPlacement]:
+        if len(components) < 2 or not frames:
+            return []
+
+        min_x = min(frame.origin.x for frame in frames)
+        max_x = max(frame.origin.x + frame.size.width for frame in frames)
+        x_start = min_x - self.config.separator_margin_x
+        x_end = max_x + self.config.separator_margin_x
+        frame_lookup = {frame.procedure_id: frame for frame in frames}
+        component_bounds: list[tuple[float, float]] = []
+
+        for idx, component in enumerate(components):
+            component_frames = [
+                frame_lookup[proc_id] for proc_id in component if proc_id in frame_lookup
+            ]
+            if not component_frames:
+                continue
+            top = min(frame.origin.y for frame in component_frames)
+            bottom = max(frame.origin.y + frame.size.height for frame in component_frames)
+            if idx < len(scenarios):
+                scenario_top, scenario_bottom = self._scenario_vertical_bounds(scenarios[idx])
+                top = min(top, scenario_top)
+                bottom = max(bottom, scenario_bottom)
+            component_bounds.append((top, bottom))
+
+        separators: list[SeparatorPlacement] = []
+        for idx in range(len(component_bounds) - 1):
+            current_bottom = component_bounds[idx][1]
+            next_top = component_bounds[idx + 1][0]
+            y = (current_bottom + next_top) / 2
+            separators.append(
+                SeparatorPlacement(
+                    start=Point(x_start, y),
+                    end=Point(x_end, y),
+                )
+            )
+        return separators
+
+    def _scenario_vertical_bounds(self, scenario: ScenarioPlacement) -> tuple[float, float]:
+        top = min(scenario.origin.y, scenario.procedures_origin.y)
+        bottom = max(
+            scenario.origin.y + scenario.size.height,
+            scenario.procedures_origin.y + scenario.procedures_size.height,
+        )
+        if scenario.merge_origin is not None and scenario.merge_size is not None:
+            top = min(top, scenario.merge_origin.y)
+            bottom = max(bottom, scenario.merge_origin.y + scenario.merge_size.height)
+        return top, bottom
 
     def _build_scenarios(
         self,
@@ -898,6 +1249,86 @@ class GridLayoutEngine(LayoutEngine):
 
         return offsets
 
+    def _return_target_row_offsets(
+        self,
+        document: MarkupDocument,
+        procedures: Sequence[Procedure],
+        owned_blocks_by_proc: Mapping[str, set[str]],
+    ) -> dict[str, dict[str, float]]:
+        if not document.block_graph:
+            return {}
+
+        procedure_lookup = {proc.procedure_id: proc for proc in procedures}
+        offsets: dict[str, dict[str, float]] = {proc.procedure_id: {} for proc in procedures}
+        resolved_edges = self._resolved_block_graph_edges(
+            document,
+            procedures,
+            owned_blocks_by_proc,
+        )
+        for edge in resolved_edges:
+            if edge.source_procedure_id == edge.target_procedure_id:
+                continue
+            source_proc = procedure_lookup.get(edge.source_procedure_id)
+            if source_proc is None:
+                continue
+            if edge.source_block_id not in source_proc.return_block_ids:
+                continue
+            offsets.setdefault(edge.target_procedure_id, {})[edge.target_block_id] = 1.0
+        return offsets
+
+    def _fit_frames_to_contents(
+        self,
+        frames: Sequence[FramePlacement],
+        blocks: Sequence[BlockPlacement],
+        markers: Sequence[MarkerPlacement],
+        return_block_lookup: set[tuple[str, str]],
+    ) -> list[FramePlacement]:
+        if not frames:
+            return []
+
+        right_padding = 180.0
+        bottom_padding = 140.0
+        block_groups: dict[str, list[BlockPlacement]] = {}
+        marker_groups: dict[str, list[MarkerPlacement]] = {}
+        for block in blocks:
+            block_groups.setdefault(block.procedure_id, []).append(block)
+        for marker in markers:
+            marker_groups.setdefault(marker.procedure_id, []).append(marker)
+
+        fitted: list[FramePlacement] = []
+        for frame in frames:
+            content_right = frame.origin.x
+            content_bottom = frame.origin.y
+            for block in block_groups.get(frame.procedure_id, []):
+                content_right = max(content_right, block.position.x + block.size.width)
+                content_bottom = max(content_bottom, block.position.y + block.size.height)
+            for marker in marker_groups.get(frame.procedure_id, []):
+                if (marker.procedure_id, marker.block_id) in return_block_lookup:
+                    # Return markers render as text-only labels; do not reserve extra frame width.
+                    continue
+                content_right = max(content_right, marker.position.x + marker.size.width)
+                content_bottom = max(content_bottom, marker.position.y + marker.size.height)
+            has_right_neighbor = any(
+                other.procedure_id != frame.procedure_id
+                and other.origin.x > frame.origin.x
+                and self._frames_overlap_vertically(frame, other)
+                for other in frames
+            )
+            fitted_width = frame.size.width
+            if not has_right_neighbor:
+                fitted_width = content_right - frame.origin.x + right_padding
+            fitted.append(
+                FramePlacement(
+                    procedure_id=frame.procedure_id,
+                    origin=frame.origin,
+                    size=Size(
+                        fitted_width,
+                        content_bottom - frame.origin.y + bottom_padding,
+                    ),
+                )
+            )
+        return fitted
+
     def _adjust_start_markers_for_edges(
         self,
         document: MarkupDocument,
@@ -1341,6 +1772,8 @@ class GridLayoutEngine(LayoutEngine):
         layout_edges: Mapping[str, list[str]] | None = None,
         turn_out_blocks: set[str] | None = None,
         end_block_row_offsets: Mapping[str, float] | None = None,
+        min_block_levels: Mapping[str, int] | None = None,
+        bottom_bias_blocks: set[str] | None = None,
     ) -> tuple[
         dict[str, int],
         int,
@@ -1350,6 +1783,7 @@ class GridLayoutEngine(LayoutEngine):
         dict[str, NodeInfo],
     ]:
         edges_for_layout = layout_edges if layout_edges is not None else procedure.branches
+        bottom_bias_block_ids = set(bottom_bias_blocks or set())
         start_blocks = list(procedure.start_block_ids)
         end_blocks = list(procedure.end_block_ids)
         end_block_types = procedure.end_block_types
@@ -1500,11 +1934,8 @@ class GridLayoutEngine(LayoutEngine):
         # Ensure end blocks have at least computed level (do not force extra column to keep arrows short).
         for end_block in end_blocks:
             levels.setdefault(end_block, max(levels.values() or [0]))
-        if start_blocks:
-            for node_id in all_nodes:
-                if node_id not in start_nodes:
-                    levels[node_id] = max(levels.get(node_id, 0), 1)
 
+        def propagate_forward_levels() -> None:
             changed = True
             while changed:
                 changed = False
@@ -1514,6 +1945,20 @@ class GridLayoutEngine(LayoutEngine):
                         if levels.get(tgt, 0) < src_level + 1:
                             levels[tgt] = src_level + 1
                             changed = True
+
+        if start_blocks:
+            for node_id in all_nodes:
+                if node_id not in start_nodes:
+                    levels[node_id] = max(levels.get(node_id, 0), 1)
+            propagate_forward_levels()
+
+        if min_block_levels:
+            for block_id, min_level in min_block_levels.items():
+                info = node_info.get(block_id)
+                if info is None or info.kind != "block":
+                    continue
+                levels[block_id] = max(levels.get(block_id, 0), int(min_level))
+            propagate_forward_levels()
 
         max_level = max(levels.values() or [0])
 
@@ -1528,10 +1973,18 @@ class GridLayoutEngine(LayoutEngine):
 
         end_block_set = set(end_blocks)
 
-        def base_order_key(node_id: str) -> tuple[int, int, int, str, str]:
+        def base_order_key(node_id: str) -> tuple[int, int, int, int, str, str]:
             info = node_info.get(node_id)
             start_rank = 0 if node_id in start_nodes else 1
             kind_rank = 0 if info and info.kind == "block" else 1
+            bottom_bias_rank = (
+                1
+                if info
+                and info.kind == "block"
+                and info.block_id in bottom_bias_block_ids
+                and info.block_id not in end_block_set
+                else 0
+            )
             end_type = (
                 normalize_end_type(end_block_types.get(info.block_id))
                 if info and info.kind == "block"
@@ -1548,7 +2001,7 @@ class GridLayoutEngine(LayoutEngine):
             )
             block_id = info.block_id if info else node_id
             end_sort = info.end_type if info and info.end_type else ""
-            return (start_rank, kind_rank, end_rank, block_id, end_sort)
+            return (start_rank, kind_rank, bottom_bias_rank, end_rank, block_id, end_sort)
 
         order_index = {node_id: idx for idx, node_id in enumerate(order)}
         level_order: dict[int, list[str]] = {}
@@ -1559,9 +2012,9 @@ class GridLayoutEngine(LayoutEngine):
                 if node_info.get(node_id) and node_info[node_id].kind == "block"
             ]
 
-            def combined_key(node_id: str) -> tuple[int, int, int, int, str, str]:
+            def combined_key(node_id: str) -> tuple[int, int, int, int, int, str, str]:
                 base = base_order_key(node_id)
-                end_bias = 1 if base[2] == 1 else 0
+                end_bias = 1 if base[3] == 1 else 0
                 return (
                     base[0],
                     base[1],
@@ -1569,6 +2022,7 @@ class GridLayoutEngine(LayoutEngine):
                     base[2],
                     base[3],
                     base[4],
+                    base[5],
                 )
 
             nodes.sort(key=combined_key)
@@ -1771,6 +2225,14 @@ class GridLayoutEngine(LayoutEngine):
                         and len(incoming.get(node_id, [])) == 1
                     ):
                         desired[node_id] = row_positions.get(parent_id, desired[node_id])
+                    info = node_info.get(node_id)
+                    if (
+                        info
+                        and info.kind == "block"
+                        and info.block_id in bottom_bias_block_ids
+                        and info.block_id not in end_block_set
+                    ):
+                        desired[node_id] += 1.0
                 index = {node_id: idx for idx, node_id in enumerate(nodes)}
                 nodes.sort(key=lambda n: (desired.get(n, 0.0), index[n], n))
                 level_order[lvl] = nodes

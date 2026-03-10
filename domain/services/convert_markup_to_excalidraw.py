@@ -124,6 +124,7 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
     ) -> Element:
         background = metadata.get("procedure_color")
         background_color = background if isinstance(background, str) else "transparent"
+        is_intermediate = metadata.get("is_intermediate_procedure") is True
         return self._base_shape(
             element_id=element_id,
             type_name="frame",
@@ -132,9 +133,10 @@ class MarkupToExcalidrawConverter(MarkupToDiagramConverter):
             height=frame.size.height,
             extra={
                 "name": name or frame.procedure_id,
-                "strokeColor": "#1e1e1e",
+                "strokeColor": "#3f8cff" if is_intermediate else "#1e1e1e",
                 "backgroundColor": background_color,
                 "fillStyle": "solid",
+                "strokeStyle": "dashed" if is_intermediate else "solid",
                 "seed": self._rand_seed(),
                 "version": 1,
                 "versionNonce": self._rand_seed(),

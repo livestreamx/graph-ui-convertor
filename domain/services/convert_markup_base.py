@@ -34,6 +34,7 @@ Metadata = dict[str, Any]
 Element = dict[str, Any]
 MERGE_ALERT_COLOR = "#ff2d2d"
 MERGE_ALERT_PANEL_COLOR = "#ff9d9d99"
+RETURN_BLOCK_COLOR = "#d7ecff"
 
 
 @dataclass
@@ -805,6 +806,7 @@ class MarkupToDiagramConverter(ABC):
             text_id = self._stable_id("block-text", block.procedure_id, block.block_id)
             end_block_type = end_block_type_lookup.get((block.procedure_id, block.block_id))
             is_initial = block.block_id in block_graph_initials
+            is_return_to_parent = (block.procedure_id, block.block_id) in return_block_lookup
             block_meta: dict[str, object] = {
                 "procedure_id": block.procedure_id,
                 "block_id": block.block_id,
@@ -817,7 +819,7 @@ class MarkupToDiagramConverter(ABC):
                 block_meta["block_graph_initial"] = True
             if end_block_type:
                 block_meta["end_block_type"] = end_block_type
-            if (block.procedure_id, block.block_id) in return_block_lookup:
+            if is_return_to_parent:
                 block_meta["return_to_parent"] = True
             label_text = block_name_lookup.get((block.procedure_id, block.block_id), block.block_id)
             registry.add(
@@ -832,7 +834,13 @@ class MarkupToDiagramConverter(ABC):
                         INITIAL_BLOCK_COLOR
                         if is_initial
                         else (
-                            INTERMEDIATE_BLOCK_COLOR if end_block_type == "intermediate" else None
+                            RETURN_BLOCK_COLOR
+                            if is_return_to_parent
+                            else (
+                                INTERMEDIATE_BLOCK_COLOR
+                                if end_block_type == "intermediate"
+                                else None
+                            )
                         )
                     ),
                     stroke_style="dashed" if is_initial else None,
@@ -849,7 +857,7 @@ class MarkupToDiagramConverter(ABC):
                 label_meta["source_procedure_id"] = source_procedure_id
             if is_initial:
                 label_meta["block_graph_initial"] = True
-            if (block.procedure_id, block.block_id) in return_block_lookup:
+            if is_return_to_parent:
                 label_meta["return_to_parent"] = True
             if label_text != block.block_id:
                 label_meta["block_name"] = label_text
@@ -920,6 +928,7 @@ class MarkupToDiagramConverter(ABC):
             block_end_type = None
             background_color = None
             stroke_style = None
+            is_return_to_parent = (marker.procedure_id, marker.block_id) in return_block_lookup
             if marker.role == "end_marker":
                 end_type = marker.end_type or END_TYPE_DEFAULT
                 block_end_type = end_block_type_lookup.get((marker.procedure_id, marker.block_id))
@@ -927,23 +936,28 @@ class MarkupToDiagramConverter(ABC):
                     block_end_type = end_type
                 marker_meta["end_block_type"] = block_end_type
                 marker_meta["end_type"] = end_type
-                if (marker.procedure_id, marker.block_id) in return_block_lookup:
+                if is_return_to_parent:
                     marker_meta["return_to_parent"] = True
-                background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
+                background_color = (
+                    RETURN_BLOCK_COLOR
+                    if is_return_to_parent
+                    else END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
+                )
                 if end_type == "intermediate":
                     stroke_style = "dashed"
-            registry.add(
-                self._ellipse_element(
-                    element_id=element_id,
-                    position=marker.position,
-                    size=marker.size,
-                    frame_id=frame_ids.get(marker.procedure_id),
-                    metadata=self._with_base_metadata(marker_meta, base_metadata),
-                    group_ids=[group_id],
-                    background_color=background_color,
-                    stroke_style=stroke_style,
+            if not is_return_to_parent:
+                registry.add(
+                    self._ellipse_element(
+                        element_id=element_id,
+                        position=marker.position,
+                        size=marker.size,
+                        frame_id=frame_ids.get(marker.procedure_id),
+                        metadata=self._with_base_metadata(marker_meta, base_metadata),
+                        group_ids=[group_id],
+                        background_color=background_color,
+                        stroke_style=stroke_style,
+                    )
                 )
-            )
             label_id = self._stable_id(
                 "marker-text",
                 marker.procedure_id,
@@ -956,7 +970,9 @@ class MarkupToDiagramConverter(ABC):
                 idx = start_label_index.get((marker.procedure_id, marker.block_id), 1)
                 label_text = "START" if len(start_label_index) == 1 else f"START #{idx}"
             elif marker.role == "end_marker":
-                if end_type == "postpone":
+                if is_return_to_parent:
+                    label_text = "RETURN"
+                elif end_type == "postpone":
                     label_text = "POSTPONE"
                 elif end_type == END_TYPE_TURN_OUT:
                     label_text = "TURN OUT"
@@ -969,7 +985,7 @@ class MarkupToDiagramConverter(ABC):
                     element_id=label_id,
                     text=label_text,
                     center=self._center(marker.position, marker.size.width, marker.size.height),
-                    container_id=element_id,
+                    container_id=None if is_return_to_parent else element_id,
                     frame_id=frame_ids.get(marker.procedure_id),
                     group_ids=[group_id],
                     metadata=self._with_base_metadata(marker_meta, base_metadata),
@@ -1035,6 +1051,9 @@ class MarkupToDiagramConverter(ABC):
                 continue
             end_type = marker_end_type or END_TYPE_DEFAULT
             block_end_type = end_block_type_lookup.get((proc_id, block_id), end_type)
+            is_return_to_parent = (proc_id, block_id) in return_block_lookup
+            if is_return_to_parent:
+                continue
             start_center = self._block_anchor(block, side="right")
             end_center = self._marker_anchor(marker, side="left")
             arrow = self._arrow_element(
@@ -1049,7 +1068,7 @@ class MarkupToDiagramConverter(ABC):
                         "end_type": end_type,
                         "end_block_type": block_end_type,
                         "source_block_id": block_id,
-                        "return_to_parent": (proc_id, block_id) in return_block_lookup,
+                        "return_to_parent": is_return_to_parent,
                     },
                     base_metadata,
                 ),
@@ -1325,9 +1344,15 @@ class MarkupToDiagramConverter(ABC):
         for source_key, edges in edges_by_source.items():
             count = max(1, len(edges))
             edge_offsets[source_key] = [(idx - (count - 1) / 2) * 15.0 for idx in range(count)]
+        return_block_lookup = {
+            (proc.procedure_id, block_id)
+            for proc in document.procedures
+            for block_id in proc.return_block_ids
+        }
 
         for (source_proc, source_block_id), edges in edges_by_source.items():
             offsets = edge_offsets.get((source_proc, source_block_id), [0.0])
+            is_return_to_parent = (source_proc, source_block_id) in return_block_lookup
             for offset_idx, (
                 target_block_id,
                 target_proc,
@@ -1362,6 +1387,7 @@ class MarkupToDiagramConverter(ABC):
                             "is_cycle": is_cycle,
                             "source_block_id": source_block_id,
                             "target_block_id": target_block_id,
+                            "return_to_parent": is_return_to_parent,
                         },
                         base_metadata,
                     ),
