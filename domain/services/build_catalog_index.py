@@ -97,6 +97,8 @@ class BuildCatalogIndex:
             team_name = config.unknown_value
         markup_meta = self._extract_markup_meta(raw)
         procedure_blocks = self._extract_procedure_blocks(document)
+        procedure_names = self._extract_procedure_names(document)
+        procedure_block_names = self._extract_procedure_block_names(document)
         procedure_start_blocks = self._extract_procedure_start_blocks(document)
         procedure_end_blocks = self._extract_procedure_end_blocks(document)
         procedure_branch_counts = self._extract_procedure_branch_counts(document)
@@ -139,6 +141,8 @@ class BuildCatalogIndex:
             unidraw_rel_path=unidraw_rel_path,
             procedure_ids=procedure_ids,
             block_ids=block_ids,
+            procedure_names=procedure_names,
+            procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
@@ -243,6 +247,35 @@ class BuildCatalogIndex:
                 continue
             block_ids = sorted(procedure.block_ids(), key=str.lower)
             result[procedure_id] = block_ids
+        return result
+
+    def _extract_procedure_names(self, document: MarkupDocument) -> dict[str, str]:
+        result: dict[str, str] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            procedure_name = str(procedure.procedure_name or "").strip()
+            if not procedure_id or not procedure_name:
+                continue
+            result[procedure_id] = procedure_name
+        return result
+
+    def _extract_procedure_block_names(
+        self,
+        document: MarkupDocument,
+    ) -> dict[str, dict[str, str]]:
+        result: dict[str, dict[str, str]] = {}
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id:
+                continue
+            block_names: dict[str, str] = {}
+            for block_id, block_name in procedure.block_id_to_block_name.items():
+                block_id_text = str(block_id).strip()
+                block_name_text = str(block_name).strip()
+                if not block_id_text or not block_name_text:
+                    continue
+                block_names[block_id_text] = block_name_text
+            result[procedure_id] = block_names
         return result
 
     def _extract_procedure_start_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:

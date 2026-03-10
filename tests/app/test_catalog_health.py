@@ -427,9 +427,11 @@ def test_catalog_health_renders_same_start_end_validity_issue(
             "procedures": [
                 {
                     "proc_id": "team_h_proc",
+                    "proc_name": "Team H Procedure",
                     "start_block_ids": ["h1"],
                     "end_block_ids": ["h1"],
                     "branches": {"h1": ["h2"]},
+                    "block_id_to_block_name": {"h1": "Team H Start/End Block"},
                 }
             ],
             "procedure_graph": {"team_h_proc": ["team_h_done"]},
@@ -470,9 +472,11 @@ def test_catalog_health_validity_issue_blocks_render_external_links(
             "procedures": [
                 {
                     "proc_id": "team_h_proc",
+                    "proc_name": "Team H Procedure",
                     "start_block_ids": ["h1"],
                     "end_block_ids": ["h1"],
                     "branches": {"h1": ["h2"]},
+                    "block_id_to_block_name": {"h1": "Team H Start/End Block"},
                 }
             ],
             "procedure_graph": {"team_h_proc": ["team_h_done"]},
@@ -496,6 +500,10 @@ def test_catalog_health_validity_issue_blocks_render_external_links(
         detail = client.get(f"/catalog/{scene_id}")
         assert detail.status_code == 200
         assert 'href="https://external.example.com/blocks/h1?proc=team_h_proc"' in detail.text
+        assert "Team H Start/End Block" in detail.text
+        assert "Team H Procedure" in detail.text
+        assert '<span class="validity-issue-block-pill-main">h1</span>' not in detail.text
+        assert '<span class="validity-issue-block-pill-meta">team_h_proc</span>' not in detail.text
 
 
 def test_catalog_detail_shows_top_three_similarity_and_expandable_rest(

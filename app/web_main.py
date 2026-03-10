@@ -140,6 +140,8 @@ class CatalogHealthState:
 class ValidityIssueBlockRef:
     procedure_id: str
     block_id: str
+    procedure_name: str
+    block_name: str
     block_external_url: str | None
 
 
@@ -1838,6 +1840,8 @@ def collect_validity_issue_block_refs(
         GAMING_ISSUE_SAME_START_AND_END_BLOCK: [],
     }
     seen: set[tuple[str, str, str]] = set()
+    procedure_names = item.procedure_names
+    block_names = item.procedure_block_names
 
     procedure_ids = sorted(
         set(item.procedure_start_blocks)
@@ -1859,6 +1863,8 @@ def collect_validity_issue_block_refs(
                     issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
                     procedure_id=procedure_id,
                     block_id=block_id,
+                    procedure_name=procedure_names.get(procedure_id, procedure_id),
+                    block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
                     block_external_url=resolve_block_external_url(
                         context,
                         block_id,
@@ -1873,6 +1879,8 @@ def collect_validity_issue_block_refs(
                 issue_code=GAMING_ISSUE_SAME_START_AND_END_BLOCK,
                 procedure_id=procedure_id,
                 block_id=block_id,
+                procedure_name=procedure_names.get(procedure_id, procedure_id),
+                block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
                 block_external_url=resolve_block_external_url(
                     context,
                     block_id,
@@ -1896,6 +1904,8 @@ def _append_validity_issue_block_ref(
     issue_code: str,
     procedure_id: str,
     block_id: str,
+    procedure_name: str,
+    block_name: str,
     block_external_url: str | None,
 ) -> None:
     dedup_key = (issue_code, procedure_id, block_id)
@@ -1906,6 +1916,8 @@ def _append_validity_issue_block_ref(
         ValidityIssueBlockRef(
             procedure_id=procedure_id,
             block_id=block_id,
+            procedure_name=procedure_name,
+            block_name=block_name,
             block_external_url=block_external_url,
         )
     )
