@@ -154,7 +154,7 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
 
 GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
-    GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no end blocks except postpone",
+    GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no graph-completing end blocks",
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: "Same block used as start and end",
 }
 
@@ -163,8 +163,8 @@ GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
         "Detected when branch blocks = 0 and start blocks > 1.",
     ),
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
-        "Detected when branch blocks = 0 and end blocks except postpone = 0.",
-        "Postpone end blocks do not make a flow complete.",
+        "Detected when branch blocks = 0 and graph-completing end blocks = 0.",
+        "Return-to-parent and postpone end blocks do not make a flow complete.",
     ),
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: (),
 }

@@ -76,6 +76,12 @@ class MarkupToDiagramConverter(ABC):
             if proc.procedure_id in included_procs
             for block_id in proc.end_block_ids
         }
+        return_block_lookup = {
+            (proc.procedure_id, block_id)
+            for proc in document.procedures
+            if proc.procedure_id in included_procs
+            for block_id in proc.return_block_ids
+        }
         block_ids_in_plan = {(block.procedure_id, block.block_id) for block in plan.blocks}
         block_name_lookup = {
             (proc.procedure_id, block_id): name
@@ -97,6 +103,7 @@ class MarkupToDiagramConverter(ABC):
             end_block_type_lookup,
             block_name_lookup,
             document.block_graph_initials,
+            return_block_lookup,
             source_procedure_ids=source_procedure_ids,
         )
 
@@ -116,6 +123,7 @@ class MarkupToDiagramConverter(ABC):
             base_metadata,
             start_label_index,
             end_block_type_lookup,
+            return_block_lookup,
         )
 
         self._build_start_edges(document, blocks, markers, registry, base_metadata)
@@ -126,6 +134,7 @@ class MarkupToDiagramConverter(ABC):
             registry,
             base_metadata,
             end_block_type_lookup,
+            return_block_lookup,
         )
         self._build_branch_edges(document, blocks, registry, base_metadata)
         self._build_procedure_flow_edges(
@@ -784,6 +793,7 @@ class MarkupToDiagramConverter(ABC):
         end_block_type_lookup: dict[tuple[str, str], str],
         block_name_lookup: dict[tuple[str, str], str],
         block_graph_initials: set[str],
+        return_block_lookup: set[tuple[str, str]],
         source_procedure_ids: dict[str, str] | None = None,
     ) -> dict[tuple[str, str], BlockPlacement]:
         placement_index: dict[tuple[str, str], BlockPlacement] = {}
@@ -807,6 +817,8 @@ class MarkupToDiagramConverter(ABC):
                 block_meta["block_graph_initial"] = True
             if end_block_type:
                 block_meta["end_block_type"] = end_block_type
+            if (block.procedure_id, block.block_id) in return_block_lookup:
+                block_meta["return_to_parent"] = True
             label_text = block_name_lookup.get((block.procedure_id, block.block_id), block.block_id)
             registry.add(
                 self._rectangle_element(
@@ -837,6 +849,8 @@ class MarkupToDiagramConverter(ABC):
                 label_meta["source_procedure_id"] = source_procedure_id
             if is_initial:
                 label_meta["block_graph_initial"] = True
+            if (block.procedure_id, block.block_id) in return_block_lookup:
+                label_meta["return_to_parent"] = True
             if label_text != block.block_id:
                 label_meta["block_name"] = label_text
             registry.add(
@@ -880,6 +894,7 @@ class MarkupToDiagramConverter(ABC):
         base_metadata: Metadata,
         start_label_index: dict[tuple[str, str], int],
         end_block_type_lookup: dict[tuple[str, str], str],
+        return_block_lookup: set[tuple[str, str]],
     ) -> dict[tuple[str, str, str, str | None], MarkerPlacement]:
         marker_index: dict[tuple[str, str, str, str | None], MarkerPlacement] = {}
         for marker in markers:
@@ -896,7 +911,7 @@ class MarkupToDiagramConverter(ABC):
             element_id = self._marker_element_id(
                 marker.procedure_id, marker.role, marker.block_id, marker.end_type
             )
-            marker_meta = {
+            marker_meta: Metadata = {
                 "procedure_id": marker.procedure_id,
                 "block_id": marker.block_id,
                 "role": marker.role,
@@ -912,6 +927,8 @@ class MarkupToDiagramConverter(ABC):
                     block_end_type = end_type
                 marker_meta["end_block_type"] = block_end_type
                 marker_meta["end_type"] = end_type
+                if (marker.procedure_id, marker.block_id) in return_block_lookup:
+                    marker_meta["return_to_parent"] = True
                 background_color = END_TYPE_COLORS.get(end_type, END_TYPE_COLORS[END_TYPE_DEFAULT])
                 if end_type == "intermediate":
                     stroke_style = "dashed"
@@ -1008,6 +1025,7 @@ class MarkupToDiagramConverter(ABC):
         registry: ElementRegistry,
         base_metadata: Metadata,
         end_block_type_lookup: dict[tuple[str, str], str],
+        return_block_lookup: set[tuple[str, str]],
     ) -> None:
         for (proc_id, block_id, role, marker_end_type), marker in markers.items():
             if role != "end_marker":
@@ -1031,6 +1049,7 @@ class MarkupToDiagramConverter(ABC):
                         "end_type": end_type,
                         "end_block_type": block_end_type,
                         "source_block_id": block_id,
+                        "return_to_parent": (proc_id, block_id) in return_block_lookup,
                     },
                     base_metadata,
                 ),

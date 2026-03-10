@@ -152,8 +152,8 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
         == "Срабатывает, когда blocks с ветвлением = 0 и стартовых блоков > 1."
     )
     assert (
-        translate_ui_text("No branches and no end blocks except postpone", "ru")
-        == "Нет ветвлений и нет end-блоков, кроме postpone"
+        translate_ui_text("No branches and no graph-completing end blocks", "ru")
+        == "Нет ветвлений и нет end-блоков, завершающих граф"
     )
     assert (
         translate_ui_text("Same block used as start and end", "ru")
@@ -161,13 +161,15 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     )
     assert (
         translate_ui_text(
-            "Detected when branch blocks = 0 and end blocks except postpone = 0.", "ru"
+            "Detected when branch blocks = 0 and graph-completing end blocks = 0.", "ru"
         )
-        == "Срабатывает, когда blocks с ветвлением = 0 и end-блоков кроме postpone = 0."
+        == "Срабатывает, когда blocks с ветвлением = 0 и end-блоков, завершающих граф, = 0."
     )
     assert (
-        translate_ui_text("Postpone end blocks do not make a flow complete.", "ru")
-        == "Postpone end-блоки не считаются завершением сценария."
+        translate_ui_text(
+            "Return-to-parent and postpone end blocks do not make a flow complete.", "ru"
+        )
+        == "End-блоки с возвратом в родителя и postpone не считаются завершением сценария."
     )
     assert translate_ui_text("End blocks", "ru") == "End-блоки"
     assert translate_ui_text("Postpone blocks", "ru") == "Postpone-блоки"

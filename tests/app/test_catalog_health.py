@@ -506,6 +506,46 @@ def test_catalog_health_validity_issue_blocks_render_external_links(
         assert '<span class="validity-issue-block-pill-meta">team_h_proc</span>' not in detail.text
 
 
+def test_catalog_health_treats_branch_end_as_return_not_completion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/team_r_return_only.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Team R Return Only",
+                "team_id": "team-r",
+                "team_name": "Team R",
+            },
+            "procedures": [
+                {
+                    "proc_id": "team_r_proc",
+                    "start_block_ids": ["r1"],
+                    "end_block_ids": [],
+                    "branches": {"r1": ["r2"], "r2": ["end"]},
+                }
+            ],
+            "procedure_graph": {"team_r_proc": []},
+        }
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+    ) as client:
+        filtered = client.get("/catalog", params={"health_marker": "validity"})
+        assert filtered.status_code == 200
+        assert "Team R Return Only" in filtered.text
+        assert "No branches and no graph-completing end blocks" in filtered.text
+        assert "Return-to-parent and postpone end blocks do not make a flow complete." in (
+            filtered.text
+        )
+
+
 def test_catalog_detail_shows_top_three_similarity_and_expandable_rest(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

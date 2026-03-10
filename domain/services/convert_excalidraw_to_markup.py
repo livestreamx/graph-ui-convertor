@@ -41,6 +41,7 @@ class MarkerCandidate:
     role: str
     element_id: str | None
     end_type: str | None
+    return_to_parent: bool = False
 
 
 class ExcalidrawToMarkupConverter:
@@ -55,6 +56,7 @@ class ExcalidrawToMarkupConverter:
         globals_meta = self._infer_globals(elements)
         start_map: dict[str, set[str]] = defaultdict(set)
         end_map: dict[str, dict[str, str]] = defaultdict(dict)
+        return_map: dict[str, set[str]] = defaultdict(set)
         branch_map: dict[str, dict[str, set[str]]] = defaultdict(lambda: defaultdict(set))
         turn_out_sources: dict[str, set[str]] = defaultdict(set)
 
@@ -66,6 +68,8 @@ class ExcalidrawToMarkupConverter:
         for marker in markers.values():
             if marker.role != "end_marker":
                 continue
+            if marker.return_to_parent:
+                return_map[marker.procedure_id].add(marker.block_id)
             if marker.end_type != END_TYPE_TURN_OUT:
                 continue
             turn_out_sources[marker.procedure_id].add(marker.block_id)
@@ -105,6 +109,8 @@ class ExcalidrawToMarkupConverter:
                     )
                     if end_type == END_TYPE_TURN_OUT:
                         continue
+                    if self._is_return_to_parent_arrow(arrow, meta, markers):
+                        return_map[procedure_id].add(source_block)
                     end_map[procedure_id][source_block] = merge_end_types(
                         end_map[procedure_id].get(source_block), end_type
                     )
@@ -135,7 +141,7 @@ class ExcalidrawToMarkupConverter:
                     if targets:
                         branch_map[proc_id][source].update(targets)
         procedures = self._build_procedures(
-            blocks, start_map, end_map, branch_map, frames, block_names, proc_names
+            blocks, start_map, end_map, return_map, branch_map, frames, block_names, proc_names
         )
         procedure_graph = self._collect_procedure_graph(elements, procedures)
         if block_graph and not any(procedure_graph.values()):
@@ -255,6 +261,7 @@ class ExcalidrawToMarkupConverter:
                 role=role,
                 element_id=element_id,
                 end_type=end_type,
+                return_to_parent=meta.get("return_to_parent") is True,
             )
         return markers
 
@@ -292,12 +299,18 @@ class ExcalidrawToMarkupConverter:
         blocks: dict[str, BlockCandidate],
         start_map: dict[str, set[str]],
         end_map: dict[str, dict[str, str]],
+        return_map: dict[str, set[str]],
         branch_map: dict[str, dict[str, set[str]]],
         frames: dict[str, str],
         block_names: dict[str, dict[str, str]],
         proc_names: dict[str, str],
     ) -> list[Procedure]:
-        procedure_ids = set(start_map.keys()) | set(end_map.keys()) | set(branch_map.keys())
+        procedure_ids = (
+            set(start_map.keys())
+            | set(end_map.keys())
+            | set(return_map.keys())
+            | set(branch_map.keys())
+        )
         procedure_ids.update(frame_proc for frame_proc in frames.values())
         for block in blocks.values():
             procedure_ids.add(block.procedure_id)
@@ -319,6 +332,7 @@ class ExcalidrawToMarkupConverter:
                     start_block_ids=start_blocks,
                     end_block_ids=end_blocks,
                     end_block_types=end_types,
+                    return_block_ids=sorted(return_map.get(procedure_id, set())),
                     branches=branches,
                     block_id_to_block_name=block_names.get(procedure_id, {}),
                 )
@@ -652,6 +666,20 @@ class ExcalidrawToMarkupConverter:
         if marker and marker.end_type:
             return marker.end_type
         return END_TYPE_DEFAULT
+
+    def _is_return_to_parent_arrow(
+        self,
+        arrow: Element,
+        meta: Mapping[str, Any],
+        markers: dict[str, MarkerCandidate],
+    ) -> bool:
+        if meta.get("return_to_parent") is True:
+            return True
+        raw_binding = arrow.get("endBinding")
+        end_binding = raw_binding if isinstance(raw_binding, dict) else {}
+        element_id = end_binding.get("elementId")
+        marker = markers.get(element_id) if isinstance(element_id, str) else None
+        return bool(marker and marker.return_to_parent)
 
     def _infer_end_type_from_element(self, element: Element, meta: Mapping[str, Any]) -> str | None:
         tagged = self._end_type_from_tags(element, meta)

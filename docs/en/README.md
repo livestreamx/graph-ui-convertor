@@ -33,6 +33,9 @@ EXCALIDRAW_PORT=5010 make demo
 # Catalog: http://localhost:8080/catalog
 ```
 
+`make demo` refreshes `data/markup`, `data/excalidraw_in`, and `data/unidraw_in`
+from `examples/markup` before the demo services start.
+
 ### 4. Convert exported Excalidraw back to markup
 
 ```bash

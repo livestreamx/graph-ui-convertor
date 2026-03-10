@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from domain.catalog import CatalogIndex, CatalogIndexConfig, CatalogItem, MarkupSourceItem
-from domain.models import END_TYPE_DEFAULT, MarkupDocument
+from domain.models import MarkupDocument, is_completion_end_block
 from domain.ports.catalog import CatalogIndexRepository, MarkupCatalogSource
 
 _SLUG_RE = re.compile(r"[^a-zA-Z0-9]+")
@@ -411,10 +411,10 @@ class BuildCatalogIndex:
         postpone_count = 0
         for procedure in document.procedures:
             for block_id in procedure.end_block_ids:
-                end_type = procedure.end_block_types.get(block_id, END_TYPE_DEFAULT)
+                end_type = procedure.end_block_types.get(block_id)
                 if str(end_type).strip().lower() == "postpone":
                     postpone_count += 1
-                else:
+                elif is_completion_end_block(procedure, block_id):
                     non_postpone_count += 1
         return non_postpone_count, postpone_count
 

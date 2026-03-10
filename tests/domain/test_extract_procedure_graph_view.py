@@ -142,3 +142,26 @@ def test_extract_procedure_graph_view_uses_service_graph_stats_from_meta() -> No
     assert node["branch_count"] == 5
     assert node["end_count"] == 2
     assert node["postpone_count"] == 1
+
+
+def test_extract_procedure_graph_view_tracks_return_to_parent_end_blocks() -> None:
+    payload = {
+        "markup_type": "procedure_graph",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["end"]},
+            }
+        ],
+        "procedure_graph": {"p1": []},
+    }
+    document = MarkupDocument.model_validate(payload)
+
+    graph_payload = extract_procedure_graph_view(document)
+    node = graph_payload["nodes"][0]
+
+    assert node["end_count"] == 0
+    assert node["postpone_count"] == 0
+    assert node["end_type_counts"] == {"return": 1}

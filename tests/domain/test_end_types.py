@@ -231,3 +231,48 @@ def test_default_end_marker_color_is_applied() -> None:
     ]
     assert end_markers
     assert all(element.get("backgroundColor") == END_TYPE_COLORS["exit"] for element in end_markers)
+
+
+def test_branch_end_roundtrip_preserves_return_to_parent_semantics() -> None:
+    payload = {
+        "markup_type": "service",
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": [],
+                "branches": {"a": ["b"], "b": ["end"]},
+            }
+        ],
+    }
+
+    markup = MarkupDocument.model_validate(payload)
+    procedure = markup.procedures[0]
+    assert procedure.end_block_ids == ["b"]
+    assert procedure.return_block_ids == ["b"]
+
+    serialized = markup.to_markup_dict()
+    procedures = cast(list[dict[str, Any]], serialized["procedures"])
+    assert procedures[0]["end_block_ids"] == []
+    assert procedures[0]["branches"] == {"a": ["b"], "b": ["end"]}
+
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    return_markers = [
+        element
+        for element in excal.elements
+        if element.get("type") == "ellipse"
+        and element.get("customData", {}).get("cjm", {}).get("role") == "end_marker"
+        and element.get("customData", {}).get("cjm", {}).get("return_to_parent") is True
+    ]
+    assert len(return_markers) == 1
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    reconstructed_proc = reconstructed.procedures[0]
+    assert reconstructed_proc.return_block_ids == ["b"]
+    reconstructed_procedures = cast(
+        list[dict[str, Any]], reconstructed.to_markup_dict()["procedures"]
+    )
+    assert reconstructed_procedures[0]["branches"] == {
+        "a": ["b"],
+        "b": ["end"],
+    }

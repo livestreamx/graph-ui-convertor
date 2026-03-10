@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -184,6 +184,42 @@ def test_roundtrip_fixture(fixture_name: str) -> None:
     reconstructed = backward.convert(excal.to_dict())
 
     assert normalize(reconstructed) == normalize(markup)
+
+
+def test_corner_cases_fixture_preserves_return_and_same_start_end_roles() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+
+    procedures = {proc.procedure_id: proc for proc in markup.procedures}
+    child = procedures["task_processor_child"]
+    overlap = procedures["task_processor_same_start_end"]
+    serialized = markup.to_markup_dict()
+    serialized_procedures = cast(list[dict[str, Any]], serialized["procedures"])
+    serialized_procs = {proc["proc_id"]: proc for proc in serialized_procedures}
+
+    assert child.return_block_ids == ["child_finish"]
+    assert "child_finish" not in child.branches
+    assert serialized_procs["task_processor_child"]["branches"]["child_finish"] == ["end"]
+    assert overlap.return_block_ids == []
+    assert overlap.start_block_ids == ["ol_entry"]
+    assert overlap.end_block_ids == ["ol_entry"]
+
+
+def test_corner_cases_roundtrip_preserves_return_and_same_start_end_markers() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+
+    procedures = {proc.procedure_id: proc for proc in reconstructed.procedures}
+    serialized = reconstructed.to_markup_dict()
+    serialized_procedures = cast(list[dict[str, Any]], serialized["procedures"])
+    serialized_procs = {proc["proc_id"]: proc for proc in serialized_procedures}
+    child = procedures["task_processor_child"]
+    overlap = procedures["task_processor_same_start_end"]
+
+    assert child.return_block_ids == ["child_finish"]
+    assert serialized_procs["task_processor_child"]["branches"]["child_finish"] == ["end"]
+    assert overlap.start_block_ids == ["ol_entry"]
+    assert overlap.end_block_ids == ["ol_entry"]
 
 
 def test_complex_graph_has_epsilon_variant_to_proc_c() -> None:

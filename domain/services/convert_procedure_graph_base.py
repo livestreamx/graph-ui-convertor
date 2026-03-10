@@ -15,6 +15,7 @@ from domain.models import (
     ScenarioPlacement,
     ServiceZonePlacement,
     Size,
+    is_completion_end_block,
 )
 from domain.services.convert_markup_base import (
     MERGE_ALERT_COLOR,
@@ -574,9 +575,7 @@ class ProcedureGraphConverterMixin(MarkupToDiagramConverter):
                 if proc.end_block_types.get(block_id) == "postpone"
             )
             end_count = sum(
-                1
-                for block_id in proc.end_block_ids
-                if proc.end_block_types.get(block_id) != "postpone"
+                1 for block_id in proc.end_block_ids if is_completion_end_block(proc, block_id)
             )
             branch_count = sum(len(targets) for targets in proc.branches.values())
             stats = [

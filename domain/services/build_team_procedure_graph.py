@@ -5,7 +5,7 @@ from hashlib import sha1
 from typing import Any, Literal
 
 from domain.markup_type_labels import humanize_markup_type_for_brackets
-from domain.models import MarkupDocument, Procedure, merge_end_types
+from domain.models import MarkupDocument, Procedure, is_completion_end_block, merge_end_types
 from domain.services.shared_node_merge_rules import (
     ServiceNodeState,
     build_service_node_state,
@@ -932,7 +932,7 @@ class BuildTeamProcedureGraph:
                     stats["end"] += sum(
                         1
                         for block_id in proc.end_block_ids
-                        if proc.end_block_types.get(block_id) != "postpone"
+                        if is_completion_end_block(proc, block_id)
                     )
                 component_stats[node_id] = stats
                 for proc_id in component_ids:
@@ -1145,6 +1145,7 @@ class BuildTeamProcedureGraph:
             "start_block_ids": list(proc.start_block_ids),
             "end_block_ids": list(proc.end_block_ids),
             "end_block_types": dict(proc.end_block_types),
+            "return_block_ids": list(proc.return_block_ids),
             "branches": {key: list(values) for key, values in proc.branches.items()},
             "block_id_to_block_name": dict(proc.block_id_to_block_name),
         }
@@ -1166,6 +1167,10 @@ class BuildTeamProcedureGraph:
         for block_id, end_type in proc.end_block_types.items():
             end_block_types[block_id] = merge_end_types(end_block_types.get(block_id), end_type)
         merged["end_block_types"] = end_block_types
+
+        return_ids = set(merged.get("return_block_ids", []) or [])
+        return_ids.update(proc.return_block_ids)
+        merged["return_block_ids"] = sorted(return_ids)
 
         branches = {key: set(values) for key, values in (merged.get("branches", {}) or {}).items()}
         for source, targets in proc.branches.items():
