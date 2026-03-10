@@ -361,7 +361,6 @@ class GridLayoutEngine(LayoutEngine):
             frames = self._fit_frames_to_contents(frames, blocks, markers, return_block_lookup)
 
         separators: list[SeparatorPlacement] = []
-        scenarios: list[ScenarioPlacement] = []
         if frames:
             scenarios = self._build_scenarios(
                 components,
@@ -1954,8 +1953,8 @@ class GridLayoutEngine(LayoutEngine):
 
         if min_block_levels:
             for block_id, min_level in min_block_levels.items():
-                info = node_info.get(block_id)
-                if info is None or info.kind != "block":
+                block_info = node_info.get(block_id)
+                if block_info is None or block_info.kind != "block":
                     continue
                 levels[block_id] = max(levels.get(block_id, 0), int(min_level))
             propagate_forward_levels()
