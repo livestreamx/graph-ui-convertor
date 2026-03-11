@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 
-def test_prepare_demo_data_syncs_markup_and_clears_generated_files(
+def test_prepare_demo_data_preserves_existing_markup_and_clears_generated_files(
     tmp_path: Path,
 ) -> None:
     source_dir = tmp_path / "source"
@@ -49,7 +49,9 @@ def test_prepare_demo_data_syncs_markup_and_clears_generated_files(
     assert sorted(path.name for path in markup_dir.glob("*.json")) == [
         "basic.json",
         "corner_cases.json",
+        "stale.json",
     ]
     assert (markup_dir / "corner_cases.json").read_text(encoding="utf-8") == '{"id":"corner"}'
+    assert (markup_dir / "stale.json").read_text(encoding="utf-8") == '{"id":"stale"}'
     assert not list(excalidraw_dir.iterdir())
     assert not list(unidraw_dir.iterdir())
