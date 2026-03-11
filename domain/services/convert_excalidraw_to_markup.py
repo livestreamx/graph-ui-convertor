@@ -111,9 +111,10 @@ class ExcalidrawToMarkupConverter:
                         continue
                     if self._is_return_to_parent_arrow(arrow, meta, markers):
                         return_map[procedure_id].add(source_block)
-                    end_map[procedure_id][source_block] = merge_end_types(
-                        end_map[procedure_id].get(source_block), end_type
-                    )
+                    else:
+                        end_map[procedure_id][source_block] = merge_end_types(
+                            end_map[procedure_id].get(source_block), end_type
+                        )
                 continue
 
             if edge_type in {"branch", "branch_cycle"}:
@@ -630,6 +631,8 @@ class ExcalidrawToMarkupConverter:
         end_types: dict[tuple[str, str], str] = {}
         for marker in markers.values():
             if marker.role != "end_marker":
+                continue
+            if marker.return_to_parent:
                 continue
             end_type = marker.end_type or END_TYPE_DEFAULT
             if end_type == END_TYPE_TURN_OUT:

@@ -141,7 +141,6 @@ class Procedure(BaseModel):
             seen_end_ids.add(block_id)
 
         def add_return_block(block_id: str) -> None:
-            add_end_block(block_id)
             if block_id in seen_return_block_ids:
                 return
             return_block_ids.append(block_id)
@@ -199,7 +198,10 @@ class Procedure(BaseModel):
 
     def block_ids(self) -> set[str]:
         referenced: set[str] = (
-            set(self.start_block_ids) | set(self.end_block_ids) | set(self.branches.keys())
+            set(self.start_block_ids)
+            | set(self.end_block_ids)
+            | set(self.return_block_ids)
+            | set(self.branches.keys())
         )
         for targets in self.branches.values():
             referenced.update(targets)

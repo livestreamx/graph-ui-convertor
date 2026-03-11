@@ -25,13 +25,15 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 - `proc_id` – swimlane.
 - `start_block_ids` – blocks with incoming START marker.
 - `end_block_ids` – blocks with outgoing arrow to END marker. Suffixes:
+  - no suffix: regular END inside the current procedure.
   - `::exit`: terminate the whole process.
   - `::all`: end + exit.
   - `::intermediate`: same as `all`, but the block can still branch further.
   - `::postpone`: issue is postponed (handoff between bot/agents/support lines).
   - `::turn_out`: unplanned exit (normally implicit from `branches` sources).
-  - no suffix: return to parent procedure.
 - `branches` – adjacency: key = source block, values = target blocks.
+  - special target `end` means "finish the current procedure and return to the parent procedure".
+    It is not treated as a real END block and must not be duplicated in `end_block_ids`.
 - `finedog_unit_meta.service_name` – markup display name.
 - `finedog_unit_id` – external unit identifier for service links (string or integer; integers are coerced to strings).
 - `procedure_graph` – adjacency between procedures.

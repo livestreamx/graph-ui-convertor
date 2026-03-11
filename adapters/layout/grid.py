@@ -1784,7 +1784,12 @@ class GridLayoutEngine(LayoutEngine):
         edges_for_layout = layout_edges if layout_edges is not None else procedure.branches
         bottom_bias_block_ids = set(bottom_bias_blocks or set())
         start_blocks = list(procedure.start_block_ids)
-        end_blocks = list(procedure.end_block_ids)
+        completion_end_blocks = set(procedure.end_block_ids)
+        end_blocks = list(procedure.end_block_ids) + [
+            block_id
+            for block_id in procedure.return_block_ids
+            if block_id not in completion_end_blocks
+        ]
         end_block_types = procedure.end_block_types
         allowed_blocks: set[str] | None = set(owned_blocks) if owned_blocks is not None else None
         if allowed_blocks is not None:

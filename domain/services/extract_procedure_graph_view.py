@@ -92,6 +92,8 @@ def _build_procedure_stats(document: MarkupDocument) -> dict[str, dict[str, obje
                 postpone_count += 1
             elif is_completion_end_block(procedure, block_id):
                 end_count += 1
+        for _block_id in procedure.return_block_ids:
+            end_type_counts["return"] = end_type_counts.get("return", 0) + 1
         stats[procedure.procedure_id] = {
             "procedure_count": 1,
             "start_count": start_count,

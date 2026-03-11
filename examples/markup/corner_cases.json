@@ -31,17 +31,19 @@
     {
       "proc_id": "task_processor_child",
       "proc_name": "Child flow with return to parent",
-      "start_block_ids": ["child_entry"],
+      "start_block_ids": ["child_entry", "child_quick_return"],
       "end_block_ids": [],
       "branches": {
         "child_entry": ["child_validate"],
         "child_validate": ["child_finish"],
-        "child_finish": ["end"]
+        "child_finish": ["end"],
+        "child_quick_return": ["end"]
       },
       "block_id_to_block_name": {
         "child_entry": "Child start",
         "child_validate": "Validate in child flow",
-        "child_finish": "Return to parent"
+        "child_finish": "Return to parent",
+        "child_quick_return": "Return immediately"
       }
     },
     {
@@ -68,10 +70,11 @@
   "block_graph": {
     "tp_entry": ["tp_dispatch"],
     "tp_dispatch": ["tp_child_call", "tp_retry"],
-    "tp_child_call": ["child_entry"],
+    "tp_child_call": ["child_entry", "child_quick_return"],
     "child_entry": ["child_validate"],
     "child_validate": ["child_finish"],
     "child_finish": ["tp_resume"],
+    "child_quick_return": ["tp_resume"],
     "tp_resume": ["tp_done"],
     "tp_retry": ["tp_done"],
     "ol_entry": ["ol_dispatch"],

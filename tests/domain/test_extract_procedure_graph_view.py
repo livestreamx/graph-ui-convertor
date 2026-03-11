@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from domain.models import MarkupDocument
 from domain.services.extract_procedure_graph_view import extract_procedure_graph_view
+from tests.helpers.markup_fixtures import load_markup_fixture
 
 
 def test_extract_procedure_graph_view_marks_merge_nodes_and_cycles() -> None:
@@ -165,3 +166,16 @@ def test_extract_procedure_graph_view_tracks_return_to_parent_end_blocks() -> No
     assert node["end_count"] == 0
     assert node["postpone_count"] == 0
     assert node["end_type_counts"] == {"return": 1}
+
+
+def test_extract_procedure_graph_view_excludes_return_blocks_from_real_end_counts() -> None:
+    document = load_markup_fixture("corner_cases.json")
+
+    graph_payload = extract_procedure_graph_view(document)
+    nodes = {node["id"]: node for node in graph_payload["nodes"]}
+    child = nodes["task_processor_child"]
+
+    assert child["start_count"] == 2
+    assert child["end_count"] == 0
+    assert child["postpone_count"] == 0
+    assert child["end_type_counts"] == {"return": 2}
