@@ -249,8 +249,9 @@ def test_branch_end_roundtrip_preserves_return_to_parent_semantics() -> None:
 
     markup = MarkupDocument.model_validate(payload)
     procedure = markup.procedures[0]
-    assert procedure.end_block_ids == ["b"]
+    assert procedure.end_block_ids == []
     assert procedure.return_block_ids == ["b"]
+    assert procedure.block_ids() == {"a", "b"}
 
     serialized = markup.to_markup_dict()
     procedures = cast(list[dict[str, Any]], serialized["procedures"])

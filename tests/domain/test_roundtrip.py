@@ -196,9 +196,12 @@ def test_corner_cases_fixture_preserves_return_and_same_start_end_roles() -> Non
     serialized_procedures = cast(list[dict[str, Any]], serialized["procedures"])
     serialized_procs = {proc["proc_id"]: proc for proc in serialized_procedures}
 
-    assert child.return_block_ids == ["child_finish"]
+    assert child.return_block_ids == ["child_finish", "child_quick_return"]
+    assert child.end_block_ids == []
     assert "child_finish" not in child.branches
+    assert "child_quick_return" not in child.branches
     assert serialized_procs["task_processor_child"]["branches"]["child_finish"] == ["end"]
+    assert serialized_procs["task_processor_child"]["branches"]["child_quick_return"] == ["end"]
     assert overlap.return_block_ids == []
     assert overlap.start_block_ids == ["ol_entry"]
     assert overlap.end_block_ids == ["ol_entry"]
@@ -216,8 +219,10 @@ def test_corner_cases_roundtrip_preserves_return_and_same_start_end_markers() ->
     child = procedures["task_processor_child"]
     overlap = procedures["task_processor_same_start_end"]
 
-    assert child.return_block_ids == ["child_finish"]
+    assert child.return_block_ids == ["child_finish", "child_quick_return"]
+    assert child.end_block_ids == []
     assert serialized_procs["task_processor_child"]["branches"]["child_finish"] == ["end"]
+    assert serialized_procs["task_processor_child"]["branches"]["child_quick_return"] == ["end"]
     assert overlap.start_block_ids == ["ol_entry"]
     assert overlap.end_block_ids == ["ol_entry"]
 

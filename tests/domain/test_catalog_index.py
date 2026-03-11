@@ -199,9 +199,63 @@ def test_build_catalog_index_excludes_return_to_parent_end_from_completion_count
     try:
         index = builder.build(config)
         item = index.items[0]
-        assert item.procedure_end_blocks == {"p1": ["b"]}
+        assert item.procedure_end_blocks == {"p1": []}
         assert item.non_postpone_end_block_count == 0
         assert item.postpone_end_block_count == 0
+        assert item.has_start_end_overlap is False
+    finally:
+        stubber.deactivate()
+
+
+def test_build_catalog_index_does_not_treat_returning_start_as_end_overlap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Fast Return"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["entry"],
+                "end_block_ids": [],
+                "branches": {"entry": ["end"]},
+            }
+        ],
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/fast-return.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        item = index.items[0]
+        assert item.procedure_start_blocks == {"p1": ["entry"]}
+        assert item.procedure_end_blocks == {"p1": []}
+        assert item.has_start_end_overlap is False
     finally:
         stubber.deactivate()
 
