@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -135,11 +136,25 @@ def test_catalog_hides_excalidraw_open_when_disabled(
 
         index_response = context.client.get("/api/index")
         team_id = index_response.json()["items"][0]["team_id"]
-        graph_response = context.client.get("/catalog/teams/graph", params={"team_ids": team_id})
-        assert graph_response.status_code == 200
-        assert "Open Excalidraw" not in graph_response.text
-        assert "Download .excalidraw" not in graph_response.text
-        assert "Download .unidraw" in graph_response.text
+        merge_response = context.client.post(
+            "/catalog/teams/graph/merge",
+            data={"team_ids": team_id},
+            headers={"HX-Request": "true"},
+        )
+        assert merge_response.status_code == 200
+        push_url = merge_response.headers.get("HX-Push-Url", "")
+        assert push_url
+        graph_html = ""
+        for _ in range(40):
+            graph_response = context.client.get(push_url)
+            assert graph_response.status_code == 200
+            graph_html = graph_response.text
+            if 'data-merge-job-status="succeeded"' in graph_html:
+                break
+            time.sleep(0.02)
+        assert "Open Excalidraw" not in graph_html
+        assert "Download .excalidraw" not in graph_html
+        assert "Download .unidraw" in graph_html
 
 
 def test_catalog_detail_renders_service_and_team_metadata_links_when_templates_configured(

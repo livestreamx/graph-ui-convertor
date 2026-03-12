@@ -23,13 +23,7 @@ def sync_markup_files(source_dir: Path, target_dir: Path) -> None:
         raise SystemExit(f"No markup files found under {source_dir}")
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    source_rel_paths = {path.relative_to(source_dir) for path in source_files}
-
-    for path in iter_files(target_dir, MARKUP_SUFFIXES):
-        if path.relative_to(target_dir) not in source_rel_paths:
-            path.unlink()
-
-    for relative in source_rel_paths:
+    for relative in {path.relative_to(source_dir) for path in source_files}:
         source_path = source_dir / relative
         target_path = target_dir / relative
         target_path.parent.mkdir(parents=True, exist_ok=True)

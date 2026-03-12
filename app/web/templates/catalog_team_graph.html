@@ -134,13 +134,12 @@
       <form
         class="team-graph-form"
         id="team-graph-form"
-        action="/catalog/teams/graph"
-        method="get"
-        hx-get="/catalog/teams/graph"
+        action="/catalog/teams/graph/merge"
+        method="post"
+        hx-post="/catalog/teams/graph/merge"
         hx-target="#team-graph-page"
         hx-select="#team-graph-page"
         hx-swap="outerHTML"
-        hx-push-url="true"
         hx-indicator="#team-graph-merge-loader"
       >
         <div class="team-graph-select-toolbar">
@@ -434,13 +433,36 @@
       >
         {{ t("Select at least one team to enable Merge.") }}
       </div>
-      <div class="team-graph-merge-loader" id="team-graph-merge-loader" aria-live="polite">
+      <div
+        class="team-graph-merge-loader{% if merge_job_status in ["pending", "running", "failed"] %} is-persistent{% endif %}{% if merge_job_status in ["pending", "running"] %} is-running{% elif merge_job_status == "failed" %} is-error{% endif %}"
+        id="team-graph-merge-loader"
+        aria-live="polite"
+        data-merge-job-state
+        data-merge-job-status="{{ merge_job_status }}"
+        {% if merge_job_status_api_url %}data-merge-job-status-api-url="{{ merge_job_status_api_url }}"{% endif %}
+        {% if merge_job_refresh_url %}data-merge-job-refresh-url="{{ merge_job_refresh_url }}"{% endif %}
+      >
         <div class="team-graph-merge-loader-spinner" aria-hidden="true"></div>
         <div class="team-graph-merge-loader-copy">
-          <div class="team-graph-merge-loader-title">{{ t("Merging selected graphs") }}</div>
-          <div class="team-graph-merge-loader-text">
-            Mapping shared nodes and building a cross-team dashboard...
+          <div class="team-graph-merge-loader-title">
+            {% if merge_job_status in ["pending", "running"] %}
+              {{ t("Merging selected graphs") }}
+            {% elif merge_job_status == "failed" %}
+              {{ t("Merge blocked") }}
+            {% else %}
+              {{ t("Merging selected graphs") }}
+            {% endif %}
           </div>
+          <div class="team-graph-merge-loader-text">
+            {% if merge_job_status in ["pending", "running"] %}
+              {{ t("Running in background. This page updates automatically when analytics and diagrams are ready.") }}
+            {% elif merge_job_status == "failed" %}
+              {{ t("Reason") }}: {{ error_message or merge_job_error or t("Unable to build team graph. Try Merge again.") }}
+            {% else %}
+              {{ t("Mapping shared nodes and building a cross-team dashboard...") }}
+            {% endif %}
+          </div>
+          <div class="team-graph-merge-loader-note" data-merge-job-poll-note></div>
         </div>
       </div>
       <div class="team-graph-result">
@@ -1342,7 +1364,11 @@
             <span class="team-graph-result-status team-graph-result-idle">{{ t("Waiting for input") }}</span>
           </div>
           <div class="team-graph-result-body">
-            {{ t("Select teams and click Merge. Status, analytics, and diagram actions appear in Steps 3-5.") }}
+            {% if team_ids %}
+              {{ t("Selection is ready. Click Merge to start a background build.") }}
+            {% else %}
+              {{ t("Select teams and click Merge. Status, analytics, and diagram actions appear in Steps 3-5.") }}
+            {% endif %}
           </div>
         {% endif %}
       </div>
@@ -1354,6 +1380,8 @@
         <div class="team-graph-analysis-host" data-team-graph-analysis-host>
           {{ team_dashboard_section | safe }}
         </div>
+      {% elif merge_job_status in ["pending", "running"] %}
+        <p class="team-graph-subtitle">{{ t("Merge is still running. Analytics will appear here automatically.") }}</p>
       {% elif diagram_ready %}
         <p class="team-graph-subtitle">{{ t("Analytics is unavailable for the selected graph set.") }}</p>
       {% elif error_message %}
@@ -1414,6 +1442,8 @@
             </div>
           </article>
         </div>
+      {% elif merge_job_status in ["pending", "running"] %}
+        <p class="team-graph-subtitle">{{ t("Merge is still running. Diagram actions unlock after completion.") }}</p>
       {% else %}
         <p class="team-graph-subtitle">{{ t("Merge graphs in Step 3 to enable diagram actions.") }}</p>
       {% endif %}
@@ -1485,6 +1515,7 @@
         nestingLevel: {{ t("Nesting level") | tojson }},
         unreachableFromStart: {{ t("not reachable from start") | tojson }},
         mergeNode: {{ t("Merge node") | tojson }},
+        mergeStatusRefreshFailed: {{ t("Failed to refresh merge status. Retrying...") | tojson }},
       };
 
       const updateToggle = (button, input) => {
@@ -1504,6 +1535,7 @@
       };
 
       let visNetworkLoadPromise = null;
+      let mergeJobPollTimer = null;
       const ensureVisNetworkLoaded = async () => {
         const visLib = window.vis;
         if (
@@ -1533,7 +1565,27 @@
         return visNetworkLoadPromise;
       };
 
+      const stopMergeJobPolling = () => {
+        if (mergeJobPollTimer !== null) {
+          window.clearTimeout(mergeJobPollTimer);
+          mergeJobPollTimer = null;
+        }
+      };
+
+      const replaceTeamGraphPageFromHtml = (html) => {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, "text/html");
+        const nextPage = doc.getElementById("team-graph-page");
+        const currentPage = document.getElementById("team-graph-page");
+        if (!(nextPage instanceof HTMLElement) || !(currentPage instanceof HTMLElement)) {
+          return false;
+        }
+        currentPage.replaceWith(nextPage);
+        return true;
+      };
+
       const initTeamGraphPage = () => {
+        stopMergeJobPolling();
         const page = document.getElementById("team-graph-page");
         if (!(page instanceof HTMLElement) || page.dataset.initialized === "true") {
           return;
@@ -2382,6 +2434,66 @@
           node.style.setProperty("--graph-badge-bg", `hsla(${hue}, 80%, 44%, 0.16)`);
           node.style.setProperty("--graph-badge-text", `hsl(${hue} 100% 88%)`);
         });
+
+        const mergeState = page.querySelector("[data-merge-job-state]");
+        if (mergeState instanceof HTMLElement) {
+          const status = mergeState.getAttribute("data-merge-job-status") || "";
+          const statusApiUrl = mergeState.getAttribute("data-merge-job-status-api-url") || "";
+          const refreshUrl = mergeState.getAttribute("data-merge-job-refresh-url") || "";
+          const pollNote = mergeState.querySelector("[data-merge-job-poll-note]");
+          if ((status === "pending" || status === "running") && statusApiUrl && refreshUrl) {
+            const poll = async () => {
+              try {
+                const statusUrl = new URL(statusApiUrl, window.location.origin);
+                statusUrl.searchParams.set("_", String(Date.now()));
+                const response = await fetch(statusUrl.toString(), {
+                  headers: {
+                    Accept: "application/json",
+                    "Cache-Control": "no-cache",
+                  },
+                  credentials: "same-origin",
+                  cache: "no-store",
+                });
+                if (!response.ok) {
+                  throw new Error(`poll failed: ${response.status}`);
+                }
+                const payload = await response.json();
+                const nextStatus = String(payload.status || "");
+                if (nextStatus === "pending" || nextStatus === "running") {
+                  mergeJobPollTimer = window.setTimeout(poll, 2000);
+                  return;
+                }
+                const pageUrl = new URL(refreshUrl, window.location.origin);
+                pageUrl.searchParams.set("_poll", String(Date.now()));
+                const pageResponse = await fetch(pageUrl.toString(), {
+                  headers: {
+                    "HX-Request": "true",
+                    "Cache-Control": "no-cache",
+                  },
+                  credentials: "same-origin",
+                  cache: "no-store",
+                });
+                if (!pageResponse.ok) {
+                  throw new Error(`refresh failed: ${pageResponse.status}`);
+                }
+                const html = await pageResponse.text();
+                if (!replaceTeamGraphPageFromHtml(html)) {
+                  throw new Error("team graph page not found in refresh response");
+                }
+                if (pollNote instanceof HTMLElement) {
+                  pollNote.textContent = "";
+                }
+                initTeamGraphPage();
+              } catch (error) {
+                if (pollNote instanceof HTMLElement) {
+                  pollNote.textContent = I18N.mergeStatusRefreshFailed;
+                }
+                mergeJobPollTimer = window.setTimeout(poll, 2500);
+              }
+            };
+            mergeJobPollTimer = window.setTimeout(poll, 2000);
+          }
+        }
 
         page.dataset.initialized = "true";
       };

@@ -237,8 +237,11 @@ class BuildTeamProcedureGraph:
             procedure_meta=procedure_meta,
         )
         if graph_level == "service":
-            return self._build_service_graph_document(merged_document)
+            return self.build_service_graph_document(merged_document)
         return merged_document
+
+    def build_service_graph_document(self, document: MarkupDocument) -> MarkupDocument:
+        return self._build_service_graph_document(document)
 
     def _drop_intermediate_procedures(
         self,
