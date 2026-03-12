@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import re
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
+import app.web_main as web_main
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.s3.markup_catalog_source import S3MarkupCatalogSource
 from app.config import AppSettings
@@ -15,6 +18,7 @@ from app.web_main import create_app
 from domain.catalog import CatalogIndexConfig
 from domain.services.build_catalog_index import BuildCatalogIndex
 from tests.adapters.s3.s3_utils import add_get_object, stub_s3_catalog
+from tests.app.catalog_test_setup import build_catalog_test_context
 from tests.helpers.markup_fixtures import load_markup_payload, repo_root
 
 
@@ -24,6 +28,45 @@ def _load_fixture(name: str) -> dict[str, object]:
 
 def _repo_root() -> Path:
     return repo_root()
+
+
+def _start_team_graph_merge(
+    client: TestClient,
+    *,
+    data: dict[str, str],
+) -> tuple[str, str, str]:
+    response = client.post(
+        "/catalog/teams/graph/merge",
+        data=data,
+        headers={"HX-Request": "true"},
+    )
+    assert response.status_code == 200
+    push_url = response.headers.get("HX-Push-Url", "")
+    assert push_url
+    job_match = re.search(r"[?&]job_id=([^&]+)", push_url)
+    assert job_match is not None
+    return push_url, job_match.group(1), response.text
+
+
+def _wait_for_team_graph_page(
+    client: TestClient,
+    *,
+    url: str,
+    attempts: int = 40,
+) -> str:
+    html = ""
+    status = ""
+    for _ in range(attempts):
+        response = client.get(url)
+        assert response.status_code == 200
+        html = response.text
+        status_match = re.search(r'data-merge-job-status="([^"]+)"', html)
+        status = status_match.group(1) if status_match is not None else ""
+        if status in {"succeeded", "failed"}:
+            return html
+        time.sleep(0.02)
+    assert status in {"succeeded", "failed"}, html
+    return html
 
 
 def test_catalog_team_graph_api(
@@ -195,105 +238,99 @@ def test_catalog_team_graph_api(
             service_download.headers.get("content-disposition", ""),
         )
 
-        html_response = client_api.get(
-            "/catalog/teams/graph",
-            params={"team_ids": "team-1,team-2"},
+        merge_url, merge_job_id, merge_html = _start_team_graph_merge(
+            client_api,
+            data={"team_ids": "team-1,team-2"},
         )
-        assert html_response.status_code == 200
-        assert "Merge" in html_response.text
-        assert "Alpha" in html_response.text
-        assert "Beta" in html_response.text
-        assert "markups merged" in html_response.text
-        assert "1 markup" in html_response.text
-        assert "Cross-team graphs builder" in html_response.text
-        assert "Step 1. Select teams" in html_response.text
-        assert "Step 2. Feature flags" in html_response.text
-        assert "Merge node chain threshold" in html_response.text
-        assert "How merge chain threshold works" in html_response.text
-        assert "Cycles are excluded from merge-chain detection." in html_response.text
-        assert "Branch/fork and join procedures are treated as chain boundaries" in (
-            html_response.text
-        )
-        assert 'id="merge_node_min_chain_size"' in html_response.text
-        assert 'name="merge_node_min_chain_size"' in html_response.text
-        assert 'min="0"' in html_response.text
-        assert 'max="10"' in html_response.text
-        assert 'step="1"' in html_response.text
-        assert "Merge markups by shared nodes" in html_response.text
-        assert "How selected graphs render their components in according to shared nodes." in (
-            html_response.text
-        )
-        assert "Render merge nodes from all available markups" in html_response.text
-        assert "Step 3. Merge graphs" in html_response.text
-        assert "Step 4. Analyze graphs" in html_response.text
-        assert "Step 5. Get diagram" in html_response.text
-        assert "Procedure-level diagram" in html_response.text
-        assert "Service-level diagram" in html_response.text
-        assert "Render graph" in html_response.text
-        assert 'id="render-team-service-graph"' in html_response.text
-        assert 'id="team-service-graph-show-reverse"' in html_response.text
-        assert "Show reverse links" in html_response.text
-        assert "/api/teams/graph-view?" in html_response.text
-        assert "graph_level=service" in html_response.text
-        assert "graph_level=procedure" not in html_response.text
-        assert "Graphs info" in html_response.text
-        assert "Markup self-sufficiency" in html_response.text
-        assert "data-dashboard-section-key" in html_response.text
-        assert "team-graph:step4:dashboard-sections" in html_response.text
-        assert "Risk hotspots" in html_response.text
-        assert "team-graph-dashboard-section-collapsible" in html_response.text
-        assert "Click to expand" in html_response.text
-        assert "data-team-graph-analysis-host" in html_response.text
-        assert "Graphs" in html_response.text
-        assert "Unique procedures" in html_response.text
-        assert "Multichannel procedures" in html_response.text
-        assert "Employee procedures" in html_response.text
-        assert "External team overlaps" in html_response.text
-        assert "data-overlap-team-toggle" in html_response.text
-        assert 'data-team="Alpha"' in html_response.text
-        assert 'data-team="Beta"' in html_response.text
-        assert "team-graph-ranked-details-list-entity" in html_response.text
-        assert "team-graph-graph-entity-type" in html_response.text
-        assert "Graph-level breakdown" in html_response.text
-        assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
-        assert "data-sortable-table" in html_response.text
-        assert "data-sort-trigger" in html_response.text
-        assert 'data-sort-key="link-count"' not in html_response.text
-        assert "Potential merges" in html_response.text
+        assert "data-merge-job-status=" in merge_html
+        html = _wait_for_team_graph_page(client_api, url=merge_url)
+        assert "Merge" in html
+        assert "Alpha" in html
+        assert "Beta" in html
+        assert "markups merged" in html
+        assert "1 markup" in html
+        assert "Cross-team graphs builder" in html
+        assert "Step 1. Select teams" in html
+        assert "Step 2. Feature flags" in html
+        assert "Merge node chain threshold" in html
+        assert "How merge chain threshold works" in html
+        assert "Cycles are excluded from merge-chain detection." in html
+        assert "Branch/fork and join procedures are treated as chain boundaries" in (html)
+        assert 'id="merge_node_min_chain_size"' in html
+        assert 'name="merge_node_min_chain_size"' in html
+        assert 'min="0"' in html
+        assert 'max="10"' in html
+        assert 'step="1"' in html
+        assert "Merge markups by shared nodes" in html
+        assert "How selected graphs render their components in according to shared nodes." in (html)
+        assert "Render merge nodes from all available markups" in html
+        assert "Step 3. Merge graphs" in html
+        assert "Step 4. Analyze graphs" in html
+        assert "Step 5. Get diagram" in html
+        assert "Procedure-level diagram" in html
+        assert "Service-level diagram" in html
+        assert "Render graph" in html
+        assert 'id="render-team-service-graph"' in html
+        assert 'id="team-service-graph-show-reverse"' in html
+        assert "Show reverse links" in html
+        assert "/api/teams/graph-view?" in html
+        assert "graph_level=service" in html
+        assert "graph_level=procedure" not in html
+        assert "Graphs info" in html
+        assert "Markup self-sufficiency" in html
+        assert "data-dashboard-section-key" in html
+        assert "team-graph:step4:dashboard-sections" in html
+        assert "Risk hotspots" in html
+        assert "team-graph-dashboard-section-collapsible" in html
+        assert "Click to expand" in html
+        assert "data-team-graph-analysis-host" in html
+        assert "Graphs" in html
+        assert "Unique procedures" in html
+        assert "Multichannel procedures" in html
+        assert "Employee procedures" in html
+        assert "External team overlaps" in html
+        assert "data-overlap-team-toggle" in html
+        assert 'data-team="Alpha"' in html
+        assert 'data-team="Beta"' in html
+        assert "team-graph-ranked-details-list-entity" in html
+        assert "team-graph-graph-entity-type" in html
+        assert "Graph-level breakdown" in html
+        assert "Procedure-level breakdown (graph order, potential merges)" in html
+        assert "data-sortable-table" in html
+        assert "data-sort-trigger" in html
+        assert 'data-sort-key="link-count"' not in html
+        assert "Potential merges" in html
         assert (
             "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled."
-            not in html_response.text
+            not in html
         )
-        assert "Merges" in html_response.text
-        assert "Links" in html_response.text
-        assert "team-graph-procedure-block-type" in html_response.text
-        assert "Starts:" not in html_response.text
-        assert "Ends:" not in html_response.text
-        assert "End (" not in html_response.text
-        assert "team-graph-procedure-order" in html_response.text
-        assert "team-graph-procedure-id" in html_response.text
-        assert "Data quality note" not in html_response.text
-        assert "Ranking priority: cross-entity reuse" in html_response.text
-        assert "Ranking priority: merges" in html_response.text
-        assert "team-graph-graphs-row-header" in html_response.text
-        assert "team-graph-graphs-count-value" in html_response.text
-        assert "--team-chip-border" in html_response.text
-        assert "const hueForTeam = (teamName)" in html_response.text
-        assert 'id="team-graph-page"' in html_response.text
-        assert 'hx-get="/catalog/teams/graph"' in html_response.text
-        assert 'hx-target="#team-graph-page"' in html_response.text
-        assert 'hx-select="#team-graph-page"' in html_response.text
-        assert 'hx-push-url="true"' in html_response.text
-        assert 'hx-indicator="#team-graph-merge-loader"' in html_response.text
-        assert "team-graph-cta-warning is-hidden" in html_response.text
-        assert 'id="team-graph-merge-loader"' in html_response.text
-        assert (
-            "Scene is injected via local storage for same-origin Excalidraw."
-            not in html_response.text
-        )
+        assert "Merges" in html
+        assert "Links" in html
+        assert "team-graph-procedure-block-type" in html
+        assert "Starts:" not in html
+        assert "Ends:" not in html
+        assert "End (" not in html
+        assert "team-graph-procedure-order" in html
+        assert "team-graph-procedure-id" in html
+        assert "Data quality note" not in html
+        assert "Ranking priority: cross-entity reuse" in html
+        assert "Ranking priority: merges" in html
+        assert "team-graph-graphs-row-header" in html
+        assert "team-graph-graphs-count-value" in html
+        assert "--team-chip-border" in html
+        assert "const hueForTeam = (teamName)" in html
+        assert 'id="team-graph-page"' in html
+        assert 'hx-post="/catalog/teams/graph/merge"' in html
+        assert 'hx-target="#team-graph-page"' in html
+        assert 'hx-select="#team-graph-page"' in html
+        assert 'hx-indicator="#team-graph-merge-loader"' in html
+        assert "team-graph-cta-warning is-hidden" in html
+        assert 'id="team-graph-merge-loader"' in html
+        assert f"job_id={merge_job_id}" in html
+        assert "Scene is injected via local storage for same-origin Excalidraw." not in html
         assert (
             "Open the team graph in Excalidraw or download the file for manual import and editing."
-            not in html_response.text
+            not in html
         )
 
         no_selection_response = client_api.get("/catalog/teams/graph")
@@ -579,6 +616,99 @@ def test_catalog_team_graph_excluded_teams_preselected(
         assert 'value="team-2"' in html
     finally:
         stubber.deactivate()
+
+
+def test_catalog_team_graph_merge_failure_is_persisted_in_step_three(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    def fail_merge(*args: object, **kwargs: object) -> object:
+        raise HTTPException(status_code=504, detail="Merge timed out in upstream S3")
+
+    monkeypatch.setattr(web_main, "compute_team_graph_build_result", fail_merge)
+
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        merge_url, _, _ = _start_team_graph_merge(
+            context.client,
+            data={"team_ids": "team-billing"},
+        )
+        html = _wait_for_team_graph_page(context.client, url=merge_url)
+        assert 'data-merge-job-status="failed"' in html
+        assert "Merge blocked" in html
+        assert "Reason: Merge timed out in upstream S3" in html
+        assert "Resolve merge issues in Step 3 to unlock analytics." in html
+
+
+def test_api_team_graph_uses_cached_merge_job_result_when_job_id_is_provided(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        merge_url, job_id, _ = _start_team_graph_merge(
+            context.client,
+            data={"team_ids": "team-billing"},
+        )
+        html = _wait_for_team_graph_page(context.client, url=merge_url)
+        assert 'data-merge-job-status="succeeded"' in html
+
+        def fail_sync_build(*args: object, **kwargs: object) -> object:
+            raise AssertionError(
+                "sync team graph rebuild should not be used when job_id is provided"
+            )
+
+        monkeypatch.setattr(web_main, "build_team_diagram_payload", fail_sync_build)
+        monkeypatch.setattr(web_main, "build_team_graph_document", fail_sync_build)
+
+        payload_response = context.client.get(
+            "/api/teams/graph",
+            params={"team_ids": "team-billing", "job_id": job_id},
+        )
+        assert payload_response.status_code == 200
+        assert payload_response.json()["elements"]
+
+        graph_view_response = context.client.get(
+            "/api/teams/graph-view",
+            params={"team_ids": "team-billing", "job_id": job_id},
+        )
+        assert graph_view_response.status_code == 200
+        assert graph_view_response.json()["nodes"]
+
+
+def test_api_team_graph_job_status_returns_terminal_job_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        merge_url, job_id, _ = _start_team_graph_merge(
+            context.client,
+            data={"team_ids": "team-billing"},
+        )
+        _wait_for_team_graph_page(context.client, url=merge_url)
+
+        response = context.client.get(f"/api/team-graph-jobs/{job_id}")
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["job_id"] == job_id
+        assert payload["status"] == "succeeded"
+        assert payload["updated_at"]
 
 
 def test_catalog_team_graph_excluded_team_name_not_overridden_by_unknown_value(
@@ -1284,21 +1414,22 @@ def test_catalog_team_graph_service_graph_view_url_preserves_merge_settings(
         )
         client_api = TestClient(create_app(settings))
 
-        response = client_api.get(
-            "/catalog/teams/graph",
-            params={
+        merge_url, merge_job_id, _ = _start_team_graph_merge(
+            client_api,
+            data={
                 "team_ids": "team-alpha,team-beta",
                 "merge_nodes_all_markups": "true",
                 "merge_selected_markups": "true",
                 "merge_node_min_chain_size": "3",
             },
         )
-        assert response.status_code == 200
-        assert "/api/teams/graph-view?" in response.text
-        assert "merge_nodes_all_markups=true" in response.text
-        assert "merge_selected_markups=true" in response.text
-        assert "merge_node_min_chain_size=3" in response.text
-        assert "graph_level=service" in response.text
+        html = _wait_for_team_graph_page(client_api, url=merge_url)
+        assert "/api/teams/graph-view?" in html
+        assert "merge_nodes_all_markups=true" in html
+        assert "merge_selected_markups=true" in html
+        assert "merge_node_min_chain_size=3" in html
+        assert "graph_level=service" in html
+        assert f"job_id={merge_job_id}" in html
     finally:
         stubber.deactivate()
 
@@ -2345,27 +2476,27 @@ def test_catalog_team_graph_fixture_markups_merge_when_flag_is_on(
             for element in elements
         )
 
-        html_response = client_api.get(
-            "/catalog/teams/graph",
-            params={
+        merge_url, _, _ = _start_team_graph_merge(
+            client_api,
+            data={
                 "team_ids": f"{basic_team_id},{graphs_team_id}",
                 "merge_selected_markups": "true",
             },
         )
-        assert html_response.status_code == 200
-        assert "Intersection node breakdown" in html_response.text
-        assert "team-graph-merge-node-card" in html_response.text
-        assert "Merge node #1" in html_response.text
-        assert "Merge nodes for this graph" not in html_response.text
-        assert "Graph #1" not in html_response.text
-        assert "Graph 1" in html_response.text
-        assert "team-graph-merge-node-procedure-link" in html_response.text
-        assert 'href="https://example.com/procedures/proc_shared_intake"' in html_response.text
-        assert 'href="https://example.com/procedures/proc_shared_routing"' in html_response.text
-        assert "proc_shared_intake" in html_response.text
-        assert "proc_shared_routing" in html_response.text
-        assert "::doc1" not in html_response.text
-        assert "::doc2" not in html_response.text
+        html = _wait_for_team_graph_page(client_api, url=merge_url)
+        assert "Intersection node breakdown" in html
+        assert "team-graph-merge-node-card" in html
+        assert "Merge node #1" in html
+        assert "Merge nodes for this graph" not in html
+        assert "Graph #1" not in html
+        assert "Graph 1" in html
+        assert "team-graph-merge-node-procedure-link" in html
+        assert 'href="https://example.com/procedures/proc_shared_intake"' in html
+        assert 'href="https://example.com/procedures/proc_shared_routing"' in html
+        assert "proc_shared_intake" in html
+        assert "proc_shared_routing" in html
+        assert "::doc1" not in html
+        assert "::doc2" not in html
     finally:
         stubber.deactivate()
 
@@ -2476,18 +2607,18 @@ def test_catalog_team_graph_dashboard_graph_count_matches_merged_diagram_graph(
         )
         client_api = TestClient(create_app(settings))
 
-        html_response = client_api.get(
-            "/catalog/teams/graph",
-            params={
+        merge_url, _, _ = _start_team_graph_merge(
+            client_api,
+            data={
                 "team_ids": "team-alpha",
                 "merge_selected_markups": "true",
                 "merge_nodes_all_markups": "true",
             },
         )
-        assert html_response.status_code == 200
+        html = _wait_for_team_graph_page(client_api, url=merge_url)
         match = re.search(
             r"<div class=\"team-graph-kpi-label\">Graphs</div>\s*.*?<div class=\"team-graph-kpi-value\">(\d+)</div>",
-            html_response.text,
+            html,
             flags=re.DOTALL,
         )
         assert match is not None
@@ -2624,19 +2755,19 @@ def test_catalog_team_graph_default_keeps_singleton_shared_nodes_separate(
         ]
         assert len(shared_ids) == 2
 
-        html_response = client_api.get(
-            "/catalog/teams/graph",
-            params={"team_ids": "team-alpha,team-beta"},
+        merge_url, _, _ = _start_team_graph_merge(
+            client_api,
+            data={"team_ids": "team-alpha,team-beta"},
         )
-        assert html_response.status_code == 200
-        assert "Potential intersection node breakdown" in html_response.text
-        assert "Potential merge node" in html_response.text
-        assert "Merge node #1" not in html_response.text
-        assert "Procedure-level breakdown (graph order, potential merges)" in html_response.text
-        assert "Potential merges" in html_response.text
+        html = _wait_for_team_graph_page(client_api, url=merge_url)
+        assert "Potential intersection node breakdown" in html
+        assert "Potential merge node" in html
+        assert "Merge node #1" not in html
+        assert "Procedure-level breakdown (graph order, potential merges)" in html
+        assert "Potential merges" in html
         assert (
             "Potential merges only: markups are rendered separately because Merge markups by shared nodes is disabled."
-            not in html_response.text
+            not in html
         )
     finally:
         stubber.deactivate()

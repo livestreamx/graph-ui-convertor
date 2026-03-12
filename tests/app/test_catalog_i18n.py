@@ -106,6 +106,24 @@ def test_service_level_builder_texts_are_localized_with_updated_copy() -> None:
     )
     assert translate_ui_text("Top overloaded entities", "ru") == "Топ перегруженных разметок"
     assert translate_ui_text("Entity", "ru") == "Разметка"
+    assert (
+        translate_ui_text(
+            "Running in background. This page updates automatically when analytics and diagrams are ready.",
+            "ru",
+        )
+        == "Запущено в фоне. Эта страница обновится автоматически, когда аналитика и диаграммы будут готовы."
+    )
+    assert (
+        translate_ui_text("Merge is still running. Analytics will appear here automatically.", "ru")
+        == "Объединение еще выполняется. Аналитика появится здесь автоматически."
+    )
+    assert (
+        translate_ui_text(
+            "Merge is still running. Diagram actions unlock after completion.",
+            "ru",
+        )
+        == "Объединение еще выполняется. Действия с диаграммой станут доступны после завершения."
+    )
 
 
 def test_catalog_detail_new_metadata_labels_are_localized_in_russian() -> None:

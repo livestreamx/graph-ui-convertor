@@ -206,6 +206,14 @@ catalog:
   the selected teams.
   Dashboard graph counters (`Graphs`, grouped graph stats) are computed from the same merged
   procedure graph payload that is opened/downloaded as the team diagram.
+- Step 3 (`Merge graphs`) now starts an asynchronous server-side merge job instead of waiting on a
+  single long HTML request. The status card in Step 3 persists for `running`, `ready`, and `failed`
+  states, shows the exact failure reason inline, and the page polls automatically until the merge
+  finishes. This avoids losing UI feedback when heavy merges run longer than browser/proxy timeouts.
+- Successful merge jobs are cached in memory by request parameters and catalog index signature.
+  Step 4 / Step 5, `/catalog/teams/graph/open`, `/api/teams/graph`, and `/api/teams/graph-view`
+  reuse the cached result via `job_id`, so downloads/open actions do not rebuild the same heavy
+  cross-team graph again.
 - Step 3 now keeps merge status and aggregate counters (`N teams · M markups merged`) only.
 - Step 4 (`Analyze graphs`) renders a dashboard with three compact sections:
   `Graphs info` (markup type distribution, unique graphs, unique procedures, bot/multi coverage),

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import hashlib
 import json
 import logging
+import os
+import threading
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlencode, urlparse
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -115,6 +120,7 @@ class CatalogContext:
     index_state: CatalogIndexState
     health_builder: BuildCatalogHealthReport
     health_state: CatalogHealthState
+    team_graph_jobs: TeamGraphJobState
 
 
 @dataclass
@@ -134,6 +140,48 @@ class CatalogIndexState:
 class CatalogHealthState:
     index_signature: str | None = None
     report: CatalogHealthReport | None = None
+
+
+TeamGraphJobStatus = Literal["pending", "running", "succeeded", "failed"]
+
+
+@dataclass(frozen=True)
+class TeamGraphBuildRequest:
+    team_ids: tuple[str, ...]
+    excluded_team_ids: tuple[str, ...]
+    merge_nodes_all_markups: bool
+    merge_selected_markups: bool
+    merge_node_min_chain_size: int
+
+
+@dataclass(frozen=True)
+class TeamGraphBuildResult:
+    dashboard: CrossTeamGraphDashboard
+    procedure_graph_document: MarkupDocument
+    service_graph_document: MarkupDocument
+
+
+@dataclass
+class TeamGraphJob:
+    job_id: str
+    request: TeamGraphBuildRequest
+    index_signature: str
+    status: TeamGraphJobStatus
+    created_at: datetime
+    updated_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    error_message: str | None = None
+    result: TeamGraphBuildResult | None = None
+
+
+@dataclass
+class TeamGraphJobState:
+    executor: concurrent.futures.ThreadPoolExecutor
+    instance_id: str = dataclass_field(default_factory=lambda: uuid4().hex)
+    jobs: dict[str, TeamGraphJob] = dataclass_field(default_factory=dict)
+    request_jobs: dict[str, str] = dataclass_field(default_factory=dict)
+    lock: threading.RLock = dataclass_field(default_factory=threading.RLock)
 
 
 @dataclass(frozen=True)
@@ -194,6 +242,10 @@ MARKUP_TYPE_GROUP_ORDER_INDEX = {
 def create_app(settings: AppSettings) -> FastAPI:
     templates.env.filters["msk_datetime"] = format_msk_datetime
     templates.env.filters["humanize_text"] = build_humanize_text(settings.catalog.ui_text_overrides)
+    team_graph_executor = concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(2, min(4, os.cpu_count() or 2)),
+        thread_name_prefix="team-graph",
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> Any:
@@ -220,6 +272,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         if refresh_task is not None:
             refresh_stop.set()
             await refresh_task
+        team_graph_executor.shutdown(wait=False, cancel_futures=True)
 
     app = FastAPI(title=settings.catalog.title, lifespan=lifespan)
 
@@ -271,6 +324,7 @@ def create_app(settings: AppSettings) -> FastAPI:
             ),
         ),
         health_state=CatalogHealthState(),
+        team_graph_jobs=TeamGraphJobState(executor=team_graph_executor),
     )
     app.state.context = context
 
@@ -311,6 +365,246 @@ def create_app(settings: AppSettings) -> FastAPI:
             reset_active_ui_language(token)
         apply_ui_language_cookie(response, localizer.language)
         return response
+
+    def render_team_graph_page(
+        request: Request,
+        *,
+        team_ids: list[str],
+        excluded_team_ids: list[str],
+        excluded_team_ids_explicit: bool,
+        merge_nodes_all_markups: bool,
+        merge_selected_markups: bool,
+        merge_node_min_chain_size: int,
+        context: CatalogContext,
+        job_id: str | None = None,
+    ) -> HTMLResponse:
+        index_data = load_index(context)
+        if index_data is None:
+            return render_catalog_template(
+                request,
+                "catalog_empty.html",
+                {
+                    "settings": context.settings,
+                },
+            )
+
+        _, all_team_options = build_filter_options(index_data.items, index_data.unknown_value)
+        team_lookup = dict(all_team_options)
+        disabled_team_ids = normalize_team_ids(excluded_team_ids)
+        if not excluded_team_ids_explicit and context.settings.catalog.builder_excluded_team_ids:
+            disabled_team_ids = normalize_team_ids(
+                context.settings.catalog.builder_excluded_team_ids
+            )
+        if disabled_team_ids:
+            missing = [
+                (team_id, team_id) for team_id in disabled_team_ids if team_id not in team_lookup
+            ]
+            if missing:
+                all_team_options = sorted(
+                    [*all_team_options, *missing], key=lambda entry: entry[1].lower()
+                )
+                team_lookup = dict(all_team_options)
+
+        team_ids = normalize_team_ids(team_ids)
+        team_options = all_team_options
+        team_counts: dict[str, int] = {}
+        for item in index_data.items:
+            team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
+        all_team_counts: dict[str, int] = {}
+        for item in index_data.items:
+            all_team_counts[item.team_id] = all_team_counts.get(item.team_id, 0) + 1
+        selected_teams = [
+            {
+                "id": team_id,
+                "label": team_lookup.get(team_id, team_id),
+                "markup_count": team_counts.get(team_id, 0),
+            }
+            for team_id in team_ids
+        ]
+        selected_team_count = len(team_ids)
+        selected_markups_count = sum(team_counts.get(team_id, 0) for team_id in team_ids)
+        disabled_team_count = len(disabled_team_ids)
+        disabled_markups_count = sum(
+            all_team_counts.get(team_id, 0) for team_id in disabled_team_ids
+        )
+
+        localizer = localizer_for_request(request)
+        build_request = build_team_graph_request(
+            team_ids=team_ids,
+            excluded_team_ids=disabled_team_ids,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+        )
+        index_signature = resolve_catalog_index_signature(context, index_data)
+        cache_signature = build_team_graph_cache_signature(
+            context,
+            index_signature=index_signature,
+        )
+
+        diagram_ready = False
+        open_mode = None
+        team_query = ""
+        procedure_team_query = ""
+        service_team_query = ""
+        service_graph_view_query = ""
+        procedure_excalidraw_open_url = None
+        service_excalidraw_open_url = None
+        error_message = None
+        team_dashboard: CrossTeamGraphDashboard | None = None
+        merge_job: TeamGraphJob | None = None
+        merge_job_error = None
+
+        if team_ids:
+            if job_id:
+                candidate_job = get_team_graph_job(context, job_id)
+                if (
+                    candidate_job is not None
+                    and candidate_job.request == build_request
+                    and candidate_job.index_signature == cache_signature
+                ):
+                    merge_job = candidate_job
+                else:
+                    merge_job_error = (
+                        "Merge result is stale or does not match the current selection."
+                    )
+            if merge_job is None:
+                merge_job = find_team_graph_job_for_request(
+                    context,
+                    build_request=build_request,
+                    cache_signature=cache_signature,
+                    reuse_failed=True,
+                )
+
+        if merge_job is not None:
+            team_query = build_team_query(
+                team_ids,
+                excluded_team_ids=disabled_team_ids,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+                job_id=merge_job.job_id,
+            )
+            procedure_team_query = team_query
+            service_team_query = build_team_query(
+                team_ids,
+                excluded_team_ids=disabled_team_ids,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+                graph_level="service",
+                job_id=merge_job.job_id,
+            )
+            service_graph_view_query = service_team_query
+
+            if merge_job.status == "succeeded" and merge_job.result is not None:
+                team_dashboard = merge_job.result.dashboard
+                diagram_base_url = context.settings.catalog.excalidraw_base_url
+                procedure_excalidraw_open_url = diagram_base_url
+                service_excalidraw_open_url = diagram_base_url
+                open_mode = "manual"
+                if is_same_origin(request, diagram_base_url):
+                    procedure_excalidraw_open_url = f"/catalog/teams/graph/open?{team_query}"
+                    service_excalidraw_open_url = f"/catalog/teams/graph/open?{service_team_query}"
+                    open_mode = "local_storage"
+                else:
+                    procedure_payload = build_procedure_graph_diagram_payload(
+                        context,
+                        merge_job.result.procedure_graph_document,
+                        "excalidraw",
+                        ui_language=localizer.language,
+                    )
+                    procedure_excalidraw_open_url = build_excalidraw_url(
+                        diagram_base_url, procedure_payload
+                    )
+                    if (
+                        len(procedure_excalidraw_open_url)
+                        > context.settings.catalog.excalidraw_max_url_length
+                    ):
+                        procedure_excalidraw_open_url = diagram_base_url
+                        open_mode = "manual"
+                    else:
+                        open_mode = "direct"
+
+                    service_payload = build_procedure_graph_diagram_payload(
+                        context,
+                        merge_job.result.service_graph_document,
+                        "excalidraw",
+                        ui_language=localizer.language,
+                    )
+                    service_excalidraw_open_url = build_excalidraw_url(
+                        diagram_base_url, service_payload
+                    )
+                    if (
+                        len(service_excalidraw_open_url)
+                        > context.settings.catalog.excalidraw_max_url_length
+                    ):
+                        service_excalidraw_open_url = diagram_base_url
+                diagram_ready = True
+            elif merge_job.status == "failed":
+                error_message = merge_job.error_message or "Unable to build team graph."
+
+        if merge_job_error and error_message is None:
+            error_message = merge_job_error
+
+        page_query = build_team_page_query(
+            team_ids,
+            excluded_team_ids=disabled_team_ids,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            job_id=merge_job.job_id if merge_job is not None else None,
+            language=localizer.language,
+        )
+        merge_job_status_api_url = ""
+        merge_job_refresh_url = ""
+        merge_job_status = "idle"
+        if merge_job is not None:
+            merge_job_status = merge_job.status
+            merge_job_status_api_url = f"/api/team-graph-jobs/{merge_job.job_id}"
+            if page_query:
+                merge_job_refresh_url = f"/catalog/teams/graph?{page_query}"
+
+        return render_catalog_template(
+            request,
+            "catalog_team_graph.html",
+            {
+                "settings": context.settings,
+                "diagram_ready": diagram_ready,
+                "diagram_excalidraw_enabled": context.settings.catalog.diagram_excalidraw_enabled,
+                "open_mode": open_mode,
+                "team_options": team_options,
+                "all_team_options": all_team_options,
+                "team_counts": team_counts,
+                "all_team_counts": all_team_counts,
+                "team_ids": team_ids,
+                "disabled_team_ids": disabled_team_ids,
+                "selected_teams": selected_teams,
+                "selected_team_count": selected_team_count,
+                "selected_markups_count": selected_markups_count,
+                "disabled_team_count": disabled_team_count,
+                "disabled_markups_count": disabled_markups_count,
+                "team_query": team_query,
+                "procedure_team_query": procedure_team_query,
+                "service_team_query": service_team_query,
+                "service_graph_view_query": service_graph_view_query,
+                "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
+                "service_excalidraw_open_url": service_excalidraw_open_url,
+                "error_message": error_message,
+                "merge_nodes_all_markups": merge_nodes_all_markups,
+                "merge_selected_markups": merge_selected_markups,
+                "merge_node_min_chain_size": merge_node_min_chain_size,
+                "team_dashboard": team_dashboard,
+                "merge_job_id": merge_job.job_id if merge_job is not None else "",
+                "merge_job_status": merge_job_status,
+                "merge_job_status_api_url": merge_job_status_api_url,
+                "merge_job_refresh_url": merge_job_refresh_url,
+                "merge_job_error": merge_job_error,
+                "resolve_procedure_link": (
+                    lambda procedure_id: resolve_procedure_external_url(context, procedure_id)
+                ),
+            },
+        )
 
     @app.get("/")
     def index(request: Request) -> RedirectResponse:
@@ -417,8 +711,41 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_nodes_all_markups: bool = Query(default=False),
         merge_selected_markups: bool = Query(default=False),
         merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
+        job_id: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> HTMLResponse:
+        return render_team_graph_page(
+            request,
+            team_ids=team_ids,
+            excluded_team_ids=excluded_team_ids,
+            excluded_team_ids_explicit="excluded_team_ids" in request.query_params,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            context=context,
+            job_id=job_id,
+        )
+
+    @app.post("/catalog/teams/graph/merge", response_class=HTMLResponse)
+    async def catalog_team_graph_merge(
+        request: Request,
+        context: CatalogContext = Depends(get_context),
+    ) -> Response:
+        form = await request.form()
+        team_ids = normalize_team_ids([str(value) for value in form.getlist("team_ids")])
+        excluded_team_ids = normalize_team_ids(
+            [str(value) for value in form.getlist("excluded_team_ids")]
+        )
+        merge_nodes_all_markups = "merge_nodes_all_markups" in form
+        merge_selected_markups = "merge_selected_markups" in form
+        merge_node_min_chain_size = 1
+        raw_threshold = str(form.get("merge_node_min_chain_size", "1")).strip()
+        if raw_threshold:
+            try:
+                merge_node_min_chain_size = max(0, min(10, int(raw_threshold)))
+            except ValueError:
+                merge_node_min_chain_size = 1
+
         index_data = load_index(context)
         if index_data is None:
             return render_catalog_template(
@@ -428,196 +755,52 @@ def create_app(settings: AppSettings) -> FastAPI:
                     "settings": context.settings,
                 },
             )
-        _, all_team_options = build_filter_options(index_data.items, index_data.unknown_value)
-        team_lookup = dict(all_team_options)
-        disabled_team_ids = normalize_team_ids(excluded_team_ids)
-        if (
-            "excluded_team_ids" not in request.query_params
-            and context.settings.catalog.builder_excluded_team_ids
-        ):
-            disabled_team_ids = normalize_team_ids(
-                context.settings.catalog.builder_excluded_team_ids
-            )
-        if disabled_team_ids:
-            missing = [
-                (team_id, team_id) for team_id in disabled_team_ids if team_id not in team_lookup
-            ]
-            if missing:
-                all_team_options = sorted(
-                    [*all_team_options, *missing], key=lambda entry: entry[1].lower()
-                )
-                team_lookup = dict(all_team_options)
-        team_ids = normalize_team_ids(team_ids)
-        effective_disabled_team_ids = effective_excluded_team_ids(disabled_team_ids, team_ids)
-        effective_disabled_team_set = set(effective_disabled_team_ids)
-        filtered_items = [
-            item for item in index_data.items if item.team_id not in effective_disabled_team_set
-        ]
-        team_options = all_team_options
-        team_counts: dict[str, int] = {}
-        for item in index_data.items:
-            team_counts[item.team_id] = team_counts.get(item.team_id, 0) + 1
-        all_team_counts: dict[str, int] = {}
-        for item in index_data.items:
-            all_team_counts[item.team_id] = all_team_counts.get(item.team_id, 0) + 1
-        selected_teams = [
-            {
-                "id": team_id,
-                "label": team_lookup.get(team_id, team_id),
-                "markup_count": team_counts.get(team_id, 0),
-            }
-            for team_id in team_ids
-        ]
-        selected_team_count = len(team_ids)
-        selected_markups_count = sum(team_counts.get(team_id, 0) for team_id in team_ids)
-        disabled_team_count = len(disabled_team_ids)
-        disabled_markups_count = sum(
-            all_team_counts.get(team_id, 0) for team_id in disabled_team_ids
+        build_request = build_team_graph_request(
+            team_ids=team_ids,
+            excluded_team_ids=excluded_team_ids,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
         )
-
-        diagram_ready = False
-        open_mode = None
-        team_query = ""
-        procedure_team_query = ""
-        service_team_query = ""
-        service_graph_view_query = ""
-        procedure_excalidraw_open_url = None
-        service_excalidraw_open_url = None
-        error_message = None
-        team_dashboard: CrossTeamGraphDashboard | None = None
+        job_id = None
         if team_ids:
-            items = filter_items_by_team_ids(index_data.items, team_ids)
-            if not items:
-                error_message = "No scenes for selected teams."
-            else:
-                document_cache: dict[str, MarkupDocument] = {}
-                try:
-                    selected_documents = load_markup_documents(context, items, cache=document_cache)
-                    all_documents = selected_documents
-                    if len(items) < len(filtered_items):
-                        all_documents = load_markup_documents(
-                            context, filtered_items, cache=document_cache
-                        )
-                except HTTPException as exc:
-                    detail = str(exc.detail) if exc.detail is not None else "Unable to load markup."
-                    error_message = detail
-                else:
-                    team_dashboard = BuildCrossTeamGraphDashboard().build(
-                        selected_documents=selected_documents,
-                        all_documents=all_documents,
-                        selected_team_ids=team_ids,
-                        merge_selected_markups=merge_selected_markups,
-                        merge_node_min_chain_size=merge_node_min_chain_size,
-                        merge_documents=all_documents if merge_nodes_all_markups else None,
-                    )
-                    diagram_base_url = context.settings.catalog.excalidraw_base_url
-                    procedure_team_query = build_team_query(
-                        team_ids,
-                        excluded_team_ids=disabled_team_ids,
-                        merge_nodes_all_markups=merge_nodes_all_markups,
-                        merge_selected_markups=merge_selected_markups,
-                        merge_node_min_chain_size=merge_node_min_chain_size,
-                        graph_level="procedure",
-                    )
-                    service_team_query = build_team_query(
-                        team_ids,
-                        excluded_team_ids=disabled_team_ids,
-                        merge_nodes_all_markups=merge_nodes_all_markups,
-                        merge_selected_markups=merge_selected_markups,
-                        merge_node_min_chain_size=merge_node_min_chain_size,
-                        graph_level="service",
-                    )
-                    service_graph_view_query = service_team_query
-                    team_query = procedure_team_query
-                    procedure_excalidraw_open_url = diagram_base_url
-                    service_excalidraw_open_url = diagram_base_url
-                    open_mode = "manual"
-                    if is_same_origin(request, diagram_base_url):
-                        procedure_excalidraw_open_url = f"/catalog/teams/graph/open?{team_query}"
-                        service_excalidraw_open_url = (
-                            f"/catalog/teams/graph/open?{service_team_query}"
-                        )
-                        open_mode = "local_storage"
-                    else:
-                        payload = build_team_diagram_payload(
-                            context,
-                            items,
-                            "excalidraw",
-                            merge_nodes_all_markups=merge_nodes_all_markups,
-                            merge_selected_markups=merge_selected_markups,
-                            merge_node_min_chain_size=merge_node_min_chain_size,
-                            merge_items=filtered_items if merge_nodes_all_markups else None,
-                            document_cache=document_cache,
-                            ui_language=localizer_for_request(request).language,
-                        )
-                        procedure_excalidraw_open_url = build_excalidraw_url(
-                            diagram_base_url, payload
-                        )
-                        if (
-                            len(procedure_excalidraw_open_url)
-                            > context.settings.catalog.excalidraw_max_url_length
-                        ):
-                            procedure_excalidraw_open_url = diagram_base_url
-                            open_mode = "manual"
-                        else:
-                            open_mode = "direct"
-
-                        service_payload = build_team_diagram_payload(
-                            context,
-                            items,
-                            "excalidraw",
-                            merge_nodes_all_markups=merge_nodes_all_markups,
-                            merge_selected_markups=merge_selected_markups,
-                            merge_node_min_chain_size=merge_node_min_chain_size,
-                            graph_level="service",
-                            merge_items=filtered_items if merge_nodes_all_markups else None,
-                            document_cache=document_cache,
-                            ui_language=localizer_for_request(request).language,
-                        )
-                        service_excalidraw_open_url = build_excalidraw_url(
-                            diagram_base_url, service_payload
-                        )
-                        if (
-                            len(service_excalidraw_open_url)
-                            > context.settings.catalog.excalidraw_max_url_length
-                        ):
-                            service_excalidraw_open_url = diagram_base_url
-                    diagram_ready = True
-        return render_catalog_template(
-            request,
-            "catalog_team_graph.html",
-            {
-                "settings": context.settings,
-                "diagram_ready": diagram_ready,
-                "diagram_excalidraw_enabled": context.settings.catalog.diagram_excalidraw_enabled,
-                "open_mode": open_mode,
-                "team_options": team_options,
-                "all_team_options": all_team_options,
-                "team_counts": team_counts,
-                "all_team_counts": all_team_counts,
-                "team_ids": team_ids,
-                "disabled_team_ids": disabled_team_ids,
-                "selected_teams": selected_teams,
-                "selected_team_count": selected_team_count,
-                "selected_markups_count": selected_markups_count,
-                "disabled_team_count": disabled_team_count,
-                "disabled_markups_count": disabled_markups_count,
-                "team_query": team_query,
-                "procedure_team_query": procedure_team_query,
-                "service_team_query": service_team_query,
-                "service_graph_view_query": service_graph_view_query,
-                "procedure_excalidraw_open_url": procedure_excalidraw_open_url,
-                "service_excalidraw_open_url": service_excalidraw_open_url,
-                "error_message": error_message,
-                "merge_nodes_all_markups": merge_nodes_all_markups,
-                "merge_selected_markups": merge_selected_markups,
-                "merge_node_min_chain_size": merge_node_min_chain_size,
-                "team_dashboard": team_dashboard,
-                "resolve_procedure_link": (
-                    lambda procedure_id: resolve_procedure_external_url(context, procedure_id)
+            index_signature = resolve_catalog_index_signature(context, index_data)
+            job = create_or_reuse_team_graph_job(
+                context,
+                build_request=build_request,
+                index_data=index_data,
+                cache_signature=build_team_graph_cache_signature(
+                    context,
+                    index_signature=index_signature,
                 ),
-            },
+            )
+            job_id = job.job_id
+
+        response = render_team_graph_page(
+            request,
+            team_ids=team_ids,
+            excluded_team_ids=excluded_team_ids,
+            excluded_team_ids_explicit=True,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            context=context,
+            job_id=job_id,
         )
+        page_query = build_team_page_query(
+            team_ids,
+            excluded_team_ids=excluded_team_ids,
+            merge_nodes_all_markups=merge_nodes_all_markups,
+            merge_selected_markups=merge_selected_markups,
+            merge_node_min_chain_size=merge_node_min_chain_size,
+            job_id=job_id,
+            language=localizer_for_request(request).language,
+        )
+        push_url = f"/catalog/teams/graph?{page_query}" if page_query else "/catalog/teams/graph"
+        if is_htmx(request):
+            response.headers["HX-Push-Url"] = push_url
+            return response
+        return RedirectResponse(url=push_url, status_code=303)
 
     @app.get("/catalog/teams/health", response_class=HTMLResponse)
     def catalog_team_health(
@@ -845,6 +1028,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_selected_markups: bool = Query(default=False),
         merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         graph_level: GraphLevel = Query(default="procedure"),
+        job_id: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> Response:
         team_ids = normalize_team_ids(team_ids)
@@ -861,28 +1045,55 @@ def create_app(settings: AppSettings) -> FastAPI:
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
             graph_level=graph_level,
+            job_id=job_id,
         )
         scene_payload: dict[str, Any] | None = None
         try:
             index_data = load_index(context)
             if index_data is not None:
-                items, merge_scope_items = resolve_team_graph_items(
-                    index_data.items,
+                build_request = build_team_graph_request(
                     team_ids=team_ids,
                     excluded_team_ids=excluded_team_ids,
+                    merge_nodes_all_markups=merge_nodes_all_markups,
+                    merge_selected_markups=merge_selected_markups,
+                    merge_node_min_chain_size=merge_node_min_chain_size,
                 )
-                if items:
-                    scene_payload = build_team_diagram_payload(
+                cached_result = resolve_team_graph_cached_result(
+                    context,
+                    index_data=index_data,
+                    build_request=build_request,
+                    job_id=job_id,
+                )
+                if cached_result is not None:
+                    graph_document = (
+                        cached_result.service_graph_document
+                        if graph_level == "service"
+                        else cached_result.procedure_graph_document
+                    )
+                    scene_payload = build_procedure_graph_diagram_payload(
                         context,
-                        items,
+                        graph_document,
                         "excalidraw",
-                        merge_nodes_all_markups=merge_nodes_all_markups,
-                        merge_selected_markups=merge_selected_markups,
-                        merge_node_min_chain_size=merge_node_min_chain_size,
-                        graph_level=graph_level,
-                        merge_items=merge_scope_items if merge_nodes_all_markups else None,
                         ui_language=localizer_for_request(request).language,
                     )
+                else:
+                    items, merge_scope_items = resolve_team_graph_items(
+                        index_data.items,
+                        team_ids=team_ids,
+                        excluded_team_ids=excluded_team_ids,
+                    )
+                    if items:
+                        scene_payload = build_team_diagram_payload(
+                            context,
+                            items,
+                            "excalidraw",
+                            merge_nodes_all_markups=merge_nodes_all_markups,
+                            merge_selected_markups=merge_selected_markups,
+                            merge_node_min_chain_size=merge_node_min_chain_size,
+                            graph_level=graph_level,
+                            merge_items=merge_scope_items if merge_nodes_all_markups else None,
+                            ui_language=localizer_for_request(request).language,
+                        )
         except Exception:
             scene_payload = None
         return render_catalog_template(
@@ -907,6 +1118,24 @@ def create_app(settings: AppSettings) -> FastAPI:
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
         return ORJSONResponse(index_data.to_dict())
+
+    @app.get("/api/team-graph-jobs/{job_id}")
+    def api_team_graph_job_status(
+        job_id: str,
+        context: CatalogContext = Depends(get_context),
+    ) -> ORJSONResponse:
+        job = get_team_graph_job(context, job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="Team graph job not found")
+        return ORJSONResponse(
+            {
+                "job_id": job.job_id,
+                "status": job.status,
+                "error_message": job.error_message,
+                "updated_at": job.updated_at.isoformat(),
+                "finished_at": job.finished_at.isoformat() if job.finished_at else None,
+            }
+        )
 
     @app.get("/api/scenes/{scene_id}")
     def api_scene(
@@ -1001,6 +1230,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         graph_level: GraphLevel = Query(default="procedure"),
         format: SceneFormat = Query(default="excalidraw"),
         download: bool = Query(default=False),
+        job_id: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         team_ids = normalize_team_ids(team_ids)
@@ -1010,24 +1240,50 @@ def create_app(settings: AppSettings) -> FastAPI:
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        items, merge_scope_items = resolve_team_graph_items(
-            index_data.items,
+        build_request = build_team_graph_request(
             team_ids=team_ids,
             excluded_team_ids=excluded_team_ids,
-        )
-        if not items:
-            raise HTTPException(status_code=404, detail="No scenes for selected teams")
-        payload = build_team_diagram_payload(
-            context,
-            items,
-            format,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
-            graph_level=graph_level,
-            merge_items=merge_scope_items if merge_nodes_all_markups else None,
-            ui_language=localizer_for_request(request).language,
         )
+        cached_result = resolve_team_graph_cached_result(
+            context,
+            index_data=index_data,
+            build_request=build_request,
+            job_id=job_id,
+        )
+        if cached_result is not None:
+            graph_document = (
+                cached_result.service_graph_document
+                if graph_level == "service"
+                else cached_result.procedure_graph_document
+            )
+            payload = build_procedure_graph_diagram_payload(
+                context,
+                graph_document,
+                format,
+                ui_language=localizer_for_request(request).language,
+            )
+        else:
+            items, merge_scope_items = resolve_team_graph_items(
+                index_data.items,
+                team_ids=team_ids,
+                excluded_team_ids=excluded_team_ids,
+            )
+            if not items:
+                raise HTTPException(status_code=404, detail="No scenes for selected teams")
+            payload = build_team_diagram_payload(
+                context,
+                items,
+                format,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+                graph_level=graph_level,
+                merge_items=merge_scope_items if merge_nodes_all_markups else None,
+                ui_language=localizer_for_request(request).language,
+            )
         headers = {}
         if download:
             extension = resolve_diagram_extension(format)
@@ -1050,6 +1306,7 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_selected_markups: bool = Query(default=False),
         merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         graph_level: GraphLevel = Query(default="service"),
+        job_id: str | None = Query(default=None),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         team_ids = normalize_team_ids(team_ids)
@@ -1059,22 +1316,42 @@ def create_app(settings: AppSettings) -> FastAPI:
         index_data = load_index(context)
         if index_data is None:
             raise HTTPException(status_code=404, detail="Catalog index not found")
-        items, merge_scope_items = resolve_team_graph_items(
-            index_data.items,
+        build_request = build_team_graph_request(
             team_ids=team_ids,
             excluded_team_ids=excluded_team_ids,
-        )
-        if not items:
-            raise HTTPException(status_code=404, detail="No scenes for selected teams")
-        graph_document = build_team_graph_document(
-            context,
-            items,
             merge_nodes_all_markups=merge_nodes_all_markups,
             merge_selected_markups=merge_selected_markups,
             merge_node_min_chain_size=merge_node_min_chain_size,
-            graph_level=graph_level,
-            merge_items=merge_scope_items if merge_nodes_all_markups else None,
         )
+        cached_result = resolve_team_graph_cached_result(
+            context,
+            index_data=index_data,
+            build_request=build_request,
+            job_id=job_id,
+        )
+        if cached_result is not None:
+            graph_document = (
+                cached_result.service_graph_document
+                if graph_level == "service"
+                else cached_result.procedure_graph_document
+            )
+        else:
+            items, merge_scope_items = resolve_team_graph_items(
+                index_data.items,
+                team_ids=team_ids,
+                excluded_team_ids=excluded_team_ids,
+            )
+            if not items:
+                raise HTTPException(status_code=404, detail="No scenes for selected teams")
+            graph_document = build_team_graph_document(
+                context,
+                items,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+                graph_level=graph_level,
+                merge_items=merge_scope_items if merge_nodes_all_markups else None,
+            )
         return ORJSONResponse(extract_procedure_graph_view(graph_document))
 
     @app.get("/api/markup/{scene_id}")
@@ -1752,6 +2029,21 @@ def build_team_diagram_payload(
         document_cache=document_cache,
         force_merge_scope=force_merge_scope,
     )
+    return build_procedure_graph_diagram_payload(
+        context,
+        graph_document,
+        diagram_format,
+        ui_language=ui_language,
+    )
+
+
+def build_procedure_graph_diagram_payload(
+    context: CatalogContext,
+    graph_document: MarkupDocument,
+    diagram_format: SceneFormat,
+    *,
+    ui_language: str | None = None,
+) -> dict[str, Any]:
     document: ExcalidrawDocument | UnidrawDocument
     if diagram_format == "excalidraw":
         document = context.to_procedure_graph_excalidraw.convert(graph_document)
@@ -1809,6 +2101,298 @@ def load_markup_documents(
         cache[item.markup_rel_path] = markup
         documents.append(markup)
     return documents
+
+
+def build_team_graph_request(
+    *,
+    team_ids: Sequence[str],
+    excluded_team_ids: Sequence[str],
+    merge_nodes_all_markups: bool,
+    merge_selected_markups: bool,
+    merge_node_min_chain_size: int,
+) -> TeamGraphBuildRequest:
+    return TeamGraphBuildRequest(
+        team_ids=tuple(team_ids),
+        excluded_team_ids=tuple(excluded_team_ids),
+        merge_nodes_all_markups=merge_nodes_all_markups,
+        merge_selected_markups=merge_selected_markups,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+    )
+
+
+def build_team_graph_request_key(
+    build_request: TeamGraphBuildRequest,
+    *,
+    cache_signature: str,
+) -> str:
+    payload = {
+        "cache_signature": cache_signature,
+        "team_ids": list(build_request.team_ids),
+        "excluded_team_ids": list(build_request.excluded_team_ids),
+        "merge_nodes_all_markups": build_request.merge_nodes_all_markups,
+        "merge_selected_markups": build_request.merge_selected_markups,
+        "merge_node_min_chain_size": build_request.merge_node_min_chain_size,
+    }
+    digest_source = orjson.dumps(payload, option=orjson.OPT_SORT_KEYS)
+    return hashlib.sha256(digest_source).hexdigest()
+
+
+def get_team_graph_job(
+    context: CatalogContext,
+    job_id: str | None,
+) -> TeamGraphJob | None:
+    if not job_id:
+        return None
+    with context.team_graph_jobs.lock:
+        return context.team_graph_jobs.jobs.get(job_id)
+
+
+def build_team_graph_cache_signature(
+    context: CatalogContext,
+    *,
+    index_signature: str,
+) -> str:
+    return f"{context.team_graph_jobs.instance_id}:{index_signature}"
+
+
+def find_team_graph_job_for_request(
+    context: CatalogContext,
+    *,
+    build_request: TeamGraphBuildRequest,
+    cache_signature: str,
+    reuse_failed: bool,
+) -> TeamGraphJob | None:
+    request_key = build_team_graph_request_key(build_request, cache_signature=cache_signature)
+    with context.team_graph_jobs.lock:
+        job_id = context.team_graph_jobs.request_jobs.get(request_key)
+        if not job_id:
+            return None
+        job = context.team_graph_jobs.jobs.get(job_id)
+        if job is None:
+            context.team_graph_jobs.request_jobs.pop(request_key, None)
+            return None
+        if (
+            job.request != build_request
+            or job.index_signature != cache_signature
+            or (job.status == "failed" and not reuse_failed)
+        ):
+            return None
+        return job
+
+
+def create_or_reuse_team_graph_job(
+    context: CatalogContext,
+    *,
+    build_request: TeamGraphBuildRequest,
+    index_data: CatalogIndex,
+    cache_signature: str,
+) -> TeamGraphJob:
+    reusable = find_team_graph_job_for_request(
+        context,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=False,
+    )
+    if reusable is not None:
+        return reusable
+
+    now = datetime.now(tz=UTC)
+    job = TeamGraphJob(
+        job_id=uuid4().hex,
+        request=build_request,
+        index_signature=cache_signature,
+        status="pending",
+        created_at=now,
+        updated_at=now,
+    )
+    request_key = build_team_graph_request_key(build_request, cache_signature=cache_signature)
+    with context.team_graph_jobs.lock:
+        context.team_graph_jobs.jobs[job.job_id] = job
+        context.team_graph_jobs.request_jobs[request_key] = job.job_id
+        prune_team_graph_jobs(context.team_graph_jobs, keep_job_ids={job.job_id})
+    context.team_graph_jobs.executor.submit(run_team_graph_job, context, job.job_id, index_data)
+    return job
+
+
+def run_team_graph_job(
+    context: CatalogContext,
+    job_id: str,
+    index_data: CatalogIndex,
+) -> None:
+    with context.team_graph_jobs.lock:
+        job = context.team_graph_jobs.jobs.get(job_id)
+        if job is None:
+            return
+        job.status = "running"
+        job.started_at = datetime.now(tz=UTC)
+        job.updated_at = job.started_at
+        job.error_message = None
+        job.result = None
+    try:
+        result = compute_team_graph_build_result(context, index_data, job.request)
+    except HTTPException as exc:
+        message = str(exc.detail) if exc.detail is not None else "Unable to build team graph."
+        logger.warning("Team graph merge job failed: %s", message)
+        finish_team_graph_job(
+            context,
+            job_id,
+            status="failed",
+            error_message=message,
+        )
+        return
+    except Exception as exc:
+        logger.exception("Team graph merge job failed unexpectedly.")
+        finish_team_graph_job(
+            context,
+            job_id,
+            status="failed",
+            error_message=str(exc).strip() or "Unexpected team graph merge failure.",
+        )
+        return
+    finish_team_graph_job(
+        context,
+        job_id,
+        status="succeeded",
+        result=result,
+    )
+
+
+def finish_team_graph_job(
+    context: CatalogContext,
+    job_id: str,
+    *,
+    status: TeamGraphJobStatus,
+    result: TeamGraphBuildResult | None = None,
+    error_message: str | None = None,
+) -> None:
+    now = datetime.now(tz=UTC)
+    with context.team_graph_jobs.lock:
+        job = context.team_graph_jobs.jobs.get(job_id)
+        if job is None:
+            return
+        job.status = status
+        job.result = result
+        job.error_message = error_message
+        job.updated_at = now
+        job.finished_at = now
+
+
+def prune_team_graph_jobs(
+    state: TeamGraphJobState,
+    *,
+    keep_job_ids: set[str] | None = None,
+) -> None:
+    keep_ids = keep_job_ids or set()
+    max_jobs = 24
+    cutoff = datetime.now(tz=UTC) - timedelta(hours=2)
+    removable = [
+        job
+        for job in state.jobs.values()
+        if job.job_id not in keep_ids and job.finished_at is not None and job.finished_at < cutoff
+    ]
+    removable.sort(key=lambda item: item.finished_at or item.updated_at)
+    while removable:
+        job = removable.pop(0)
+        state.jobs.pop(job.job_id, None)
+        request_key = build_team_graph_request_key(job.request, cache_signature=job.index_signature)
+        if state.request_jobs.get(request_key) == job.job_id:
+            state.request_jobs.pop(request_key, None)
+    if len(state.jobs) <= max_jobs:
+        return
+    overflow = len(state.jobs) - max_jobs
+    finished_jobs = sorted(
+        (
+            job
+            for job in state.jobs.values()
+            if job.job_id not in keep_ids and job.finished_at is not None
+        ),
+        key=lambda item: item.finished_at or item.updated_at,
+    )
+    for job in finished_jobs[:overflow]:
+        state.jobs.pop(job.job_id, None)
+        request_key = build_team_graph_request_key(job.request, cache_signature=job.index_signature)
+        if state.request_jobs.get(request_key) == job.job_id:
+            state.request_jobs.pop(request_key, None)
+
+
+def compute_team_graph_build_result(
+    context: CatalogContext,
+    index_data: CatalogIndex,
+    build_request: TeamGraphBuildRequest,
+) -> TeamGraphBuildResult:
+    items, merge_scope_items = resolve_team_graph_items(
+        index_data.items,
+        team_ids=list(build_request.team_ids),
+        excluded_team_ids=list(build_request.excluded_team_ids),
+    )
+    if not items:
+        raise HTTPException(status_code=404, detail="No scenes for selected teams.")
+
+    document_cache: dict[str, MarkupDocument] = {}
+    selected_documents = load_markup_documents(context, items, cache=document_cache)
+    all_documents = selected_documents
+    if len(items) < len(merge_scope_items):
+        all_documents = load_markup_documents(context, merge_scope_items, cache=document_cache)
+
+    dashboard = BuildCrossTeamGraphDashboard().build(
+        selected_documents=selected_documents,
+        all_documents=all_documents,
+        selected_team_ids=list(build_request.team_ids),
+        merge_selected_markups=build_request.merge_selected_markups,
+        merge_node_min_chain_size=build_request.merge_node_min_chain_size,
+        merge_documents=all_documents if build_request.merge_nodes_all_markups else None,
+    )
+
+    builder = BuildTeamProcedureGraph()
+    try:
+        procedure_graph_document = builder.build(
+            selected_documents,
+            merge_documents=all_documents if build_request.merge_nodes_all_markups else None,
+            merge_selected_markups=build_request.merge_selected_markups,
+            merge_node_min_chain_size=build_request.merge_node_min_chain_size,
+            graph_level="procedure",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    service_graph_document = builder.build_service_graph_document(procedure_graph_document)
+    return TeamGraphBuildResult(
+        dashboard=dashboard,
+        procedure_graph_document=procedure_graph_document,
+        service_graph_document=service_graph_document,
+    )
+
+
+def resolve_team_graph_cached_result(
+    context: CatalogContext,
+    *,
+    index_data: CatalogIndex,
+    build_request: TeamGraphBuildRequest,
+    job_id: str | None,
+) -> TeamGraphBuildResult | None:
+    index_signature = resolve_catalog_index_signature(context, index_data)
+    cache_signature = build_team_graph_cache_signature(
+        context,
+        index_signature=index_signature,
+    )
+    job: TeamGraphJob | None = None
+    if job_id:
+        candidate = get_team_graph_job(context, job_id)
+        if (
+            candidate is not None
+            and candidate.request == build_request
+            and candidate.index_signature == cache_signature
+        ):
+            job = candidate
+    if job is None:
+        job = find_team_graph_job_for_request(
+            context,
+            build_request=build_request,
+            cache_signature=cache_signature,
+            reuse_failed=False,
+        )
+    if job is None or job.status != "succeeded":
+        return None
+    return job.result
 
 
 def build_validity_issue_blocks_by_scene(
@@ -1930,6 +2514,7 @@ def build_team_query(
     merge_selected_markups: bool = False,
     merge_node_min_chain_size: int = 1,
     graph_level: GraphLevel = "procedure",
+    job_id: str | None = None,
 ) -> str:
     if not team_ids:
         return ""
@@ -1944,7 +2529,33 @@ def build_team_query(
         payload["merge_node_min_chain_size"] = str(merge_node_min_chain_size)
     if graph_level == "service":
         payload["graph_level"] = graph_level
+    if job_id:
+        payload["job_id"] = job_id
     return urlencode(payload)
+
+
+def build_team_page_query(
+    team_ids: list[str],
+    *,
+    excluded_team_ids: list[str] | None = None,
+    merge_nodes_all_markups: bool = False,
+    merge_selected_markups: bool = False,
+    merge_node_min_chain_size: int = 1,
+    job_id: str | None = None,
+    language: str | None = None,
+) -> str:
+    payload = build_team_query(
+        team_ids,
+        excluded_team_ids=excluded_team_ids,
+        merge_nodes_all_markups=merge_nodes_all_markups,
+        merge_selected_markups=merge_selected_markups,
+        merge_node_min_chain_size=merge_node_min_chain_size,
+        job_id=job_id,
+    )
+    query_parts = [payload] if payload else []
+    if language:
+        query_parts.append(urlencode({"lang": language}))
+    return "&".join(part for part in query_parts if part)
 
 
 def normalize_team_ids(team_ids: list[str]) -> list[str]:
