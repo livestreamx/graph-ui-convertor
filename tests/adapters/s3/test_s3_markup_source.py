@@ -49,6 +49,28 @@ def test_s3_markup_catalog_source_loads_items() -> None:
     assert items[0].updated_at == last_modified
 
 
+def test_s3_markup_catalog_source_loads_markup_with_raw_control_characters() -> None:
+    client = boto3.client("s3", region_name="us-east-1")
+    stubber = Stubber(client)
+
+    payload = b'{\n"markup_type":"service",\n"service_name":"Billing\tSupport",\n"procedures":[]\n}'
+    stubber.add_response(
+        "get_object",
+        {"Body": StreamingBody(io.BytesIO(payload), len(payload))},
+        {"Bucket": "cjm-bucket", "Key": "markup/billing.json"},
+    )
+
+    stubber.activate()
+    try:
+        source = S3MarkupCatalogSource(client, "cjm-bucket", "markup/")
+        document = source.load_document(Path("billing.json"))
+    finally:
+        stubber.deactivate()
+
+    assert document.markup_type == "service"
+    assert document.service_name == "Billing\tSupport"
+
+
 def test_s3_markup_catalog_source_fingerprint_uses_object_list_metadata() -> None:
     client = boto3.client("s3", region_name="us-east-1")
     stubber = Stubber(client)

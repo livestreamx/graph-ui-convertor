@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterable
 from datetime import UTC, datetime
 from hashlib import sha256
@@ -11,7 +10,7 @@ from botocore.client import BaseClient  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from botocore.response import StreamingBody  # type: ignore[import-untyped]
 
-from adapters.filesystem.markup_utils import strip_markup_comments
+from adapters.filesystem.markup_utils import parse_markup_json
 from adapters.s3.s3_client import create_s3_client
 from domain.catalog import MarkupSourceItem
 from domain.models import MarkupDocument
@@ -127,9 +126,7 @@ class S3MarkupCatalogSource(MarkupCatalogSource):
         response = self._client.get_object(Bucket=self._bucket, Key=key)
         body = response.get("Body")
         raw_bytes = self._read_body(body)
-        cleaned = strip_markup_comments(raw_bytes.decode("utf-8"))
-        content = json.loads(cleaned)
-        return content if isinstance(content, dict) else {}
+        return parse_markup_json(raw_bytes.decode("utf-8"))
 
     def _read_body(self, body: Any) -> bytes:
         if isinstance(body, bytes | bytearray):

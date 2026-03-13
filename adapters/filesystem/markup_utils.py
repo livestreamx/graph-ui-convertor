@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 
 def iter_markup_paths(directory: Path) -> Iterable[Path]:
@@ -24,3 +26,9 @@ def strip_markup_comments(content: str) -> str:
             escaped = char == "\\" and not escaped
         result_lines.append("".join(cleaned))
     return "\n".join(result_lines)
+
+
+def parse_markup_json(content: str) -> dict[str, Any]:
+    cleaned = strip_markup_comments(content)
+    data = json.loads(cleaned, strict=False)
+    return data if isinstance(data, dict) else {}

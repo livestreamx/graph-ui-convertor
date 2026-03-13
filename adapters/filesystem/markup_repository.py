@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from adapters.filesystem.markup_utils import iter_markup_paths, strip_markup_comments
+from adapters.filesystem.markup_utils import iter_markup_paths, parse_markup_json
 from domain.models import MarkupDocument
 from domain.ports.repositories import MarkupRepository
 
@@ -16,13 +16,13 @@ class FileSystemMarkupRepository(MarkupRepository):
         documents: list[tuple[Path, MarkupDocument]] = []
         for path in sorted(iter_markup_paths(directory)):
             text = path.read_text(encoding="utf-8")
-            content = json.loads(strip_markup_comments(text))
+            content = parse_markup_json(text)
             documents.append((path, MarkupDocument.model_validate(content)))
         return documents
 
     def load_by_path(self, path: Path) -> MarkupDocument:
         text = path.read_text(encoding="utf-8")
-        content = json.loads(strip_markup_comments(text))
+        content = parse_markup_json(text)
         return MarkupDocument.model_validate(content)
 
     def load_raw(self, path: Path) -> bytes:
