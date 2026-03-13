@@ -10,6 +10,7 @@ from rich.console import Console
 from adapters.excalidraw.repository import FileSystemExcalidrawRepository
 from adapters.filesystem.catalog_index_repository import FileSystemCatalogIndexRepository
 from adapters.filesystem.markup_repository import FileSystemMarkupRepository
+from adapters.filesystem.markup_utils import parse_markup_json
 from adapters.layout.grid import GridLayoutEngine
 from adapters.unidraw.repository import FileSystemUnidrawRepository
 from app.catalog_wiring import build_markup_repository, build_markup_source
@@ -163,7 +164,11 @@ def validate(
         console.print(f"[red]File not found:[/] {input_path}")
         raise typer.Exit(code=1)
 
-    data = json.loads(input_path.read_text(encoding="utf-8"))
+    raw_text = input_path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        data = parse_markup_json(raw_text)
     try:
         if "elements" in data:
             converter = ExcalidrawToMarkupConverter()
