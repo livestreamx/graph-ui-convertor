@@ -273,9 +273,11 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Active filters" in filtered.text
         assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
-        assert "Multiple starts but no branches" in filtered.text
-        assert "Detected when branch blocks = 0 and start blocks &gt; 1." in filtered.text
-        assert "Start blocks" in filtered.text
+        assert "No branches and no graph-completing end blocks" in filtered.text
+        assert "Return-to-parent and postpone end blocks do not make a flow complete." in (
+            filtered.text
+        )
+        assert "Multiple starts but no branches" not in filtered.text
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
         assert f'href="/catalog/{scene_id}?lang=en' in filtered.text
@@ -402,7 +404,8 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team Z" in response.text
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
-        assert "Multiple starts but no branches" in response.text
+        assert "No branches and no graph-completing end blocks" in response.text
+        assert "Multiple starts but no branches" not in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text
 
@@ -454,6 +457,58 @@ def test_catalog_health_renders_same_start_end_validity_issue(
         assert "Detected when one procedure marks the same block as both start and end." not in (
             filtered.text
         )
+
+
+def test_catalog_health_skips_merged_multiple_starts_without_branches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    extra_objects = {
+        "markup/team_m_merged_starts.json": {
+            "markup_type": "service",
+            "finedog_unit_meta": {
+                "service_name": "Team M Merged Starts",
+                "team_id": "team-m",
+                "team_name": "Team M",
+            },
+            "procedures": [
+                {
+                    "proc_id": "team_m_proc",
+                    "proc_name": "Team M Procedure",
+                    "start_block_ids": ["m1", "m2"],
+                    "end_block_ids": ["m4"],
+                    "branches": {},
+                    "block_id_to_block_name": {
+                        "m1": "Primary Start",
+                        "m2": "Secondary Start",
+                        "m3": "Shared Step",
+                        "m4": "Done",
+                    },
+                }
+            ],
+            "block_graph": {
+                "m1": ["m3"],
+                "m2": ["m3"],
+                "m3": ["m4"],
+            },
+            "procedure_graph": {"team_m_proc": []},
+        }
+    }
+
+    with build_catalog_health_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        extra_objects=extra_objects,
+    ) as client:
+        catalog = client.get("/catalog")
+        assert catalog.status_code == 200
+        assert "Team M Merged Starts" in catalog.text
+
+        filtered = client.get("/catalog", params={"health_marker": "validity"})
+        assert filtered.status_code == 200
+        assert "Team M Merged Starts" not in filtered.text
 
 
 def test_catalog_health_validity_issue_blocks_render_external_links(

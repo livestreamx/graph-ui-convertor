@@ -64,6 +64,7 @@ from domain.services.catalog_health import (
     BuildCatalogHealthReport,
     CatalogHealthReport,
     CatalogItemHealth,
+    problematic_multiple_start_blocks_by_procedure,
 )
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
@@ -208,7 +209,7 @@ GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
 
 GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: (
-        "Detected when branch blocks = 0 and start blocks > 1.",
+        "Detected when a procedure has multiple starts, zero branch blocks, and those starts do not merge downstream.",
     ),
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
         "Detected when branch blocks = 0 and graph-completing end blocks = 0.",
@@ -2426,6 +2427,7 @@ def collect_validity_issue_block_refs(
     seen: set[tuple[str, str, str]] = set()
     procedure_names = item.procedure_names
     block_names = item.procedure_block_names
+    problematic_start_blocks = problematic_multiple_start_blocks_by_procedure(item)
 
     procedure_ids = sorted(
         set(item.procedure_start_blocks)
@@ -2438,23 +2440,21 @@ def collect_validity_issue_block_refs(
             continue
         start_ids = tuple(item.procedure_start_blocks.get(procedure_id, ()))
         end_ids = set(item.procedure_end_blocks.get(procedure_id, ()))
-        branch_count = int(item.procedure_branch_counts.get(procedure_id, 0))
-        if branch_count == 0 and len(start_ids) > 1:
-            for block_id in start_ids:
-                _append_validity_issue_block_ref(
-                    by_issue[GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH],
-                    seen,
-                    issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
+        for block_id in problematic_start_blocks.get(procedure_id, ()):
+            _append_validity_issue_block_ref(
+                by_issue[GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH],
+                seen,
+                issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
+                procedure_id=procedure_id,
+                block_id=block_id,
+                procedure_name=procedure_names.get(procedure_id, procedure_id),
+                block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
+                block_external_url=resolve_block_external_url(
+                    context,
+                    block_id,
                     procedure_id=procedure_id,
-                    block_id=block_id,
-                    procedure_name=procedure_names.get(procedure_id, procedure_id),
-                    block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
-                    block_external_url=resolve_block_external_url(
-                        context,
-                        block_id,
-                        procedure_id=procedure_id,
-                    ),
-                )
+                ),
+            )
         overlap_ids = sorted(end_ids.intersection(start_ids), key=str.lower)
         for block_id in overlap_ids:
             _append_validity_issue_block_ref(

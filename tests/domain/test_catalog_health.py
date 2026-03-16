@@ -20,6 +20,11 @@ def _catalog_item(
     team_id: str,
     team_name: str,
     procedure_graph: dict[str, list[str]],
+    procedure_blocks: dict[str, list[str]] | None = None,
+    procedure_block_graphs: dict[str, dict[str, list[str]]] | None = None,
+    procedure_start_blocks: dict[str, list[str]] | None = None,
+    procedure_end_blocks: dict[str, list[str]] | None = None,
+    procedure_branch_counts: dict[str, int] | None = None,
     start_block_count: int = 1,
     branch_block_count: int = 1,
     non_postpone_end_block_count: int = 1,
@@ -56,7 +61,11 @@ def _catalog_item(
         unidraw_rel_path=f"{scene_id}.unidraw",
         procedure_ids=procedure_ids,
         block_ids=[],
-        procedure_blocks={},
+        procedure_blocks=procedure_blocks or {},
+        procedure_block_graphs=procedure_block_graphs or {},
+        procedure_start_blocks=procedure_start_blocks or {},
+        procedure_end_blocks=procedure_end_blocks or {},
+        procedure_branch_counts=procedure_branch_counts or {},
         procedure_graph=procedure_graph,
         start_block_count=start_block_count,
         branch_block_count=branch_block_count,
@@ -382,6 +391,10 @@ def test_catalog_health_report_detects_multiple_starts_without_branches() -> Non
         team_id="team-a",
         team_name="Team A",
         procedure_graph={"bot_entry": ["finish"]},
+        procedure_blocks={"p1": ["a", "b", "c", "d"]},
+        procedure_block_graphs={"p1": {"a": ["c"], "b": ["d"], "c": [], "d": []}},
+        procedure_start_blocks={"p1": ["a", "b"]},
+        procedure_branch_counts={"p1": 0},
         start_block_count=2,
         branch_block_count=0,
         non_postpone_end_block_count=1,
@@ -395,6 +408,56 @@ def test_catalog_health_report_detects_multiple_starts_without_branches() -> Non
     assert health.gaming.is_problem is True
     assert health.gaming.issue_codes == (GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,)
     assert report.gaming_problem_count == 1
+
+
+def test_catalog_health_report_allows_sequential_multiple_starts_without_branches() -> None:
+    item = _catalog_item(
+        scene_id="multiple-starts-sequential",
+        title="Multiple starts sequential",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"bot_entry": ["finish"]},
+        procedure_blocks={"p1": ["a", "b", "c"]},
+        procedure_block_graphs={"p1": {"a": ["b"], "b": ["c"], "c": []}},
+        procedure_start_blocks={"p1": ["a", "b"]},
+        procedure_branch_counts={"p1": 0},
+        start_block_count=2,
+        branch_block_count=0,
+        non_postpone_end_block_count=1,
+        postpone_end_block_count=0,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("multiple-starts-sequential")
+    assert health is not None
+    assert health.gaming.is_problem is False
+    assert health.gaming.issue_codes == ()
+
+
+def test_catalog_health_report_allows_multiple_starts_that_merge_into_one_block() -> None:
+    item = _catalog_item(
+        scene_id="multiple-starts-merge",
+        title="Multiple starts merge",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"bot_entry": ["finish"]},
+        procedure_blocks={"p1": ["a", "b", "c", "d"]},
+        procedure_block_graphs={"p1": {"a": ["c"], "b": ["c"], "c": ["d"], "d": []}},
+        procedure_start_blocks={"p1": ["a", "b"]},
+        procedure_branch_counts={"p1": 0},
+        start_block_count=2,
+        branch_block_count=0,
+        non_postpone_end_block_count=1,
+        postpone_end_block_count=0,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("multiple-starts-merge")
+    assert health is not None
+    assert health.gaming.is_problem is False
+    assert health.gaming.issue_codes == ()
 
 
 def test_catalog_health_report_detects_same_block_used_as_start_and_end() -> None:

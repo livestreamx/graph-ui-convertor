@@ -268,7 +268,10 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
     non_postpone_end_block_count = max(0, int(item.non_postpone_end_block_count))
     postpone_end_block_count = max(0, int(item.postpone_end_block_count))
     issue_codes: list[str] = []
-    if branch_block_count == 0 and start_block_count > 1:
+    problematic_multiple_starts = problematic_multiple_start_blocks_by_procedure(item)
+    if problematic_multiple_starts or (
+        not item.procedure_start_blocks and branch_block_count == 0 and start_block_count > 1
+    ):
         issue_codes.append(GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH)
     if unique_graph_count > 0 and branch_block_count == 0 and non_postpone_end_block_count == 0:
         issue_codes.append(GAMING_ISSUE_NO_BRANCH_AND_NO_END)
@@ -283,6 +286,101 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
         issue_codes=tuple(issue_codes),
         is_problem=is_problem,
     )
+
+
+def problematic_multiple_start_blocks_by_procedure(item: CatalogItem) -> dict[str, tuple[str, ...]]:
+    result: dict[str, tuple[str, ...]] = {}
+    procedure_ids = sorted(
+        set(item.procedure_start_blocks) | set(item.procedure_branch_counts),
+        key=str.lower,
+    )
+    for procedure_id in procedure_ids:
+        start_ids = tuple(
+            block_id
+            for block_id in item.procedure_start_blocks.get(procedure_id, ())
+            if str(block_id).strip()
+        )
+        if len(start_ids) <= 1:
+            continue
+        if int(item.procedure_branch_counts.get(procedure_id, 0)) > 0:
+            continue
+        if _starts_merge_without_branch(item, procedure_id, start_ids):
+            continue
+        result[procedure_id] = start_ids
+    return result
+
+
+def _starts_merge_without_branch(
+    item: CatalogItem,
+    procedure_id: str,
+    start_ids: Sequence[str],
+) -> bool:
+    adjacency = _normalize_procedure_block_adjacency(item, procedure_id, start_ids)
+    if not adjacency:
+        return False
+    shared_reachable: set[str] | None = None
+    for start_id in start_ids:
+        reachable = _reachable_block_ids(start_id, adjacency)
+        if shared_reachable is None:
+            shared_reachable = reachable
+        else:
+            shared_reachable.intersection_update(reachable)
+        if not shared_reachable:
+            return False
+    return bool(shared_reachable)
+
+
+def _normalize_procedure_block_adjacency(
+    item: CatalogItem,
+    procedure_id: str,
+    start_ids: Sequence[str],
+) -> dict[str, tuple[str, ...]]:
+    raw_adjacency = item.procedure_block_graphs.get(procedure_id, {})
+    adjacency: dict[str, set[str]] = {}
+    for block_id in item.procedure_blocks.get(procedure_id, ()):
+        normalized = str(block_id).strip()
+        if normalized:
+            adjacency.setdefault(normalized, set())
+    for block_id in start_ids:
+        normalized = str(block_id).strip()
+        if normalized:
+            adjacency.setdefault(normalized, set())
+    for source_id, targets in raw_adjacency.items():
+        source = str(source_id).strip()
+        if not source:
+            continue
+        source_targets = adjacency.setdefault(source, set())
+        for target_id in targets:
+            target = str(target_id).strip()
+            if not target:
+                continue
+            source_targets.add(target)
+            adjacency.setdefault(target, set())
+    return {
+        source: tuple(sorted(targets, key=str.lower))
+        for source, targets in sorted(adjacency.items(), key=lambda entry: entry[0].lower())
+    }
+
+
+def _reachable_block_ids(
+    start_id: str,
+    adjacency: Mapping[str, Sequence[str]],
+) -> set[str]:
+    normalized_start = str(start_id).strip()
+    if not normalized_start:
+        return set()
+    visited: set[str] = set()
+    stack = [normalized_start]
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+        for target in adjacency.get(current, ()):
+            normalized_target = str(target).strip()
+            if normalized_target and normalized_target not in visited:
+                stack.append(normalized_target)
+    return visited
 
 
 def _build_team_summaries(

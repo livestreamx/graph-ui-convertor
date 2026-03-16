@@ -38,6 +38,7 @@ class CatalogItem:
     procedure_names: dict[str, str] = field(default_factory=dict)
     procedure_block_names: dict[str, dict[str, str]] = field(default_factory=dict)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_block_graphs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     procedure_start_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_end_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_branch_counts: dict[str, int] = field(default_factory=dict)
@@ -73,6 +74,10 @@ class CatalogItem:
                 for procedure_id, block_names in self.procedure_block_names.items()
             },
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
+            "procedure_block_graphs": {
+                procedure_id: {source: list(targets) for source, targets in adjacency.items()}
+                for procedure_id, adjacency in self.procedure_block_graphs.items()
+            },
             "procedure_start_blocks": {
                 key: list(value) for key, value in self.procedure_start_blocks.items()
             },
@@ -93,6 +98,7 @@ class CatalogItem:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
         procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_block_graphs = _load_procedure_block_graphs(payload.get("procedure_block_graphs"))
         procedure_names = _load_string_mapping(payload.get("procedure_names"))
         procedure_block_names = _load_procedure_block_names(payload.get("procedure_block_names"))
         procedure_start_blocks = _load_procedure_blocks(payload.get("procedure_start_blocks"))
@@ -128,6 +134,7 @@ class CatalogItem:
             procedure_names=procedure_names,
             procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
+            procedure_block_graphs=procedure_block_graphs,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
             procedure_branch_counts=procedure_branch_counts,
@@ -206,6 +213,18 @@ def _load_procedure_graph(raw: Any) -> dict[str, list[str]]:
         if not source_text:
             continue
         normalized[source_text] = _load_string_list(target_values)
+    return normalized
+
+
+def _load_procedure_block_graphs(raw: Any) -> dict[str, dict[str, list[str]]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for procedure_id, adjacency in raw.items():
+        procedure_text = str(procedure_id).strip()
+        if not procedure_text:
+            continue
+        normalized[procedure_text] = _load_procedure_graph(adjacency)
     return normalized
 
 
