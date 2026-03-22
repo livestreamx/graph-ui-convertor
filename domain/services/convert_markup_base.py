@@ -159,6 +159,7 @@ class MarkupToDiagramConverter(ABC):
             "schema_version": METADATA_SCHEMA_VERSION,
             "markup_type": document.markup_type,
             "display_markup_type": display_markup_type,
+            "consistent": document.consistent,
         }
         if document.finedog_unit_id:
             base_metadata["finedog_unit_id"] = document.finedog_unit_id

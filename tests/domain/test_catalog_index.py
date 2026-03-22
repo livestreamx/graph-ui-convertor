@@ -77,6 +77,7 @@ def test_build_catalog_index_extracts_fields(
         assert item.group_values["custom.domain"] == "payments"
         assert item.group_values["markup_type"] == "service"
         assert item.markup_type == "service"
+        assert item.consistent is True
         assert item.finedog_unit_id == "fd-01"
         assert item.scene_id == "fd-01"
         assert item.criticality_level == "BC"
@@ -150,6 +151,57 @@ def test_build_catalog_index_detects_start_end_overlap_in_same_block(
     try:
         index = builder.build(config)
         assert index.items[0].has_start_end_overlap is True
+    finally:
+        stubber.deactivate()
+
+
+def test_build_catalog_index_extracts_consistent_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "consistent": False,
+        "finedog_unit_meta": {"service_name": "Inconsistent"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/inconsistent.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        assert index.items[0].consistent is False
     finally:
         stubber.deactivate()
 

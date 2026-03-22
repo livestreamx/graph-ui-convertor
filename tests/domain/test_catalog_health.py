@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from domain.catalog import CatalogItem
 from domain.services.catalog_health import (
+    GAMING_ISSUE_INCONSISTENT_MARKUP,
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
     GAMING_ISSUE_SAME_START_AND_END_BLOCK,
@@ -30,6 +31,7 @@ def _catalog_item(
     non_postpone_end_block_count: int = 1,
     postpone_end_block_count: int = 0,
     has_start_end_overlap: bool = False,
+    consistent: bool = True,
     markup_type: str = "service",
 ) -> CatalogItem:
     procedure_ids: list[str] = []
@@ -49,6 +51,7 @@ def _catalog_item(
         tags=[],
         updated_at="2026-02-01T00:00:00+00:00",
         markup_type=markup_type,
+        consistent=consistent,
         finedog_unit_id=scene_id,
         criticality_level="low",
         team_id=team_id,
@@ -382,6 +385,25 @@ def test_catalog_health_report_detects_gaming_marker_problem() -> None:
     assert problematic_health.gaming.issue_codes == (GAMING_ISSUE_NO_BRANCH_AND_NO_END,)
     assert report.gaming_problem_count == 1
     assert report.total_problem_markups == 2
+
+
+def test_catalog_health_report_detects_inconsistent_markup_flag() -> None:
+    item = _catalog_item(
+        scene_id="inconsistent",
+        title="Inconsistent",
+        team_id="team-a",
+        team_name="Team A",
+        procedure_graph={"bot_entry": ["finish"]},
+        consistent=False,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+
+    health = report.item("inconsistent")
+    assert health is not None
+    assert health.gaming.is_problem is True
+    assert health.gaming.issue_codes == (GAMING_ISSUE_INCONSISTENT_MARKUP,)
+    assert report.gaming_problem_count == 1
 
 
 def test_catalog_health_report_detects_multiple_starts_without_branches() -> None:

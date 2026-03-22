@@ -163,6 +163,17 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
     assert translate_ui_text("Start blocks", "ru") == "Стартовые блоки"
     assert (
+        translate_ui_text("Markup is not consistent", "ru") == "Разметка не является консистентной"
+    )
+    assert (
+        translate_ui_text("Markup is not consistent because some key blocks were lost.", "ru")
+        == "Разметка не является консистентной, поскольку часть ключевых блоков потеряна."
+    )
+    assert (
+        translate_ui_text("Fix by manually refreshing the markup in the markup tool.", "ru")
+        == "Исправляется путем актуализации разметки вручную через инструмент разметки."
+    )
+    assert (
         translate_ui_text("Multiple starts but no branches", "ru")
         == "Несколько стартов, но нет ветвлений"
     )

@@ -1,5 +1,6 @@
 {
   "markup_type": "system_task_processor",
+  "consistent": false,
   "finedog_unit_id": "svc-task-processor-corner-cases",
   "finedog_unit_meta": {
     "service_name": "Task Processor Corner Cases",

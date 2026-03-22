@@ -48,6 +48,7 @@ class CatalogItem:
     non_postpone_end_block_count: int = 0
     postpone_end_block_count: int = 0
     has_start_end_overlap: bool = False
+    consistent: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -56,6 +57,7 @@ class CatalogItem:
             "tags": list(self.tags),
             "updated_at": self.updated_at,
             "markup_type": self.markup_type,
+            "consistent": bool(self.consistent),
             "finedog_unit_id": self.finedog_unit_id,
             "criticality_level": self.criticality_level,
             "team_id": self.team_id,
@@ -119,6 +121,7 @@ class CatalogItem:
             tags=list(payload.get("tags", []) or []),
             updated_at=str(payload.get("updated_at", "")),
             markup_type=str(payload.get("markup_type", "")),
+            consistent=_load_bool(payload.get("consistent", True)),
             finedog_unit_id=str(payload.get("finedog_unit_id", "")),
             criticality_level=str(payload.get("criticality_level", "")),
             team_id=str(payload.get("team_id", "")),

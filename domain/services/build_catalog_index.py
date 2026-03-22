@@ -125,6 +125,7 @@ class BuildCatalogIndex:
             tags=tags,
             updated_at=updated_at.isoformat(),
             markup_type=markup_type,
+            consistent=bool(document.consistent),
             finedog_unit_id=finedog_unit_id,
             criticality_level=criticality_level,
             team_id=team_id,

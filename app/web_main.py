@@ -54,6 +54,7 @@ from domain.services.build_cross_team_graph_dashboard import (
 )
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, GraphLevel
 from domain.services.catalog_health import (
+    GAMING_ISSUE_INCONSISTENT_MARKUP,
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
     GAMING_ISSUE_SAME_START_AND_END_BLOCK,
@@ -202,12 +203,17 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
 }
 
 GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
+    GAMING_ISSUE_INCONSISTENT_MARKUP: "Markup is not consistent",
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no graph-completing end blocks",
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: "Same block used as start and end",
 }
 
 GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
+    GAMING_ISSUE_INCONSISTENT_MARKUP: (
+        "Markup is not consistent because some key blocks were lost.",
+        "Fix by manually refreshing the markup in the markup tool.",
+    ),
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: (
         "Detected when a procedure has multiple starts, zero branch blocks, and those starts do not merge downstream.",
     ),

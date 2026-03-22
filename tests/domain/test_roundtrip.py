@@ -111,6 +111,30 @@ def test_metadata_contains_globals() -> None:
         assert meta.get("markup_type") == markup.markup_type
 
 
+def test_roundtrip_preserves_consistent_flag() -> None:
+    payload = {
+        "markup_type": "service",
+        "consistent": False,
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    markup = MarkupDocument.model_validate(payload)
+    excal = MarkupToExcalidrawConverter(GridLayoutEngine()).convert(markup)
+
+    for element in excal.elements:
+        meta = element.get("customData", {}).get("cjm", {})
+        assert meta.get("consistent") is False
+
+    reconstructed = ExcalidrawToMarkupConverter().convert(excal.to_dict())
+    assert reconstructed.consistent is False
+
+
 def test_service_name_title_rendered_above_frames() -> None:
     payload = {
         "markup_type": "service",

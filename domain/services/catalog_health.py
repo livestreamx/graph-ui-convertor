@@ -13,6 +13,7 @@ GRAPH_ISSUE_TOO_MANY = "too_many_graphs"
 GAMING_ISSUE_NO_BRANCH_AND_NO_END = "no_branch_and_no_end_except_postpone"
 GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH = "multiple_starts_without_branch"
 GAMING_ISSUE_SAME_START_AND_END_BLOCK = "same_block_used_for_start_and_end"
+GAMING_ISSUE_INCONSISTENT_MARKUP = "inconsistent_markup_missing_key_blocks"
 
 
 @dataclass(frozen=True)
@@ -268,6 +269,8 @@ def _build_gaming_health(item: CatalogItem, unique_graph_count: int) -> GamingHe
     non_postpone_end_block_count = max(0, int(item.non_postpone_end_block_count))
     postpone_end_block_count = max(0, int(item.postpone_end_block_count))
     issue_codes: list[str] = []
+    if not item.consistent:
+        issue_codes.append(GAMING_ISSUE_INCONSISTENT_MARKUP)
     problematic_multiple_starts = problematic_multiple_start_blocks_by_procedure(item)
     if problematic_multiple_starts or (
         not item.procedure_start_blocks and branch_block_count == 0 and start_block_count > 1

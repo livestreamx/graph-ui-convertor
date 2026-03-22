@@ -149,6 +149,7 @@ class ExcalidrawToMarkupConverter:
             procedure_graph = self._infer_procedure_graph_from_block_graph(block_graph, procedures)
         return MarkupDocument(
             markup_type=globals_meta["markup_type"],
+            consistent=bool(globals_meta.get("consistent", True)),
             finedog_unit_id=globals_meta.get("finedog_unit_id"),
             service_name=globals_meta.get("service_name"),
             criticality_level=globals_meta.get("criticality_level"),
@@ -593,6 +594,7 @@ class ExcalidrawToMarkupConverter:
             if markup_type:
                 return {
                     "markup_type": str(markup_type),
+                    "consistent": bool(meta.get("consistent", True)),
                     "finedog_unit_id": self._normalize_meta_str(meta.get("finedog_unit_id")),
                     "service_name": self._normalize_meta_str(meta.get("service_name")),
                     "criticality_level": self._normalize_meta_str(meta.get("criticality_level")),
@@ -601,6 +603,7 @@ class ExcalidrawToMarkupConverter:
                 }
         return {
             "markup_type": "service",
+            "consistent": True,
             "finedog_unit_id": None,
             "service_name": None,
             "criticality_level": None,
