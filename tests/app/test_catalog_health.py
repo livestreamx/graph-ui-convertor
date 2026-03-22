@@ -274,13 +274,13 @@ def test_catalog_health_markers_and_problem_filter(
         assert "Active filters" in filtered.text
         assert filtered.text.count("Active filters") == 1
         assert "Problem markers: validity" in filtered.text
-        assert "Markup is not consistent" in filtered.text
         assert "Markup is not consistent because some key blocks were lost." in filtered.text
         assert "Fix by manually refreshing the markup in the markup tool." in filtered.text
         assert "No branches and no graph-completing end blocks" in filtered.text
         assert "Return-to-parent and postpone end blocks do not make a flow complete." in (
             filtered.text
         )
+        assert filtered.text.count('class="validity-status-item"') >= 2
         assert "Multiple starts but no branches" not in filtered.text
 
         scene_id = _scene_id_by_title(client, "Team G Gaming Problem")
@@ -408,8 +408,8 @@ def test_catalog_teams_health_page_and_thresholds(
         assert "Team Z" in response.text
         assert "Team G" in response.text
         assert "Validity marker problems" in response.text
-        assert "Markup is not consistent" in response.text
         assert "No branches and no graph-completing end blocks" in response.text
+        assert 'class="validity-status-item"' in response.text
         assert "Multiple starts but no branches" not in response.text
         assert "&gt;55.0%" in response.text
         assert "&gt;25.0%" in response.text

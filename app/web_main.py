@@ -203,7 +203,6 @@ GRAPH_ISSUE_TEXT_KEYS: dict[str, str] = {
 }
 
 GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
-    GAMING_ISSUE_INCONSISTENT_MARKUP: "Markup is not consistent",
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: "Multiple starts but no branches",
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: "No branches and no graph-completing end blocks",
     GAMING_ISSUE_SAME_START_AND_END_BLOCK: "Same block used as start and end",

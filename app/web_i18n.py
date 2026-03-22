@@ -199,7 +199,6 @@ _RUSSIAN_TRANSLATIONS: Final[dict[str, str]] = {
     "Closest markup across teams": "Наиболее похожая разметка среди других команд",
     "No comparable markups across teams": "Нет разметок для сравнения в других командах",
     "Start blocks": "Стартовые блоки",
-    "Markup is not consistent": "Разметка не является консистентной",
     "Markup is not consistent because some key blocks were lost.": "Разметка не является консистентной, поскольку часть ключевых блоков потеряна.",
     "Fix by manually refreshing the markup in the markup tool.": "Исправляется путем актуализации разметки вручную через инструмент разметки.",
     "Multiple starts but no branches": "Несколько стартов, но нет ветвлений",

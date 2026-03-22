@@ -40,10 +40,15 @@
   {% if gaming.is_problem %}
     <div class="validity-status validity-status-problem{% if compact %} validity-status-compact{% endif %}">
       {% for issue_code in gaming.issue_codes %}
-        <div>{{ t(gaming_issue_text_keys.get(issue_code, issue_code)) }}</div>
-        {% for reason_text in gaming_issue_reason_text_keys.get(issue_code, ()) %}
-          <div class="validity-status-reason">{{ t(reason_text) }}</div>
-        {% endfor %}
+        {% set issue_title = gaming_issue_text_keys.get(issue_code) %}
+        <div class="validity-status-item">
+          {% if issue_title %}
+            <div class="validity-status-title-line">{{ t(issue_title) }}</div>
+          {% endif %}
+          {% for reason_text in gaming_issue_reason_text_keys.get(issue_code, ()) %}
+            <div class="validity-status-reason">{{ t(reason_text) }}</div>
+          {% endfor %}
+        </div>
       {% endfor %}
     </div>
   {% elif show_ok %}
