@@ -99,6 +99,7 @@ class BuildCatalogIndex:
         procedure_blocks = self._extract_procedure_blocks(document)
         procedure_names = self._extract_procedure_names(document)
         procedure_block_names = self._extract_procedure_block_names(document)
+        procedure_block_graphs = self._extract_procedure_block_graphs(document)
         procedure_start_blocks = self._extract_procedure_start_blocks(document)
         procedure_end_blocks = self._extract_procedure_end_blocks(document)
         procedure_branch_counts = self._extract_procedure_branch_counts(document)
@@ -124,6 +125,7 @@ class BuildCatalogIndex:
             tags=tags,
             updated_at=updated_at.isoformat(),
             markup_type=markup_type,
+            consistent=bool(document.consistent),
             finedog_unit_id=finedog_unit_id,
             criticality_level=criticality_level,
             team_id=team_id,
@@ -144,6 +146,7 @@ class BuildCatalogIndex:
             procedure_names=procedure_names,
             procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
+            procedure_block_graphs=procedure_block_graphs,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
             procedure_branch_counts=procedure_branch_counts,
@@ -293,6 +296,70 @@ class BuildCatalogIndex:
                 key=str.lower,
             )
             result[procedure_id] = start_blocks
+        return result
+
+    def _extract_procedure_block_graphs(
+        self,
+        document: MarkupDocument,
+    ) -> dict[str, dict[str, list[str]]]:
+        result: dict[str, dict[str, list[str]]] = {}
+        has_block_graph = bool(document.block_graph)
+        for procedure in document.procedures:
+            procedure_id = str(procedure.procedure_id).strip()
+            if not procedure_id or procedure_id in result:
+                continue
+            block_ids = {
+                block_id
+                for block_id in (str(raw).strip() for raw in procedure.block_ids())
+                if block_id
+            }
+            block_ids.update(
+                block_id
+                for block_id in (
+                    str(raw).strip() for raw in procedure.block_id_to_block_name.keys()
+                )
+                if block_id
+            )
+            adjacency: dict[str, set[str]] = {block_id: set() for block_id in block_ids}
+            if has_block_graph:
+                discovered = set(block_ids)
+                queue = sorted(discovered, key=str.lower)
+                while queue:
+                    current = queue.pop()
+                    for target in document.block_graph.get(current, ()):
+                        target_id = str(target).strip()
+                        if not target_id or target_id in discovered:
+                            continue
+                        discovered.add(target_id)
+                        queue.append(target_id)
+                adjacency = {block_id: set() for block_id in discovered}
+                for source, targets in document.block_graph.items():
+                    source_id = str(source).strip()
+                    if source_id not in discovered:
+                        continue
+                    source_targets = adjacency.setdefault(source_id, set())
+                    for target in targets:
+                        target_id = str(target).strip()
+                        if target_id not in discovered:
+                            continue
+                        source_targets.add(target_id)
+                        adjacency.setdefault(target_id, set())
+            else:
+                for source, targets in procedure.branches.items():
+                    source_id = str(source).strip()
+                    if source_id not in block_ids:
+                        continue
+                    source_targets = adjacency.setdefault(source_id, set())
+                    for target in targets:
+                        target_id = str(target).strip()
+                        if target_id not in block_ids:
+                            continue
+                        source_targets.add(target_id)
+                        adjacency.setdefault(target_id, set())
+            result[procedure_id] = {
+                source: sorted(targets, key=str.lower)
+                for source, targets in sorted(adjacency.items(), key=lambda entry: entry[0].lower())
+            }
         return result
 
     def _extract_procedure_end_blocks(self, document: MarkupDocument) -> dict[str, list[str]]:

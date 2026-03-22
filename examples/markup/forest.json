@@ -1,5 +1,6 @@
 {
   "markup_type": "system_service_search",
+  "consistent": true,
   "finedog_unit_id": "svc-forest",
   "finedog_unit_meta": {
     "service_name": "Forest graph",

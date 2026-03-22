@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlencode, urlparse
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -54,6 +53,7 @@ from domain.services.build_cross_team_graph_dashboard import (
 )
 from domain.services.build_team_procedure_graph import BuildTeamProcedureGraph, GraphLevel
 from domain.services.catalog_health import (
+    GAMING_ISSUE_INCONSISTENT_MARKUP,
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
     GAMING_ISSUE_NO_BRANCH_AND_NO_END,
     GAMING_ISSUE_SAME_START_AND_END_BLOCK,
@@ -64,6 +64,7 @@ from domain.services.catalog_health import (
     BuildCatalogHealthReport,
     CatalogHealthReport,
     CatalogItemHealth,
+    problematic_multiple_start_blocks_by_procedure,
 )
 from domain.services.convert_excalidraw_to_markup import ExcalidrawToMarkupConverter
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
@@ -178,7 +179,6 @@ class TeamGraphJob:
 @dataclass
 class TeamGraphJobState:
     executor: concurrent.futures.ThreadPoolExecutor
-    instance_id: str = dataclass_field(default_factory=lambda: uuid4().hex)
     jobs: dict[str, TeamGraphJob] = dataclass_field(default_factory=dict)
     request_jobs: dict[str, str] = dataclass_field(default_factory=dict)
     lock: threading.RLock = dataclass_field(default_factory=threading.RLock)
@@ -207,8 +207,12 @@ GAMING_ISSUE_TEXT_KEYS: dict[str, str] = {
 }
 
 GAMING_ISSUE_REASON_TEXT_KEYS: dict[str, tuple[str, ...]] = {
+    GAMING_ISSUE_INCONSISTENT_MARKUP: (
+        "Markup is not consistent because some key blocks were lost.",
+        "Fix by manually refreshing the markup in the markup tool.",
+    ),
     GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH: (
-        "Detected when branch blocks = 0 and start blocks > 1.",
+        "Detected when a procedure has multiple starts, zero branch blocks, and those starts do not merge downstream.",
     ),
     GAMING_ISSUE_NO_BRANCH_AND_NO_END: (
         "Detected when branch blocks = 0 and graph-completing end blocks = 0.",
@@ -457,23 +461,23 @@ def create_app(settings: AppSettings) -> FastAPI:
 
         if team_ids:
             if job_id:
-                candidate_job = get_team_graph_job(context, job_id)
-                if (
-                    candidate_job is not None
-                    and candidate_job.request == build_request
-                    and candidate_job.index_signature == cache_signature
-                ):
-                    merge_job = candidate_job
-                else:
-                    merge_job_error = (
-                        "Merge result is stale or does not match the current selection."
-                    )
-            if merge_job is None:
-                merge_job = find_team_graph_job_for_request(
+                merge_job, merge_job_error = resolve_team_graph_job_for_request(
                     context,
                     build_request=build_request,
+                    index_data=index_data,
+                    cache_signature=cache_signature,
+                    requested_job_id=job_id,
+                    reuse_failed=True,
+                    create_if_missing=True,
+                )
+            if merge_job is None:
+                merge_job, _ = resolve_team_graph_job_for_request(
+                    context,
+                    build_request=build_request,
+                    index_data=index_data,
                     cache_signature=cache_signature,
                     reuse_failed=True,
+                    create_if_missing=False,
                 )
 
         if merge_job is not None:
@@ -561,7 +565,16 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_job_status = "idle"
         if merge_job is not None:
             merge_job_status = merge_job.status
+            merge_job_status_query = build_team_query(
+                team_ids,
+                excluded_team_ids=disabled_team_ids,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+            )
             merge_job_status_api_url = f"/api/team-graph-jobs/{merge_job.job_id}"
+            if merge_job_status_query:
+                merge_job_status_api_url = f"{merge_job_status_api_url}?{merge_job_status_query}"
             if page_query:
                 merge_job_refresh_url = f"/catalog/teams/graph?{page_query}"
 
@@ -1122,9 +1135,41 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/team-graph-jobs/{job_id}")
     def api_team_graph_job_status(
         job_id: str,
+        team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         job = get_team_graph_job(context, job_id)
+        if job is None:
+            team_ids = normalize_team_ids(team_ids)
+            excluded_team_ids = normalize_team_ids(excluded_team_ids)
+            if team_ids:
+                index_data = load_index(context)
+                if index_data is not None:
+                    build_request = build_team_graph_request(
+                        team_ids=team_ids,
+                        excluded_team_ids=excluded_team_ids,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
+                    )
+                    job, mismatch_error = resolve_team_graph_job_for_request(
+                        context,
+                        build_request=build_request,
+                        index_data=index_data,
+                        cache_signature=build_team_graph_cache_signature(
+                            context,
+                            index_signature=resolve_catalog_index_signature(context, index_data),
+                        ),
+                        requested_job_id=job_id,
+                        reuse_failed=True,
+                        create_if_missing=True,
+                    )
+                    if mismatch_error:
+                        raise HTTPException(status_code=404, detail=mismatch_error)
         if job is None:
             raise HTTPException(status_code=404, detail="Team graph job not found")
         return ORJSONResponse(
@@ -2137,6 +2182,14 @@ def build_team_graph_request_key(
     return hashlib.sha256(digest_source).hexdigest()
 
 
+def build_team_graph_job_id(
+    build_request: TeamGraphBuildRequest,
+    *,
+    cache_signature: str,
+) -> str:
+    return build_team_graph_request_key(build_request, cache_signature=cache_signature)
+
+
 def get_team_graph_job(
     context: CatalogContext,
     job_id: str | None,
@@ -2152,7 +2205,22 @@ def build_team_graph_cache_signature(
     *,
     index_signature: str,
 ) -> str:
-    return f"{context.team_graph_jobs.instance_id}:{index_signature}"
+    del context
+    return index_signature
+
+
+def team_graph_job_matches_request(
+    job: TeamGraphJob,
+    *,
+    build_request: TeamGraphBuildRequest,
+    cache_signature: str,
+    reuse_failed: bool,
+) -> bool:
+    return (
+        job.request == build_request
+        and job.index_signature == cache_signature
+        and (job.status != "failed" or reuse_failed)
+    )
 
 
 def find_team_graph_job_for_request(
@@ -2171,13 +2239,59 @@ def find_team_graph_job_for_request(
         if job is None:
             context.team_graph_jobs.request_jobs.pop(request_key, None)
             return None
-        if (
-            job.request != build_request
-            or job.index_signature != cache_signature
-            or (job.status == "failed" and not reuse_failed)
+        if not team_graph_job_matches_request(
+            job,
+            build_request=build_request,
+            cache_signature=cache_signature,
+            reuse_failed=reuse_failed,
         ):
             return None
         return job
+
+
+def resolve_team_graph_job_for_request(
+    context: CatalogContext,
+    *,
+    build_request: TeamGraphBuildRequest,
+    index_data: CatalogIndex,
+    cache_signature: str,
+    requested_job_id: str | None = None,
+    reuse_failed: bool,
+    create_if_missing: bool,
+) -> tuple[TeamGraphJob | None, str | None]:
+    expected_job_id = build_team_graph_job_id(build_request, cache_signature=cache_signature)
+    if requested_job_id and requested_job_id != expected_job_id:
+        return None, "Merge result is stale or does not match the current selection."
+
+    job = get_team_graph_job(context, expected_job_id)
+    if job is not None and team_graph_job_matches_request(
+        job,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=reuse_failed,
+    ):
+        return job, None
+
+    job = find_team_graph_job_for_request(
+        context,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=reuse_failed,
+    )
+    if job is not None:
+        return job, None
+
+    if create_if_missing:
+        return (
+            create_or_reuse_team_graph_job(
+                context,
+                build_request=build_request,
+                index_data=index_data,
+                cache_signature=cache_signature,
+            ),
+            None,
+        )
+    return None, None
 
 
 def create_or_reuse_team_graph_job(
@@ -2187,6 +2301,16 @@ def create_or_reuse_team_graph_job(
     index_data: CatalogIndex,
     cache_signature: str,
 ) -> TeamGraphJob:
+    job_id = build_team_graph_job_id(build_request, cache_signature=cache_signature)
+    existing = get_team_graph_job(context, job_id)
+    if existing is not None and team_graph_job_matches_request(
+        existing,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=False,
+    ):
+        return existing
+
     reusable = find_team_graph_job_for_request(
         context,
         build_request=build_request,
@@ -2197,21 +2321,43 @@ def create_or_reuse_team_graph_job(
         return reusable
 
     now = datetime.now(tz=UTC)
-    job = TeamGraphJob(
-        job_id=uuid4().hex,
-        request=build_request,
-        index_signature=cache_signature,
-        status="pending",
-        created_at=now,
-        updated_at=now,
-    )
     request_key = build_team_graph_request_key(build_request, cache_signature=cache_signature)
+    job_to_submit: TeamGraphJob | None = None
     with context.team_graph_jobs.lock:
-        context.team_graph_jobs.jobs[job.job_id] = job
-        context.team_graph_jobs.request_jobs[request_key] = job.job_id
-        prune_team_graph_jobs(context.team_graph_jobs, keep_job_ids={job.job_id})
-    context.team_graph_jobs.executor.submit(run_team_graph_job, context, job.job_id, index_data)
-    return job
+        existing = context.team_graph_jobs.jobs.get(job_id)
+        if existing is not None and team_graph_job_matches_request(
+            existing,
+            build_request=build_request,
+            cache_signature=cache_signature,
+            reuse_failed=False,
+        ):
+            return existing
+        if existing is None:
+            existing = TeamGraphJob(
+                job_id=job_id,
+                request=build_request,
+                index_signature=cache_signature,
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+            context.team_graph_jobs.jobs[job_id] = existing
+        else:
+            existing.request = build_request
+            existing.index_signature = cache_signature
+            existing.status = "pending"
+            existing.created_at = now
+            existing.updated_at = now
+            existing.started_at = None
+            existing.finished_at = None
+            existing.error_message = None
+            existing.result = None
+        context.team_graph_jobs.request_jobs[request_key] = job_id
+        prune_team_graph_jobs(context.team_graph_jobs, keep_job_ids={job_id})
+        job_to_submit = existing
+    context.team_graph_jobs.executor.submit(run_team_graph_job, context, job_id, index_data)
+    assert job_to_submit is not None
+    return job_to_submit
 
 
 def run_team_graph_job(
@@ -2376,13 +2522,15 @@ def resolve_team_graph_cached_result(
     )
     job: TeamGraphJob | None = None
     if job_id:
-        candidate = get_team_graph_job(context, job_id)
-        if (
-            candidate is not None
-            and candidate.request == build_request
-            and candidate.index_signature == cache_signature
-        ):
-            job = candidate
+        job, _ = resolve_team_graph_job_for_request(
+            context,
+            build_request=build_request,
+            index_data=index_data,
+            cache_signature=cache_signature,
+            requested_job_id=job_id,
+            reuse_failed=False,
+            create_if_missing=False,
+        )
     if job is None:
         job = find_team_graph_job_for_request(
             context,
@@ -2426,6 +2574,7 @@ def collect_validity_issue_block_refs(
     seen: set[tuple[str, str, str]] = set()
     procedure_names = item.procedure_names
     block_names = item.procedure_block_names
+    problematic_start_blocks = problematic_multiple_start_blocks_by_procedure(item)
 
     procedure_ids = sorted(
         set(item.procedure_start_blocks)
@@ -2438,23 +2587,21 @@ def collect_validity_issue_block_refs(
             continue
         start_ids = tuple(item.procedure_start_blocks.get(procedure_id, ()))
         end_ids = set(item.procedure_end_blocks.get(procedure_id, ()))
-        branch_count = int(item.procedure_branch_counts.get(procedure_id, 0))
-        if branch_count == 0 and len(start_ids) > 1:
-            for block_id in start_ids:
-                _append_validity_issue_block_ref(
-                    by_issue[GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH],
-                    seen,
-                    issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
+        for block_id in problematic_start_blocks.get(procedure_id, ()):
+            _append_validity_issue_block_ref(
+                by_issue[GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH],
+                seen,
+                issue_code=GAMING_ISSUE_MULTIPLE_STARTS_WITHOUT_BRANCH,
+                procedure_id=procedure_id,
+                block_id=block_id,
+                procedure_name=procedure_names.get(procedure_id, procedure_id),
+                block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
+                block_external_url=resolve_block_external_url(
+                    context,
+                    block_id,
                     procedure_id=procedure_id,
-                    block_id=block_id,
-                    procedure_name=procedure_names.get(procedure_id, procedure_id),
-                    block_name=block_names.get(procedure_id, {}).get(block_id, block_id),
-                    block_external_url=resolve_block_external_url(
-                        context,
-                        block_id,
-                        procedure_id=procedure_id,
-                    ),
-                )
+                ),
+            )
         overlap_ids = sorted(end_ids.intersection(start_ids), key=str.lower)
         for block_id in overlap_ids:
             _append_validity_issue_block_ref(

@@ -38,6 +38,7 @@ class CatalogItem:
     procedure_names: dict[str, str] = field(default_factory=dict)
     procedure_block_names: dict[str, dict[str, str]] = field(default_factory=dict)
     procedure_blocks: dict[str, list[str]] = field(default_factory=dict)
+    procedure_block_graphs: dict[str, dict[str, list[str]]] = field(default_factory=dict)
     procedure_start_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_end_blocks: dict[str, list[str]] = field(default_factory=dict)
     procedure_branch_counts: dict[str, int] = field(default_factory=dict)
@@ -47,6 +48,7 @@ class CatalogItem:
     non_postpone_end_block_count: int = 0
     postpone_end_block_count: int = 0
     has_start_end_overlap: bool = False
+    consistent: bool = True
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -55,6 +57,7 @@ class CatalogItem:
             "tags": list(self.tags),
             "updated_at": self.updated_at,
             "markup_type": self.markup_type,
+            "consistent": bool(self.consistent),
             "finedog_unit_id": self.finedog_unit_id,
             "criticality_level": self.criticality_level,
             "team_id": self.team_id,
@@ -73,6 +76,10 @@ class CatalogItem:
                 for procedure_id, block_names in self.procedure_block_names.items()
             },
             "procedure_blocks": {key: list(value) for key, value in self.procedure_blocks.items()},
+            "procedure_block_graphs": {
+                procedure_id: {source: list(targets) for source, targets in adjacency.items()}
+                for procedure_id, adjacency in self.procedure_block_graphs.items()
+            },
             "procedure_start_blocks": {
                 key: list(value) for key, value in self.procedure_start_blocks.items()
             },
@@ -93,6 +100,7 @@ class CatalogItem:
     @classmethod
     def from_dict(cls, payload: dict[str, Any]) -> CatalogItem:
         procedure_blocks = _load_procedure_blocks(payload.get("procedure_blocks"))
+        procedure_block_graphs = _load_procedure_block_graphs(payload.get("procedure_block_graphs"))
         procedure_names = _load_string_mapping(payload.get("procedure_names"))
         procedure_block_names = _load_procedure_block_names(payload.get("procedure_block_names"))
         procedure_start_blocks = _load_procedure_blocks(payload.get("procedure_start_blocks"))
@@ -113,6 +121,7 @@ class CatalogItem:
             tags=list(payload.get("tags", []) or []),
             updated_at=str(payload.get("updated_at", "")),
             markup_type=str(payload.get("markup_type", "")),
+            consistent=_load_bool(payload.get("consistent", True)),
             finedog_unit_id=str(payload.get("finedog_unit_id", "")),
             criticality_level=str(payload.get("criticality_level", "")),
             team_id=str(payload.get("team_id", "")),
@@ -128,6 +137,7 @@ class CatalogItem:
             procedure_names=procedure_names,
             procedure_block_names=procedure_block_names,
             procedure_blocks=procedure_blocks,
+            procedure_block_graphs=procedure_block_graphs,
             procedure_start_blocks=procedure_start_blocks,
             procedure_end_blocks=procedure_end_blocks,
             procedure_branch_counts=procedure_branch_counts,
@@ -206,6 +216,18 @@ def _load_procedure_graph(raw: Any) -> dict[str, list[str]]:
         if not source_text:
             continue
         normalized[source_text] = _load_string_list(target_values)
+    return normalized
+
+
+def _load_procedure_block_graphs(raw: Any) -> dict[str, dict[str, list[str]]]:
+    if not isinstance(raw, dict):
+        return {}
+    normalized: dict[str, dict[str, list[str]]] = {}
+    for procedure_id, adjacency in raw.items():
+        procedure_text = str(procedure_id).strip()
+        if not procedure_text:
+            continue
+        normalized[procedure_text] = _load_procedure_graph(adjacency)
     return normalized
 
 

@@ -7,6 +7,7 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
 ```json
 {
   "markup_type": "service",
+  "consistent": true,
   "finedog_unit_id": "fd-01",
   "finedog_unit_meta": {
     "service_name": "Support Flow"
@@ -35,6 +36,9 @@ This project converts CJM markup JSON <-> Excalidraw/Unidraw scenes while preser
   - special target `end` means "finish the current procedure and return to the parent procedure".
     It is not treated as a real END block and must not be duplicated in `end_block_ids`.
 - `finedog_unit_meta.service_name` – markup display name.
+- `consistent` – optional validity flag from the markup tool. `false` means the markup is treated
+  as invalid in Catalog health because some key blocks were lost and the markup must be refreshed
+  manually in the markup tool.
 - `finedog_unit_id` – external unit identifier for service links (string or integer; integers are coerced to strings).
 - `procedure_graph` – adjacency between procedures.
 - `block_graph` – adjacency between block ids; when provided, it becomes the primary source of block
@@ -110,6 +114,7 @@ Stored on every shape/arrow/text:
 
 - `schema_version`: `"1.0"`
 - `markup_type`
+- `consistent`
 - `finedog_unit_id` (if present)
 - `service_name` (if present)
 - `criticality_level` (if present)

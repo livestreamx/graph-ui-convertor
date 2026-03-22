@@ -157,10 +157,11 @@ catalog:
   `same block used as start and end`), marker cards now include concrete block IDs grouped by issue.
   If `CJM_CATALOG__BLOCK_LINK_PATH` is configured, each block is rendered as an external link.
   For validity problems, the UI shows the exact trigger for the first two cases:
-  either branch blocks = 0 with start blocks > 1, or branch blocks = 0 with no graph-completing
-  end blocks. `postpone` and return-to-parent endings from `branches -> end` do not count as
-  completion. The "same block used as start and end" case is shown without an extra explanatory
-  line.
+  either a procedure has multiple starts, zero branch blocks, and those starts do not merge in the
+  block graph, or branch blocks = 0 with no graph-completing end blocks. Sequential starts and
+  starts that converge into the same downstream block are treated as valid. `postpone` and
+  return-to-parent endings from `branches -> end` do not count as completion. The "same block used
+  as start and end" case is shown without an extra explanatory line.
 - The main page includes an additional filter `Problem markers` with options:
   `All`, `Graph types`, `Graph validity`, `Team overlap`, and `Cross-team overlap`.
   Selecting a marker shows only cards where that exact marker is in a problem state.

@@ -51,10 +51,11 @@ def test_catalog_open_and_team_graph_are_localized_in_russian(
         open_response = context.client.get(f"/catalog/{context.scene_id}/open?lang=ru")
         assert open_response.status_code == 200
         assert (
-            "Не удалось загрузить последнюю версию сцены. Повторите попытку." in open_response.text
+            "Не удалось загрузить последнюю версию диаграммы. Повторите попытку."
+            in open_response.text
         )
         assert "Причина" in open_response.text
-        assert "Подготавливаем сцену в localStorage и выполняем редирект." in open_response.text
+        assert "Подготавливаем диаграмму в localStorage и выполняем редирект." in open_response.text
 
         team_graph_response = context.client.get("/catalog/teams/graph?lang=ru")
         assert team_graph_response.status_code == 200
@@ -162,12 +163,23 @@ def test_catalog_health_texts_are_localized_in_russian() -> None:
     assert translate_ui_text("Validity marker problems", "ru") == "Проблемы маркера валидности"
     assert translate_ui_text("Start blocks", "ru") == "Стартовые блоки"
     assert (
+        translate_ui_text("Markup is not consistent because some key blocks were lost.", "ru")
+        == "Разметка не является консистентной, поскольку часть ключевых блоков потеряна."
+    )
+    assert (
+        translate_ui_text("Fix by manually refreshing the markup in the markup tool.", "ru")
+        == "Исправляется путем актуализации разметки вручную через инструмент разметки."
+    )
+    assert (
         translate_ui_text("Multiple starts but no branches", "ru")
         == "Несколько стартов, но нет ветвлений"
     )
     assert (
-        translate_ui_text("Detected when branch blocks = 0 and start blocks > 1.", "ru")
-        == "Срабатывает, когда blocks с ветвлением = 0 и стартовых блоков > 1."
+        translate_ui_text(
+            "Detected when a procedure has multiple starts, zero branch blocks, and those starts do not merge downstream.",
+            "ru",
+        )
+        == "Срабатывает, когда в процедуре несколько стартов, blocks с ветвлением = 0 и эти старты не сходятся дальше по графу."
     )
     assert (
         translate_ui_text("No branches and no graph-completing end blocks", "ru")

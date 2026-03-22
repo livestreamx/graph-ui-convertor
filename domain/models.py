@@ -240,6 +240,7 @@ class MarkupDocument(BaseModel):
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     markup_type: str
+    consistent: bool = True
     finedog_unit_id: str | None = None
     service_name: str | None = None
     criticality_level: str | None = None
@@ -331,6 +332,7 @@ class MarkupDocument(BaseModel):
     def to_markup_dict(self) -> dict[str, object]:
         payload: dict[str, object] = {
             "markup_type": self.markup_type,
+            "consistent": self.consistent,
             "procedures": [proc.to_markup_dict() for proc in self.procedures],
         }
         if self.finedog_unit_id:

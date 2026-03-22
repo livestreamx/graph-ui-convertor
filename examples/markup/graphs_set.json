@@ -1,5 +1,6 @@
 {
   "markup_type": "service",
+  "consistent": true,
   "finedog_unit_id": "svc-graph-set",
   "finedog_unit_meta": {
     "service_name": "Graphs Set",

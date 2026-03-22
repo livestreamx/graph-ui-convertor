@@ -4,7 +4,7 @@ import re
 import time
 from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pytest
 from fastapi import HTTPException
@@ -709,6 +709,82 @@ def test_api_team_graph_job_status_returns_terminal_job_state(
         assert payload["job_id"] == job_id
         assert payload["status"] == "succeeded"
         assert payload["updated_at"]
+
+
+def test_api_team_graph_job_status_creates_local_job_on_fresh_app_instance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        _, job_id, _ = _start_team_graph_merge(
+            context.client,
+            data={"team_ids": "team-billing"},
+        )
+
+        def fail_recovered_merge(*args: object, **kwargs: object) -> object:
+            raise HTTPException(status_code=504, detail="Recovered merge runs on another pod")
+
+        monkeypatch.setattr(web_main, "compute_team_graph_build_result", fail_recovered_merge)
+
+        source_app = cast(Any, context.client.app)
+        second_client = TestClient(create_app(source_app.state.context.settings))
+        try:
+            response = second_client.get(
+                f"/api/team-graph-jobs/{job_id}",
+                params={"team_ids": "team-billing"},
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["job_id"] == job_id
+            assert payload["status"] in {"pending", "running", "failed"}
+            second_app = cast(Any, second_client.app)
+            assert web_main.get_team_graph_job(second_app.state.context, job_id) is not None
+        finally:
+            second_client.close()
+
+
+def test_catalog_team_graph_page_creates_local_job_on_fresh_app_instance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    app_settings_factory: Callable[..., AppSettings],
+) -> None:
+    with build_catalog_test_context(
+        tmp_path=tmp_path,
+        monkeypatch=monkeypatch,
+        app_settings_factory=app_settings_factory,
+        include_upload_stub=True,
+    ) as context:
+        merge_url, job_id, _ = _start_team_graph_merge(
+            context.client,
+            data={"team_ids": "team-billing"},
+        )
+
+        def fail_recovered_merge(*args: object, **kwargs: object) -> object:
+            raise HTTPException(status_code=504, detail="Recovered merge runs on another pod")
+
+        monkeypatch.setattr(web_main, "compute_team_graph_build_result", fail_recovered_merge)
+
+        source_app = cast(Any, context.client.app)
+        second_client = TestClient(create_app(source_app.state.context.settings))
+        try:
+            response = second_client.get(merge_url)
+            assert response.status_code == 200
+            assert f"job_id={job_id}" in response.text
+            assert 'data-merge-job-status="' in response.text
+            assert (
+                "Merge result is stale or does not match the current selection."
+                not in response.text
+            )
+            second_app = cast(Any, second_client.app)
+            assert web_main.get_team_graph_job(second_app.state.context, job_id) is not None
+        finally:
+            second_client.close()
 
 
 def test_catalog_team_graph_excluded_team_name_not_overridden_by_unknown_value(

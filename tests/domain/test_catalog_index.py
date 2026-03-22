@@ -77,6 +77,7 @@ def test_build_catalog_index_extracts_fields(
         assert item.group_values["custom.domain"] == "payments"
         assert item.group_values["markup_type"] == "service"
         assert item.markup_type == "service"
+        assert item.consistent is True
         assert item.finedog_unit_id == "fd-01"
         assert item.scene_id == "fd-01"
         assert item.criticality_level == "BC"
@@ -89,6 +90,7 @@ def test_build_catalog_index_extracts_fields(
         assert item.procedure_ids == ["p1"]
         assert item.block_ids == ["a", "b"]
         assert item.procedure_blocks == {"p1": ["a", "b"]}
+        assert item.procedure_block_graphs == {"p1": {"a": ["b"], "b": []}}
         assert item.start_block_count == 1
         assert item.branch_block_count == 0
         assert item.non_postpone_end_block_count == 1
@@ -149,6 +151,57 @@ def test_build_catalog_index_detects_start_end_overlap_in_same_block(
     try:
         index = builder.build(config)
         assert index.items[0].has_start_end_overlap is True
+    finally:
+        stubber.deactivate()
+
+
+def test_build_catalog_index_extracts_consistent_flag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "consistent": False,
+        "finedog_unit_meta": {"service_name": "Inconsistent"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a"],
+                "end_block_ids": ["b"],
+                "branches": {"a": ["b"]},
+            }
+        ],
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/inconsistent.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        assert index.items[0].consistent is False
     finally:
         stubber.deactivate()
 
@@ -256,6 +309,69 @@ def test_build_catalog_index_does_not_treat_returning_start_as_end_overlap(
         assert item.procedure_start_blocks == {"p1": ["entry"]}
         assert item.procedure_end_blocks == {"p1": []}
         assert item.has_start_end_overlap is False
+    finally:
+        stubber.deactivate()
+
+
+def test_build_catalog_index_extracts_procedure_block_graphs_from_block_graph(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    excalidraw_dir = tmp_path / "excalidraw_in"
+    index_path = tmp_path / "catalog" / "index.json"
+    excalidraw_dir.mkdir(parents=True)
+
+    payload = {
+        "markup_type": "service",
+        "finedog_unit_meta": {"service_name": "Merged Starts"},
+        "procedures": [
+            {
+                "proc_id": "p1",
+                "start_block_ids": ["a", "b"],
+                "end_block_ids": ["d"],
+                "branches": {},
+            }
+        ],
+        "block_graph": {
+            "a": ["c"],
+            "b": ["c"],
+            "c": ["d"],
+        },
+    }
+    client, stubber = stub_s3_catalog(
+        monkeypatch=monkeypatch,
+        objects={"markup/merged-starts.json": payload},
+        bucket="cjm-bucket",
+        prefix="markup/",
+        list_repeats=2,
+    )
+
+    config = CatalogIndexConfig(
+        markup_dir=Path("markup"),
+        excalidraw_in_dir=excalidraw_dir,
+        index_path=index_path,
+        group_by=[],
+        title_field="finedog_unit_meta.service_name",
+        tag_fields=[],
+        sort_by="title",
+        sort_order="asc",
+        unknown_value="unknown",
+    )
+
+    builder = BuildCatalogIndex(
+        S3MarkupCatalogSource(client, "cjm-bucket", "markup/"),
+        FileSystemCatalogIndexRepository(),
+    )
+    try:
+        index = builder.build(config)
+        item = index.items[0]
+        assert item.procedure_block_graphs == {
+            "p1": {
+                "a": ["c"],
+                "b": ["c"],
+                "c": ["d"],
+                "d": [],
+            }
+        }
     finally:
         stubber.deactivate()
 

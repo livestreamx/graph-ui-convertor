@@ -6,6 +6,11 @@ from typing import Any
 import pytest
 
 from adapters.layout.grid import GridLayoutEngine
+from domain.catalog import CatalogItem
+from domain.services.catalog_health import (
+    GAMING_ISSUE_INCONSISTENT_MARKUP,
+    BuildCatalogHealthReport,
+)
 from domain.services.convert_markup_to_excalidraw import MarkupToExcalidrawConverter
 from tests.helpers.markup_fixtures import load_expected_fixture, load_markup_fixture
 
@@ -157,6 +162,49 @@ def test_examples_share_blocks_for_cross_team_merge() -> None:
     assert graphs_set.team_id is not None
     assert graphs_set.team_name
     assert basic.team_id != graphs_set.team_id
+
+
+def test_examples_define_consistent_flag_and_corner_cases_is_inconsistent() -> None:
+    for name in ("basic.json", "complex_graph.json", "graphs_set.json", "forest.json"):
+        markup = load_markup_fixture(name)
+        assert markup.consistent is True
+
+    corner_cases = load_markup_fixture("corner_cases.json")
+    assert corner_cases.consistent is False
+
+
+def test_corner_cases_fixture_triggers_inconsistent_validity_issue() -> None:
+    markup = load_markup_fixture("corner_cases.json")
+    procedure_ids = [procedure.procedure_id for procedure in markup.procedures]
+
+    item = CatalogItem(
+        scene_id=str(markup.finedog_unit_id or "corner-cases"),
+        title=str(markup.service_name or "Corner Cases"),
+        tags=[],
+        updated_at="2026-03-20T00:00:00+00:00",
+        markup_type=markup.markup_type,
+        finedog_unit_id=str(markup.finedog_unit_id or "corner-cases"),
+        criticality_level=str(markup.criticality_level or "unknown"),
+        team_id=str(markup.team_id or "unknown"),
+        team_name=str(markup.team_name or "unknown"),
+        group_values={"markup_type": markup.markup_type},
+        fields={"markup_type": markup.markup_type},
+        markup_meta={},
+        markup_rel_path="examples/markup/corner_cases.json",
+        excalidraw_rel_path="corner_cases.excalidraw",
+        unidraw_rel_path="corner_cases.unidraw",
+        procedure_ids=procedure_ids,
+        block_ids=[],
+        procedure_graph={key: list(value) for key, value in markup.procedure_graph.items()},
+        consistent=markup.consistent,
+    )
+
+    report = BuildCatalogHealthReport().build([item])
+    health = report.item(item.scene_id)
+
+    assert health is not None
+    assert health.gaming.is_problem is True
+    assert GAMING_ISSUE_INCONSISTENT_MARKUP in health.gaming.issue_codes
 
 
 @pytest.mark.parametrize(
