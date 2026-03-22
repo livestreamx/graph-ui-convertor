@@ -15,7 +15,6 @@ from datetime import UTC, datetime, timedelta, timezone, tzinfo
 from pathlib import Path
 from typing import Any, Literal, cast
 from urllib.parse import urlencode, urlparse
-from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -180,7 +179,6 @@ class TeamGraphJob:
 @dataclass
 class TeamGraphJobState:
     executor: concurrent.futures.ThreadPoolExecutor
-    instance_id: str = dataclass_field(default_factory=lambda: uuid4().hex)
     jobs: dict[str, TeamGraphJob] = dataclass_field(default_factory=dict)
     request_jobs: dict[str, str] = dataclass_field(default_factory=dict)
     lock: threading.RLock = dataclass_field(default_factory=threading.RLock)
@@ -463,23 +461,23 @@ def create_app(settings: AppSettings) -> FastAPI:
 
         if team_ids:
             if job_id:
-                candidate_job = get_team_graph_job(context, job_id)
-                if (
-                    candidate_job is not None
-                    and candidate_job.request == build_request
-                    and candidate_job.index_signature == cache_signature
-                ):
-                    merge_job = candidate_job
-                else:
-                    merge_job_error = (
-                        "Merge result is stale or does not match the current selection."
-                    )
-            if merge_job is None:
-                merge_job = find_team_graph_job_for_request(
+                merge_job, merge_job_error = resolve_team_graph_job_for_request(
                     context,
                     build_request=build_request,
+                    index_data=index_data,
+                    cache_signature=cache_signature,
+                    requested_job_id=job_id,
+                    reuse_failed=True,
+                    create_if_missing=True,
+                )
+            if merge_job is None:
+                merge_job, _ = resolve_team_graph_job_for_request(
+                    context,
+                    build_request=build_request,
+                    index_data=index_data,
                     cache_signature=cache_signature,
                     reuse_failed=True,
+                    create_if_missing=False,
                 )
 
         if merge_job is not None:
@@ -567,7 +565,16 @@ def create_app(settings: AppSettings) -> FastAPI:
         merge_job_status = "idle"
         if merge_job is not None:
             merge_job_status = merge_job.status
+            merge_job_status_query = build_team_query(
+                team_ids,
+                excluded_team_ids=disabled_team_ids,
+                merge_nodes_all_markups=merge_nodes_all_markups,
+                merge_selected_markups=merge_selected_markups,
+                merge_node_min_chain_size=merge_node_min_chain_size,
+            )
             merge_job_status_api_url = f"/api/team-graph-jobs/{merge_job.job_id}"
+            if merge_job_status_query:
+                merge_job_status_api_url = f"{merge_job_status_api_url}?{merge_job_status_query}"
             if page_query:
                 merge_job_refresh_url = f"/catalog/teams/graph?{page_query}"
 
@@ -1128,9 +1135,41 @@ def create_app(settings: AppSettings) -> FastAPI:
     @app.get("/api/team-graph-jobs/{job_id}")
     def api_team_graph_job_status(
         job_id: str,
+        team_ids: list[str] = Query(default_factory=list),
+        excluded_team_ids: list[str] = Query(default_factory=list),
+        merge_nodes_all_markups: bool = Query(default=False),
+        merge_selected_markups: bool = Query(default=False),
+        merge_node_min_chain_size: int = Query(default=1, ge=0, le=10),
         context: CatalogContext = Depends(get_context),
     ) -> ORJSONResponse:
         job = get_team_graph_job(context, job_id)
+        if job is None:
+            team_ids = normalize_team_ids(team_ids)
+            excluded_team_ids = normalize_team_ids(excluded_team_ids)
+            if team_ids:
+                index_data = load_index(context)
+                if index_data is not None:
+                    build_request = build_team_graph_request(
+                        team_ids=team_ids,
+                        excluded_team_ids=excluded_team_ids,
+                        merge_nodes_all_markups=merge_nodes_all_markups,
+                        merge_selected_markups=merge_selected_markups,
+                        merge_node_min_chain_size=merge_node_min_chain_size,
+                    )
+                    job, mismatch_error = resolve_team_graph_job_for_request(
+                        context,
+                        build_request=build_request,
+                        index_data=index_data,
+                        cache_signature=build_team_graph_cache_signature(
+                            context,
+                            index_signature=resolve_catalog_index_signature(context, index_data),
+                        ),
+                        requested_job_id=job_id,
+                        reuse_failed=True,
+                        create_if_missing=True,
+                    )
+                    if mismatch_error:
+                        raise HTTPException(status_code=404, detail=mismatch_error)
         if job is None:
             raise HTTPException(status_code=404, detail="Team graph job not found")
         return ORJSONResponse(
@@ -2143,6 +2182,14 @@ def build_team_graph_request_key(
     return hashlib.sha256(digest_source).hexdigest()
 
 
+def build_team_graph_job_id(
+    build_request: TeamGraphBuildRequest,
+    *,
+    cache_signature: str,
+) -> str:
+    return build_team_graph_request_key(build_request, cache_signature=cache_signature)
+
+
 def get_team_graph_job(
     context: CatalogContext,
     job_id: str | None,
@@ -2158,7 +2205,22 @@ def build_team_graph_cache_signature(
     *,
     index_signature: str,
 ) -> str:
-    return f"{context.team_graph_jobs.instance_id}:{index_signature}"
+    del context
+    return index_signature
+
+
+def team_graph_job_matches_request(
+    job: TeamGraphJob,
+    *,
+    build_request: TeamGraphBuildRequest,
+    cache_signature: str,
+    reuse_failed: bool,
+) -> bool:
+    return (
+        job.request == build_request
+        and job.index_signature == cache_signature
+        and (job.status != "failed" or reuse_failed)
+    )
 
 
 def find_team_graph_job_for_request(
@@ -2177,13 +2239,59 @@ def find_team_graph_job_for_request(
         if job is None:
             context.team_graph_jobs.request_jobs.pop(request_key, None)
             return None
-        if (
-            job.request != build_request
-            or job.index_signature != cache_signature
-            or (job.status == "failed" and not reuse_failed)
+        if not team_graph_job_matches_request(
+            job,
+            build_request=build_request,
+            cache_signature=cache_signature,
+            reuse_failed=reuse_failed,
         ):
             return None
         return job
+
+
+def resolve_team_graph_job_for_request(
+    context: CatalogContext,
+    *,
+    build_request: TeamGraphBuildRequest,
+    index_data: CatalogIndex,
+    cache_signature: str,
+    requested_job_id: str | None = None,
+    reuse_failed: bool,
+    create_if_missing: bool,
+) -> tuple[TeamGraphJob | None, str | None]:
+    expected_job_id = build_team_graph_job_id(build_request, cache_signature=cache_signature)
+    if requested_job_id and requested_job_id != expected_job_id:
+        return None, "Merge result is stale or does not match the current selection."
+
+    job = get_team_graph_job(context, expected_job_id)
+    if job is not None and team_graph_job_matches_request(
+        job,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=reuse_failed,
+    ):
+        return job, None
+
+    job = find_team_graph_job_for_request(
+        context,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=reuse_failed,
+    )
+    if job is not None:
+        return job, None
+
+    if create_if_missing:
+        return (
+            create_or_reuse_team_graph_job(
+                context,
+                build_request=build_request,
+                index_data=index_data,
+                cache_signature=cache_signature,
+            ),
+            None,
+        )
+    return None, None
 
 
 def create_or_reuse_team_graph_job(
@@ -2193,6 +2301,16 @@ def create_or_reuse_team_graph_job(
     index_data: CatalogIndex,
     cache_signature: str,
 ) -> TeamGraphJob:
+    job_id = build_team_graph_job_id(build_request, cache_signature=cache_signature)
+    existing = get_team_graph_job(context, job_id)
+    if existing is not None and team_graph_job_matches_request(
+        existing,
+        build_request=build_request,
+        cache_signature=cache_signature,
+        reuse_failed=False,
+    ):
+        return existing
+
     reusable = find_team_graph_job_for_request(
         context,
         build_request=build_request,
@@ -2203,21 +2321,43 @@ def create_or_reuse_team_graph_job(
         return reusable
 
     now = datetime.now(tz=UTC)
-    job = TeamGraphJob(
-        job_id=uuid4().hex,
-        request=build_request,
-        index_signature=cache_signature,
-        status="pending",
-        created_at=now,
-        updated_at=now,
-    )
     request_key = build_team_graph_request_key(build_request, cache_signature=cache_signature)
+    job_to_submit: TeamGraphJob | None = None
     with context.team_graph_jobs.lock:
-        context.team_graph_jobs.jobs[job.job_id] = job
-        context.team_graph_jobs.request_jobs[request_key] = job.job_id
-        prune_team_graph_jobs(context.team_graph_jobs, keep_job_ids={job.job_id})
-    context.team_graph_jobs.executor.submit(run_team_graph_job, context, job.job_id, index_data)
-    return job
+        existing = context.team_graph_jobs.jobs.get(job_id)
+        if existing is not None and team_graph_job_matches_request(
+            existing,
+            build_request=build_request,
+            cache_signature=cache_signature,
+            reuse_failed=False,
+        ):
+            return existing
+        if existing is None:
+            existing = TeamGraphJob(
+                job_id=job_id,
+                request=build_request,
+                index_signature=cache_signature,
+                status="pending",
+                created_at=now,
+                updated_at=now,
+            )
+            context.team_graph_jobs.jobs[job_id] = existing
+        else:
+            existing.request = build_request
+            existing.index_signature = cache_signature
+            existing.status = "pending"
+            existing.created_at = now
+            existing.updated_at = now
+            existing.started_at = None
+            existing.finished_at = None
+            existing.error_message = None
+            existing.result = None
+        context.team_graph_jobs.request_jobs[request_key] = job_id
+        prune_team_graph_jobs(context.team_graph_jobs, keep_job_ids={job_id})
+        job_to_submit = existing
+    context.team_graph_jobs.executor.submit(run_team_graph_job, context, job_id, index_data)
+    assert job_to_submit is not None
+    return job_to_submit
 
 
 def run_team_graph_job(
@@ -2382,13 +2522,15 @@ def resolve_team_graph_cached_result(
     )
     job: TeamGraphJob | None = None
     if job_id:
-        candidate = get_team_graph_job(context, job_id)
-        if (
-            candidate is not None
-            and candidate.request == build_request
-            and candidate.index_signature == cache_signature
-        ):
-            job = candidate
+        job, _ = resolve_team_graph_job_for_request(
+            context,
+            build_request=build_request,
+            index_data=index_data,
+            cache_signature=cache_signature,
+            requested_job_id=job_id,
+            reuse_failed=False,
+            create_if_missing=False,
+        )
     if job is None:
         job = find_team_graph_job_for_request(
             context,
